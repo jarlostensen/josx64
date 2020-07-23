@@ -1,5 +1,4 @@
-#include <efi.h>
-#include <efilib.h>
+#include <c-efi.h>
 
 #include <string.h>
 #include <stdint.h>
@@ -9,7 +8,7 @@
 // TL;DR linker error we get when building with Clang on Windows 
 int _fltused = 0;
 
-static CHAR16*   kLoaderHeading = L"| jOSx64 ----------------------------\n\r";
+static CEfiChar16*   kLoaderHeading = L"| jOSx64 ----------------------------\n\r";
 
 static uint32_t _read_cr4(void)
 {
@@ -26,50 +25,42 @@ static uint32_t _read_cr4(void)
      return val;
 }
 
-static EFI_STATUS _wait_for_key(EFI_INPUT_KEY* key)
-{
-    ST->ConOut->OutputString(ST->ConOut, L"\n\rPress a key, any key...\n\r"); 
-    EFI_STATUS status = ST->ConIn->Reset(ST->ConIn, FALSE);
-    if (EFI_ERROR(status))
-        return status; 
-    while ((status = ST->ConIn->ReadKeyStroke(ST->ConIn, key)) == EFI_NOT_READY) ;
-    return status;
-}
-
-EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
+CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 {    
-    EFI_STATUS Status;
-    EFI_INPUT_KEY Key;
-
-    ST = SystemTable;
-
-    ST->ConOut->ClearScreen(ST->ConOut);
-    ST->ConOut->OutputString(ST->ConOut, kLoaderHeading);
+    CEfiStatus status;
+    
+    st->con_out->clear_screen(st->con_out);
+    st->con_out->output_string(st->con_out, kLoaderHeading);
 
 #ifdef _JOS_KERNEL_BUILD
-    ST->ConOut->OutputString(ST->ConOut, L"kernel build\n\r\n\r");
+    st->con_out->output_string(st->con_out, L"kernel build\n\r\n\r");
 #endif
 
     //unsigned long cr4 = _read_cr4();
     //Print(L"cr4: 0x%x\n\r", cr4);
 
-    Status = _wait_for_key(&Key);
+    CEfiInputKey key;
+    st->con_out->output_string(st->con_out, L"\n\rPress a key, any key...\n\r"); 
+    CEfiUSize x;
+    st->boot_services->wait_for_event(1, &st->con_in->wait_for_key, &x);
 
-    ST->ConOut->OutputString(ST->ConOut, L"\n\rGetting the memory map....\n\r");
-    UINTN mapSize = 0, mapKey, descriptorSize;
-    EFI_MEMORY_DESCRIPTOR *memoryMap = NULL;
-    UINT32 descriptorVersion;
-    EFI_STATUS result = ST->BootServices->GetMemoryMap(&mapSize, memoryMap, NULL, &descriptorSize, NULL);
-    mapSize += 2 * descriptorSize;
-    result = ST->BootServices->AllocatePool(AllocateAnyPages, mapSize, (void**)&memoryMap);
-    //ErrorCheck(result, EFI_SUCCESS);
-    result = ST->BootServices->GetMemoryMap(&mapSize, memoryMap, &mapKey, &descriptorSize, &descriptorVersion);
+    st->con_out->output_string(st->con_out, L"\n\rGetting the memory map....\n\r");
+
+    CEfiUSize map_size = 0;
+    CEfiMemoryDescriptor *memory_map = 0;
+    CEfiUSize map_key, descriptor_size;
+    CEfiU32 descriptor_version;
+    st->boot_services->get_memory_map(&map_size, memory_map, 0, &descriptor_size, 0);
+    map_size += 2*descriptor_size;
+    status = st->boot_services->allocate_pool(C_EFI_CONVENTIONAL_MEMORY, map_size, (void**)&memory_map);
+
+    st->boot_services->get_memory_map(&map_size, memory_map, &map_key, &descriptor_size, &descriptor_version);
 
     //ErrorCheck(result, EFI_SUCCESS);
-    ST->ConOut->OutputString(ST->ConOut, L"Exiting boot services!\n\r");
-    result = ST->BootServices->ExitBootServices(ImageHandle, mapKey);
-    //ErrorCheck(result, EFI_SUCCESS);
-    ST->ConOut->OutputString(ST->ConOut, L"Goodbye, we're going to sleep now...\n\r");
+    st->con_out->output_string(st->con_out, L"Exiting boot services!\n\r");
+    status = st->boot_services->exit_boot_services(h, map_key);
+    
+    st->con_out->output_string(st->con_out, L"Goodbye, we're going to sleep now...\n\r");
     
     while(1)
     {
