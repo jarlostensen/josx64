@@ -268,13 +268,18 @@ int _vprint_impl(ctx_t* ctx, const wchar_t* __restrict format, va_list parameter
 				const wchar_t* str = va_arg(parameters, const wchar_t*);
 				//NOTE: this is *not* standard, supporting a width modifier for %s
 				size_t len = width ? (size_t)width : wcslen(str);
-				if (maxrem < len) {
+				if (maxrem < len) 
+				{
 					// TODO: Set errno to EOVERFLOW.
 					return EOF;
 				}
 				if (len)
 				{
-					ctx->_wprint(ctx->_that, str, len);
+					if ( ctx->_wprint(ctx->_that, str, len) == EOF )
+					{
+						// TODO: Set errno to EOVERFLOW.
+						return EOF;
+					}
 					written += len;
 				}
 			}
@@ -422,27 +427,56 @@ int _vprint_impl(ctx_t* ctx, const wchar_t* __restrict format, va_list parameter
 
 typedef struct buffer_ctx_struct
 {
+	// current writing position
 	wchar_t* _wp;
-	const wchar_t* _end;
+	// points to position of the last valid nibble in the buffer (including 0 terminator)
+	const wchar_t*	_end;
+	// points to the last permitted position in the buffer (including 0 terminator), may be < _end
+	const wchar_t*	_n_end;
 } buffer_t;
+
+static size_t buffer_characters_left(buffer_t* buffer)
+{
+	return ((size_t)buffer->_n_end - (size_t)buffer->_wp)/sizeof(wchar_t);
+}
+
+static bool buffer_has_n_semtantics(buffer_t* buffer)
+{
+	return buffer->_n_end != buffer->_end;
+}
 
 static int buffer_putchar(void* ctx_, int c)
 {
 	buffer_t* ctx = (buffer_t*)ctx_;
-	_JOS_ASSERT(ctx->_wp != ctx->_end);	
+	const size_t rem_chars = buffer_characters_left(ctx);
+	if ( rem_chars==1 )
+	{
+		if(!buffer_has_n_semtantics(ctx))
+			return EOF;
+		return 1;
+	}
 	*ctx->_wp++ = (wchar_t)c;
-	return (ctx->_wp != ctx->_end ? c : EOF);
+	return 1;
 }
 
 static int buffer_wprint(void* ctx_, const wchar_t* data, size_t length)
 {
-	const unsigned short* nybbles = (const unsigned short*)data;
-	for (size_t i = 0; i < length; i++)
+	buffer_t* ctx = (buffer_t*)ctx_;
+	const size_t rem_chars = buffer_characters_left(ctx);
+	if ( rem_chars < length+1 )
 	{
-		buffer_t* ctx = (buffer_t*)ctx_;
-		_JOS_ASSERT(ctx->_wp != ctx->_end);		
-		*ctx->_wp++ = (wchar_t)nybbles[i];
+		if(!buffer_has_n_semtantics(ctx))
+			return EOF;
+		if ( rem_chars==1 )
+		{
+			return 0;
+		}
+		length = rem_chars-1;
 	}
+	
+	memcpy(ctx->_wp, data, length*sizeof(wchar_t));
+	ctx->_wp+=length;
+	
 	return (int)length;
 }
 
@@ -453,12 +487,13 @@ int _JOS_LIBC_FUNC_NAME(swprintf_s)(wchar_t* __restrict buffer, size_t buffercou
 		return 0;
 	}
 
+	const wchar_t* end = buffer + buffercount;
 	va_list parameters;
 	va_start(parameters, format);
 	int written = _vprint_impl(&(ctx_t) {
 		._wprint = buffer_wprint,
 			._putchar = buffer_putchar,
-			._that = (void*) & (buffer_t) { ._wp = buffer, ._end = buffer + buffercount }
+			._that = (void*) & (buffer_t) { ._wp = buffer, ._end = end, ._n_end = end }
 	},
 		format, parameters);
 	buffer[written] = 0;
@@ -490,7 +525,7 @@ static int buffer_n_print(void* ctx_, const wchar_t* data, size_t length)
 	return (int)length;
 }
 
-int _JOS_LIBC_FUNC_NAME(snwprintf) (wchar_t* buffer, size_t n, const wchar_t* format, ...)
+int _JOS_LIBC_FUNC_NAME(snwprintf_s) (wchar_t* buffer, size_t buffercount, size_t n, const wchar_t* format, ...)
 {
 	if (!buffer || !n || !format || !format[0])
 		return 0;
@@ -498,9 +533,9 @@ int _JOS_LIBC_FUNC_NAME(snwprintf) (wchar_t* buffer, size_t n, const wchar_t* fo
 	va_list parameters;
 	va_start(parameters, format);
 	int written = _vprint_impl(&(ctx_t) {
-		._wprint = buffer_n_print,
-			._putchar = buffer_n_putchar,
-			._that = (void*) & (buffer_t) { ._wp = buffer, ._end = buffer + (n - 1) }
+			._wprint = buffer_wprint,
+			._putchar = buffer_putchar,
+			._that = (void*) & (buffer_t) { ._wp = buffer, ._end = buffer + buffercount, ._n_end = buffer + n }
 	},
 		format, parameters);
 	written = written < (int)n ? written : (int)n - 1;
