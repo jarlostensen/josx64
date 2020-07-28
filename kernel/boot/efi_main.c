@@ -3,6 +3,9 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
+
+//#include <internal/include/_stdio.h>
 
 //https://github.com/rust-lang/rust/issues/62785/
 // TL;DR linker error we get when building with Clang on Windows 
@@ -36,31 +39,90 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     st->con_out->output_string(st->con_out, L"kernel build\n\r\n\r");
 #endif
 
-    //unsigned long cr4 = _read_cr4();
-    //Print(L"cr4: 0x%x\n\r", cr4);
+    //CEfiInputKey key;
+    //st->con_out->output_string(st->con_out, L"\n\rPress a key, any key...\n\r"); 
+    //CEfiUSize x;
+    //st->boot_services->wait_for_event(1, &st->con_in->wait_for_key, &x);
 
-    CEfiInputKey key;
-    st->con_out->output_string(st->con_out, L"\n\rPress a key, any key...\n\r"); 
-    CEfiUSize x;
-    st->boot_services->wait_for_event(1, &st->con_in->wait_for_key, &x);
+    char test[1024];
+    sprintf_s(test, sizeof(test), "this is a test", 1,2,3);
+    if (strlen(test)==2)
+        st->con_out->output_string(st->con_out, L"\n\rMemory map info:\n\r");
 
-    st->con_out->output_string(st->con_out, L"\n\rGetting the memory map....\n\r");
+    st->con_out->output_string(st->con_out, L"\n\rMemory map info:\n\r");
 
     CEfiUSize map_size = 0;
     CEfiMemoryDescriptor *memory_map = 0;
     CEfiUSize map_key, descriptor_size;
     CEfiU32 descriptor_version;
     st->boot_services->get_memory_map(&map_size, memory_map, 0, &descriptor_size, 0);
-    map_size += 2*descriptor_size;
-    status = st->boot_services->allocate_pool(C_EFI_CONVENTIONAL_MEMORY, map_size, (void**)&memory_map);
+    unsigned mem_desc_entries = map_size / descriptor_size;
 
+    // make room for any expansion that might happen when we call "allocate_pool" 
+    map_size += 2*descriptor_size;    
+    status = st->boot_services->allocate_pool(C_EFI_LOADER_DATA, map_size, (void**)&memory_map);
     st->boot_services->get_memory_map(&map_size, memory_map, &map_key, &descriptor_size, &descriptor_version);
 
-    //ErrorCheck(result, EFI_SUCCESS);
-    st->con_out->output_string(st->con_out, L"Exiting boot services!\n\r");
+#define _EFI_PRINT(s)\
+st->con_out->output_string(st->con_out, s)
+
+    // traverse memory map and dump it    
+    CEfiMemoryDescriptor* desc = memory_map;
+    for ( unsigned i = 0; i < mem_desc_entries; ++i )
+    {
+        switch(desc->type)
+        {
+            case C_EFI_LOADER_CODE:
+            {
+                _EFI_PRINT(L"Loader code\n\r");
+            }
+            break;
+            case C_EFI_LOADER_DATA:
+            {
+                _EFI_PRINT(L"Loader data\n\r");
+            }
+            break;
+            case C_EFI_BOOT_SERVICES_CODE:
+            {
+                _EFI_PRINT(L"Boot services code\n\r");
+            }
+            break;
+            case C_EFI_BOOT_SERVICES_DATA:
+            {
+                _EFI_PRINT(L"Boot services data\n\r");
+            }
+            break;
+            case C_EFI_RUNTIME_SERVICES_CODE:
+            {
+                _EFI_PRINT(L"Runtime services code\n\r");
+            }
+            break;
+            case C_EFI_RUNTIME_SERVICES_DATA:
+            {
+                _EFI_PRINT(L"Runtime services data\n\r");
+            }
+            break;
+            case C_EFI_CONVENTIONAL_MEMORY:
+            {
+                _EFI_PRINT(L"Conventional memory\n\r");
+            }
+            break;
+            default:
+            {
+                _EFI_PRINT(L".");
+            }
+            break;            
+        }
+
+        desc = (CEfiMemoryDescriptor*)((char*)desc + descriptor_size);
+    }
+
+    _EFI_PRINT(L"\n\rexiting boot services\n\r");
+
+    // after this point we can no longer use boot services (only runtime)
     status = st->boot_services->exit_boot_services(h, map_key);
     
-    st->con_out->output_string(st->con_out, L"Goodbye, we're going to sleep now...\n\r");
+    _EFI_PRINT(L"Goodbye, we're going to sleep now...\n\r");
     
     while(1)
     {
