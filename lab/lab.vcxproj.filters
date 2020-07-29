@@ -33,6 +33,9 @@
     <ClCompile Include="..\libc\internal\_vprint.c">
       <Filter>libc\internal</Filter>
     </ClCompile>
+    <ClCompile Include="..\libc\internal\_wchar.c">
+      <Filter>libc</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\libc\libc_internal.h">

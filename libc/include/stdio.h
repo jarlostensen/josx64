@@ -10,17 +10,17 @@
 extern "C" {
 #endif
 
-#ifdef wchar_t
-#undef wchar_t
-#endif
-typedef int16_t	wchar_t;
+//#ifdef wchar_t
+//#undef wchar_t
+//#endif
+//typedef uint16_t	wchar_t;
+
+int swprintf(wchar_t* __restrict buffer, size_t sizeOfBuffer, const wchar_t* __restrict format, ...);
+int vswprintf(wchar_t *__restrict buffer, size_t bufsz, const wchar_t * __restrict format, va_list vlist);
+int vswprintf(wchar_t *__restrict buffer, size_t bufsz, const wchar_t * __restrict format, va_list parameters);
 
 int printf(const char* __restrict, ...);
 int puts(const char*);
-int sprintf (char * __restrict, const char * __restrict, ... );
-int sprintf_s(char* __restrict buffer, size_t buffercount, const char* __restrict format, ...);
-int snprintf ( char * __restrict, size_t n, const char * __restrict, ... );
-int vsnprintf(char* buffer, size_t n, const char* format, va_list parameters);
 
 #ifdef __cplusplus
 }

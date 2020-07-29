@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <wchar.h>
 
 //#include <internal/include/_stdio.h>
 
@@ -44,13 +45,6 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     //CEfiUSize x;
     //st->boot_services->wait_for_event(1, &st->con_in->wait_for_key, &x);
 
-    char test[1024];
-    sprintf_s(test, sizeof(test), "this is a test", 1,2,3);
-    if (strlen(test)==2)
-        st->con_out->output_string(st->con_out, L"\n\rMemory map info:\n\r");
-
-    st->con_out->output_string(st->con_out, L"\n\rMemory map info:\n\r");
-
     CEfiUSize map_size = 0;
     CEfiMemoryDescriptor *memory_map = 0;
     CEfiUSize map_key, descriptor_size;
@@ -66,10 +60,16 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 #define _EFI_PRINT(s)\
 st->con_out->output_string(st->con_out, s)
 
+    wchar_t buf[256];
+    const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
+    swprintf(buf, bufcount, L"There are %d entries in the memory map\n\r", mem_desc_entries);
+    _EFI_PRINT(buf);
     // traverse memory map and dump it    
     CEfiMemoryDescriptor* desc = memory_map;
     for ( unsigned i = 0; i < mem_desc_entries; ++i )
     {
+        swprintf(buf, bufcount, L"entry %d: 0x%x\n\r", i, desc->type);
+        _EFI_PRINT(buf);
         switch(desc->type)
         {
             case C_EFI_LOADER_CODE:

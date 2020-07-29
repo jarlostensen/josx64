@@ -15,15 +15,16 @@ static int printdecimal(ctx_t* ctx, long long d, int un_signed)
 	int written = 0;
 	if (!d)
 	{
-		ctx->_putchar(ctx->_that, (int)L'0');
-		return 1;
+		return ctx->_putchar(ctx->_that, (int)L'0');
 	}
 
 	if (d < 0)
 	{
 		if (!un_signed)
 		{
-			ctx->_putchar(ctx->_that, (int)L'-');
+			int res = ctx->_putchar(ctx->_that, (int)L'-');
+			if(res==EOF)
+				return EOF;
 			++written;
 		}
 		d *= -1;
@@ -42,7 +43,9 @@ static int printdecimal(ctx_t* ctx, long long d, int un_signed)
 	// print digits from MSD to LSD
 	while (true) 
 	{
-		ctx->_putchar(ctx->_that, (int)L'0' + (int)dd);
+		int res = ctx->_putchar(ctx->_that, (int)L'0' + (int)dd);
+		if(res==EOF)
+			return EOF;
 		++written;
 		d = d - (dd * pow_10);
 		pow_10 /= 10;
@@ -72,7 +75,9 @@ static int printhex(ctx_t* ctx, int width, long long d)
 			written += width;
 			while (width--)
 			{
-				ctx->_putchar(ctx->_that, (int)L'0');
+				int res = ctx->_putchar(ctx->_that, (int)L'0');
+				if ( res == EOF )
+					return EOF;
 			}
 			return written;
 		}
@@ -97,15 +102,20 @@ static int printhex(ctx_t* ctx, int width, long long d)
 		written += width;
 		while (width--)
 		{
-			ctx->_putchar(ctx->_that, L'0');
+			int res = ctx->_putchar(ctx->_that, L'0');
+			if ( res == EOF )
+				return EOF;
 		}
 		
 		if (d > 15)
 		{
-			ctx->_putchar(ctx->_that, (int)kHexDigits[(d & 0xf0) >> 4]);
+			int res = ctx->_putchar(ctx->_that, (int)kHexDigits[(d & 0xf0) >> 4]);
+			if ( res == EOF )
+				return EOF;
 			++written;
 		}
-		ctx->_putchar(ctx->_that, (int)kHexDigits[(d & 0xf)]);
+		if ( ctx->_putchar(ctx->_that, (int)kHexDigits[(d & 0xf)]) == EOF )
+			return EOF;
 		return written+1;
 	}
 
@@ -114,7 +124,8 @@ static int printhex(ctx_t* ctx, int width, long long d)
 	written += width;
 	while (width--)
 	{
-		ctx->_putchar(ctx->_that, L'0');
+		if ( ctx->_putchar(ctx->_that, L'0') == EOF )
+			return EOF;
 	}
 	
 	int high_idx = 0;
@@ -133,8 +144,10 @@ static int printhex(ctx_t* ctx, int width, long long d)
 		//NOTE: this will always "pad" the output to an even number of nybbles
 		size_t lo = *chars & 0x0f;
 		size_t hi = (*chars & 0xf0) >> 4;
-		ctx->_putchar(ctx->_that, (int)kHexDigits[hi]);
-		ctx->_putchar(ctx->_that, (int)kHexDigits[lo]);
+		int res = ctx->_putchar(ctx->_that, (int)kHexDigits[hi]);
+		res = res == EOF || ctx->_putchar(ctx->_that, (int)kHexDigits[lo]);
+		if ( res == EOF )
+			return EOF;
 		written += 2;
 		--high_idx;
 		--chars;
@@ -157,7 +170,8 @@ static int printbin(ctx_t* ctx, unsigned long long d)
 	{
 		unsigned long dc = d & (1ull << (bc - 1));
 		dc >>= (bc - 1);
-		ctx->_putchar(ctx->_that, (int)L'0' + (int)dc);
+		if ( ctx->_putchar(ctx->_that, (int)L'0' + (int)dc) == EOF)
+			return EOF;
 		--bc;
 		++written;
 	}
@@ -190,12 +204,13 @@ int _vprint_impl(ctx_t* ctx, const wchar_t* __restrict format, va_list parameter
 				// TODO: Set errno to EOVERFLOW.
 				return -1;
 			}
-			if (!ctx->_wprint(ctx->_that, format, amount))
+			int result = ctx->_wprint(ctx->_that, format, amount);
+			if (result==EOF)
 			{
-				return -1;
+				return EOF;
 			}
-			format += amount;
-			written += (int)amount;
+			format += (size_t)result;
+			written += result;
 		}
 
 		if (format[0])
@@ -259,7 +274,9 @@ int _vprint_impl(ctx_t* ctx, const wchar_t* __restrict format, va_list parameter
 			case L'c':
 			{
 				wchar_t c = (wchar_t)va_arg(parameters, int);
-				ctx->_wprint(ctx->_that, &c, 1);
+				int result = ctx->_wprint(ctx->_that, &c, 1);
+				if ( result == EOF )
+					return EOF;
 				written++;
 			}
 			break;
@@ -275,104 +292,121 @@ int _vprint_impl(ctx_t* ctx, const wchar_t* __restrict format, va_list parameter
 				}
 				if (len)
 				{
-					if ( ctx->_wprint(ctx->_that, str, len) == EOF )
+					int result = ctx->_wprint(ctx->_that, str, len);
+					if ( result == EOF )
 					{
 						// TODO: Set errno to EOVERFLOW.
 						return EOF;
 					}
-					written += len;
+					written += result;
 				}
 			}
 			break;
 			case L'd':
 			case L'i':
 			{
+				int res;
 				if (length[0] == L'l')
-				{
+				{					
 					if (length[1] == L'l')
 					{
 						long long d = va_arg(parameters, long long);
-						written += printdecimal(ctx, d, 0);
+						res = printdecimal(ctx, d, 0);						
 					}
 					else
 					{
 						long d = va_arg(parameters, long);
-						written += printdecimal(ctx, d, 0);
+						res = printdecimal(ctx, d, 0);						
 					}
 				}
 				else
 				{
 					int d = va_arg(parameters, int);
-					written += printdecimal(ctx, d, 0);
+					res = printdecimal(ctx, d, 0);
 				}
+				if (res == EOF)
+					return EOF;
+				written += res;
 			}
 			break;
 			case L'u':
 			{
+				int res;
 				if (length[0] == L'l')
 				{
 					if (length[1] == L'l')
 					{
 						unsigned long long d = va_arg(parameters, unsigned long long);
-						written += printdecimal(ctx, d, 1);
+						res = printdecimal(ctx, d, 1);
 					}
 					else
 					{
 						unsigned long d = va_arg(parameters, unsigned long);
-						written += printdecimal(ctx, d, 1);
+						res = printdecimal(ctx, d, 1);
 					}
 				}
 				else
 				{
 					unsigned int d = va_arg(parameters, unsigned int);
-					written += printdecimal(ctx, d, 1);
+					res = printdecimal(ctx, d, 1);
 				}
+				if(res == EOF)
+					return EOF;
+				written += res;
 			}
 			break;
 			case L'x':
 			{
+				int res;
 				if (length[0] == L'l')
 				{
 					if (length[1] == L'l')
 					{
 						unsigned long long d = va_arg(parameters, unsigned long long);
-						written += printhex(ctx, width, d);
+						res = printhex(ctx, width, d);
 					}
 					else
 					{
 						unsigned long d = va_arg(parameters, unsigned long);
-						written += printhex(ctx, width, d);
+						res = printhex(ctx, width, d);
 					}
 				}
 				else
 				{
 					unsigned int d = va_arg(parameters, unsigned int);
-					written += printhex(ctx, width, d);
+					res = printhex(ctx, width, d); 
 				}
+				if(res == EOF)
+					return EOF;
+				written += res;
 			}
 			break;
 			// -----------------------------------------
 			// NOT STANDARD
 			case L'b':
 			{
+				int res;
 				if (length[0] == L'l')
 				{
 					if (length[1] == L'l')
 					{
 						unsigned long long d = va_arg(parameters, unsigned long long);
-						written += printbin(ctx, d);
+						res = printbin(ctx, d);
 					}
 					else
 					{
 						unsigned long d = va_arg(parameters, unsigned long);
-						written += printbin(ctx, d);
+						res = printbin(ctx, d);
 					}
 				}
 				else
 				{
 					unsigned int d = va_arg(parameters, unsigned int);
-					written += printbin(ctx, d);
+					res = printbin(ctx, d);
 				}
+				if(res == EOF)
+					return EOF;
+				written += res;
 			}
 			break;
 			// -----------------------------------------
@@ -381,19 +415,26 @@ int _vprint_impl(ctx_t* ctx, const wchar_t* __restrict format, va_list parameter
 				const float f = (float)va_arg(parameters, double);
 				int integral_part = (int)f;
 				float fractional_part = f - (float)integral_part;
-				written += printdecimal(ctx, (long long)integral_part, 0);
+				int res = printdecimal(ctx, (long long)integral_part, 0);
+				if (res == EOF)
+					return EOF;
+				written += res;
 				if(fractional_part!=0.0f && precision)
 				{
 					static wchar_t c = L'.';
-					ctx->_wprint(ctx->_that, &c, 1);
-
+					res = ctx->_wprint(ctx->_that, &c, 1);
+					if ( res == EOF )
+						return EOF;
+					++written;
 					int prec = precision;
 					do
 					{
 						fractional_part *= 10.0f;
-						written += printdecimal(ctx, (long long)fractional_part, 0);
-						fractional_part -= (float)((int)fractional_part);
-						
+						res = printdecimal(ctx, (long long)fractional_part, 0);
+						if ( res == EOF )
+							return EOF;
+						written += res;
+						fractional_part -= (float)((int)fractional_part);						
 						//TODO: we need to use machine rounding mode for precision						
 					}
 					while(fractional_part!=0.0f && --prec);
@@ -408,9 +449,11 @@ int _vprint_impl(ctx_t* ctx, const wchar_t* __restrict format, va_list parameter
 					// TODO: Set errno to EOVERFLOW.
 					return EOF;
 				}
-				ctx->_wprint(ctx->_that, format, len);
-				written += len;
-				format += len;
+				int res = ctx->_wprint(ctx->_that, format, len);
+				if ( res == EOF )
+					return EOF;
+				written += res;
+				format += res;
 			}
 			break;
 			}
@@ -430,19 +473,12 @@ typedef struct buffer_ctx_struct
 	// current writing position
 	wchar_t* _wp;
 	// points to position of the last valid nibble in the buffer (including 0 terminator)
-	const wchar_t*	_end;
-	// points to the last permitted position in the buffer (including 0 terminator), may be < _end
-	const wchar_t*	_n_end;
+	const wchar_t*	_end;	
 } buffer_t;
 
 static size_t buffer_characters_left(buffer_t* buffer)
 {
-	return ((size_t)buffer->_n_end - (size_t)buffer->_wp)/sizeof(wchar_t);
-}
-
-static bool buffer_has_n_semtantics(buffer_t* buffer)
-{
-	return buffer->_n_end != buffer->_end;
+	return ((size_t)buffer->_end - (size_t)buffer->_wp)/sizeof(wchar_t);
 }
 
 static int buffer_putchar(void* ctx_, int c)
@@ -451,9 +487,7 @@ static int buffer_putchar(void* ctx_, int c)
 	const size_t rem_chars = buffer_characters_left(ctx);
 	if ( rem_chars==1 )
 	{
-		if(!buffer_has_n_semtantics(ctx))
-			return EOF;
-		return 1;
+		return EOF;		
 	}
 	*ctx->_wp++ = (wchar_t)c;
 	return 1;
@@ -465,11 +499,9 @@ static int buffer_wprint(void* ctx_, const wchar_t* data, size_t length)
 	const size_t rem_chars = buffer_characters_left(ctx);
 	if ( rem_chars < length+1 )
 	{
-		if(!buffer_has_n_semtantics(ctx))
-			return EOF;
 		if ( rem_chars==1 )
 		{
-			return 0;
+			return EOF;
 		}
 		length = rem_chars-1;
 	}
@@ -480,82 +512,50 @@ static int buffer_wprint(void* ctx_, const wchar_t* data, size_t length)
 	return (int)length;
 }
 
-int _JOS_LIBC_FUNC_NAME(swprintf_s)(wchar_t* __restrict buffer, size_t buffercount, const wchar_t* __restrict format, ...)
+static int buffer_putchar_count(void* ctx_, int c)
 {
-	if (!buffer || !format || !format[0])
-	{
-		return 0;
-	}
-
-	const wchar_t* end = buffer + buffercount;
-	va_list parameters;
-	va_start(parameters, format);
-	int written = _vprint_impl(&(ctx_t) {
-		._wprint = buffer_wprint,
-			._putchar = buffer_putchar,
-			._that = (void*) & (buffer_t) { ._wp = buffer, ._end = end, ._n_end = end }
-	},
-		format, parameters);
-	buffer[written] = 0;
-	va_end(parameters);
-	return written;
+	(void)ctx_;
+	(void)c;
+	return 1;
 }
 
-static int buffer_n_putchar(void* ctx_, int c)
+static int buffer_wprint_count(void* ctx_, const wchar_t* data, size_t length)
 {
-	buffer_t* ctx = (buffer_t*)ctx_;
-	if (ctx->_wp != ctx->_end)
-	{
-		*ctx->_wp++ = (wchar_t)c;
-		return 1;
-	}
-	return EOF;
-}
-
-static int buffer_n_print(void* ctx_, const wchar_t* data, size_t length)
-{
-	buffer_t* ctx = (buffer_t*)ctx_;
-	const wchar_t* chars = (const wchar_t*)data;
-	size_t rem_chars = (size_t)ctx->_end - (size_t)ctx->_wp;
-	if(!rem_chars)
-		return EOF;
-	length = length < rem_chars ? length : rem_chars;	
-	memcpy(ctx->_wp, chars, length*sizeof(wchar_t));
-	ctx->_wp += length;
+	(void)ctx_;
+	(void)data;
 	return (int)length;
 }
 
-int _JOS_LIBC_FUNC_NAME(snwprintf_s) (wchar_t* buffer, size_t buffercount, size_t n, const wchar_t* format, ...)
+int _JOS_LIBC_FUNC_NAME(swprintf) (wchar_t* buffer, size_t bufsz, const wchar_t* format, ...)
 {
-	if (!buffer || !n || !format || !format[0])
+	if (!buffer || !format || !format[0])
 		return 0;
 
 	va_list parameters;
 	va_start(parameters, format);
 	int written = _vprint_impl(&(ctx_t) {
-			._wprint = buffer_wprint,
-			._putchar = buffer_putchar,
-			._that = (void*) & (buffer_t) { ._wp = buffer, ._end = buffer + buffercount, ._n_end = buffer + n }
+			._wprint = (bufsz ? buffer_wprint : buffer_wprint_count),
+			._putchar = (bufsz ? buffer_putchar : buffer_putchar_count),
+			._that = (void*) & (buffer_t) { ._wp = buffer, ._end = buffer + bufsz }
 	},
 		format, parameters);
-	written = written < (int)n ? written : (int)n - 1;
 	buffer[written] = 0;
 	va_end(parameters);
 	return written;
 }
-#if 0
-int _JOS_LIBC_FUNC_NAME(vsnprintf)(char* buffer, size_t n, const char* format, va_list parameters)
+
+int _JOS_LIBC_FUNC_NAME(vswprintf)(wchar_t *__restrict buffer, size_t bufsz, const wchar_t * __restrict format, va_list parameters)
 {
-	if (!buffer || !n || !format || !format[0])
+	if (!buffer || !format || !format[0])
 		return 0;
 
 	int written = _vprint_impl(&(ctx_t) {
-		._print = buffer_n_print,
-			._putchar = buffer_n_putchar,
-			._that = (void*) & (buffer_t) { ._wp = buffer, ._end = buffer + (n - 1) }
+		._wprint = (bufsz ? buffer_wprint : buffer_wprint_count),
+			._putchar = (bufsz ? buffer_putchar : buffer_putchar_count),
+			._that = (void*) & (buffer_t) { ._wp = buffer, ._end = buffer + bufsz }
 	},
 		format, parameters);
-	buffer[written < (int)n ? written : (int)n - 1] = 0;
+	buffer[written] = 0;
 	return written;
 }
-#endif
+

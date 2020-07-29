@@ -139,6 +139,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\libc\internal\_vprint.c" />
+    <ClCompile Include="..\libc\internal\_wchar.c" />
     <ClCompile Include="lab.c" />
   </ItemGroup>
   <ItemGroup>
