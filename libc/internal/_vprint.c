@@ -302,6 +302,28 @@ int _vprint_impl(ctx_t* ctx, const wchar_t* __restrict format, va_list parameter
 				}
 			}
 			break;
+			case L'S':
+			{
+				const char* str = va_arg(parameters, const char*);
+				//NOTE: this is *not* standard, supporting a width modifier for %s
+				size_t len = width ? (size_t)width : strlen(str);
+				if (maxrem < len) 
+				{
+					// TODO: Set errno to EOVERFLOW.
+					return EOF;
+				}
+				if (len)
+				{
+					int result = ctx->_print(ctx->_that, str, len);
+					if ( result == EOF )
+					{
+						// TODO: Set errno to EOVERFLOW.
+						return EOF;
+					}
+					written += result;
+				}
+			}
+			break;
 			case L'd':
 			case L'i':
 			{
@@ -512,6 +534,25 @@ static int buffer_wprint(void* ctx_, const wchar_t* data, size_t length)
 	return (int)length;
 }
 
+static int buffer_print(void* ctx_, const char* data, size_t length)
+{
+	buffer_t* ctx = (buffer_t*)ctx_;
+	const size_t rem_chars = buffer_characters_left(ctx);
+	if ( rem_chars < length+1 )
+	{
+		if ( rem_chars==1 )
+		{
+			return EOF;
+		}
+		length = rem_chars-1;
+	}
+	for(unsigned i = 0; i < length; ++i)
+	{
+		*ctx->_wp++ = (wchar_t)data[i];
+	}	
+	return (int)length;
+}
+
 static int buffer_putchar_count(void* ctx_, int c)
 {
 	(void)ctx_;
@@ -526,6 +567,13 @@ static int buffer_wprint_count(void* ctx_, const wchar_t* data, size_t length)
 	return (int)length;
 }
 
+static int buffer_print_count(void* ctx_, const char* data, size_t length)
+{
+	(void)ctx_;
+	(void)data;
+	return (int)length;
+}
+
 int _JOS_LIBC_FUNC_NAME(swprintf) (wchar_t* buffer, size_t bufsz, const wchar_t* format, ...)
 {
 	if (!buffer || !format || !format[0])
@@ -534,6 +582,7 @@ int _JOS_LIBC_FUNC_NAME(swprintf) (wchar_t* buffer, size_t bufsz, const wchar_t*
 	va_list parameters;
 	va_start(parameters, format);
 	int written = _vprint_impl(&(ctx_t) {
+			._print = (bufsz ? buffer_print : buffer_wprint_count),
 			._wprint = (bufsz ? buffer_wprint : buffer_wprint_count),
 			._putchar = (bufsz ? buffer_putchar : buffer_putchar_count),
 			._that = (void*) & (buffer_t) { ._wp = buffer, ._end = buffer + bufsz }
@@ -550,9 +599,10 @@ int _JOS_LIBC_FUNC_NAME(vswprintf)(wchar_t *__restrict buffer, size_t bufsz, con
 		return 0;
 
 	int written = _vprint_impl(&(ctx_t) {
+		._print = (bufsz ? buffer_print : buffer_wprint_count),
 		._wprint = (bufsz ? buffer_wprint : buffer_wprint_count),
-			._putchar = (bufsz ? buffer_putchar : buffer_putchar_count),
-			._that = (void*) & (buffer_t) { ._wp = buffer, ._end = buffer + bufsz }
+		._putchar = (bufsz ? buffer_putchar : buffer_putchar_count),
+		._that = (void*) & (buffer_t) { ._wp = buffer, ._end = buffer + bufsz }
 	},
 		format, parameters);
 	buffer[written] = 0;
