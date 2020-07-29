@@ -15,6 +15,8 @@ void* memmove(void*, const void*, size_t);
 void* memset(void*, int, size_t);
 size_t strlen(const char*);
 
+#define EOF     (int)(-1)
+
 #ifdef __cplusplus
 }
 #endif
