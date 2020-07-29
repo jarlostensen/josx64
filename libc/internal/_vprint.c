@@ -209,7 +209,7 @@ int _vprint_impl(ctx_t* ctx, const wchar_t* __restrict format, va_list parameter
 			{
 				return EOF;
 			}
-			format += (size_t)result;
+			format += (size_t)amount;
 			written += result;
 		}
 
@@ -474,7 +474,7 @@ int _vprint_impl(ctx_t* ctx, const wchar_t* __restrict format, va_list parameter
 				if (res == EOF)
 					return EOF;
 				written += res;
-				format += res;
+				format += len;
 			}
 			break;
 			}
@@ -534,31 +534,36 @@ static int buffer_wprint(void* ctx_, const wchar_t* data, size_t length)
 		{
 		case L'\t':
 		{
-			if (rem_chars < 5)
+			if ((rem_chars-length) < 5)
 			{
+				// no more space
 				return EOF;
 			}
-			*ctx->_wp++ = L' ';
-			*ctx->_wp++ = L' ';
-			*ctx->_wp++ = L' ';
-			*ctx->_wp++ = L' ';
-
-			HERE
-				
+			// expand tabs to four spaces because It Is The Law
+			static const wchar_t kTab[4] = {L' ',L' ',L' ',L' '};
+			memcpy(ctx->_wp, kTab, sizeof(kTab));
+			ctx->_wp += 4;
 			++escapes;
 		}
 		break;
-		case L'\"':
-			*ctx->_wp++ = L'"';
-			++escapes;
-			break;
+		//TODO: more of these, if we can be bothered...
+#define _JOS_ESCAPED_CHAR(ec,c)\
+		case ec:\
+			if((rem_chars-length) < 2)\
+			{\
+				return EOF;\
+			}\
+			*ctx->_wp++ = c;\
+			++escapes;\
+			break
+		_JOS_ESCAPED_CHAR(L'\"','"');
 		default:
 			*ctx->_wp++ = wc;
 			break;
 		}
 	}
 
-	return (int)(length-escapes);
+	return (int)(length+escapes);
 }
 
 static int buffer_print(void* ctx_, const char* data, size_t length)
