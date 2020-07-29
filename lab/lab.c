@@ -7,17 +7,7 @@
 
 extern int _JOS_LIBC_FUNC_NAME(swprintf)(wchar_t* __restrict buffer, size_t sizeOfBuffer, const wchar_t* __restrict format, ...);
 extern int _JOS_LIBC_FUNC_NAME(vswprintf)(wchar_t *__restrict buffer, size_t bufsz, const wchar_t * __restrict format, va_list vlist);
-
-size_t _JOS_LIBC_FUNC_NAME(wcslen)( const wchar_t *str )
-{
-	size_t n = 0;
-	while(*str!=0) 
-	{
-		++n;
-		++str;
-	}
-	return n;
-}
+extern size_t _JOS_LIBC_FUNC_NAME(wcslen)( const wchar_t *str);
 
 int main(void)
 {
@@ -26,6 +16,8 @@ int main(void)
 	wbuffer[0] = 0;
 	written = _JOS_LIBC_FUNC_NAME(swprintf)(wbuffer,0,L"Hello wide %s, %3.2f this is 0x%x == %d, and \"%c\"", L"world", 3.1459f, 0xabcdef, 42, L'J');
 
+	written = _JOS_LIBC_FUNC_NAME(wcslen)(0);
+	written = _JOS_LIBC_FUNC_NAME(wcslen)(L"");
 	written = _JOS_LIBC_FUNC_NAME(wcslen)(L"1");
 	written = _JOS_LIBC_FUNC_NAME(wcslen)(L"22");
 	written = _JOS_LIBC_FUNC_NAME(wcslen)(L"123456789");
