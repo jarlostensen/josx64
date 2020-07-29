@@ -67,8 +67,7 @@ st->con_out->output_string(st->con_out, s)
     // traverse memory map and dump it    
     CEfiMemoryDescriptor* desc = memory_map;
     for ( unsigned i = 0; i < mem_desc_entries; ++i )
-    {
-        swprintf(buf, bufcount, L"entry %d: 0x%x\n\r", i, desc->type);
+    {        
         _EFI_PRINT(buf);
         switch(desc->type)
         {
@@ -109,12 +108,21 @@ st->con_out->output_string(st->con_out, s)
             break;
             default:
             {
-                _EFI_PRINT(L".");
+                _EFI_PRINT(L"unhandled\n\r");
             }
             break;            
         }
-
+        
+        swprintf(buf, bufcount, L"\ttype 0x%x, starts at 0x%llx, %d pages\n\r", desc->type, desc->physical_start, desc->number_of_pages);
         desc = (CEfiMemoryDescriptor*)((char*)desc + descriptor_size);
+
+        if ( i && i%8==0 )
+        {
+            CEfiInputKey key;
+            st->con_out->output_string(st->con_out, L"\n\rpress any key...\n\r"); 
+            CEfiUSize x;
+            st->boot_services->wait_for_event(1, &st->con_in->wait_for_key, &x);
+        }
     }
 
     _EFI_PRINT(L"\n\rexiting boot services\n\r");

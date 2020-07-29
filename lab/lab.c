@@ -18,9 +18,9 @@ extern size_t _JOS_LIBC_FUNC_NAME(wcslen)( const wchar_t *str);
 int main(void)
 {
 	wchar_t wbuffer[1024];
-	int written = _JOS_LIBC_FUNC_NAME(swprintf)(wbuffer,0,L"Hello wide %S, %3.2f this is 0x%x == %d, and \"%c\"", "world", 3.1459f, 0xabcdef, 42, L'J');	
+	int written = _JOS_LIBC_FUNC_NAME(swprintf)(wbuffer,0,L"\tHello wide %S, %3.2f this is 0x%x == %d, and \"%c\"", "world", 3.1459f, 0xabcdef, 42, L'J');	
 	wbuffer[0] = 0;
-	written = _JOS_LIBC_FUNC_NAME(swprintf)(wbuffer,sizeof(wbuffer)/sizeof(wchar_t),L"Hello wide %S, %3.2f this is 0x%x == %d, and \"%c\"", "world", 3.1459f, 0xabcdef, 42, L'J');
+	written = _JOS_LIBC_FUNC_NAME(swprintf)(wbuffer,sizeof(wbuffer)/sizeof(wchar_t),L"\tHello wide %S, %3.2f this is 0x%x == %d, and \"%c\"", "world", 3.1459f, 0xabcdef, 42, L'J');
 
 	written = _JOS_LIBC_FUNC_NAME(wcslen)(0);
 	written = _JOS_LIBC_FUNC_NAME(wcslen)(L"");
