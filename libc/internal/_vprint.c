@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 #ifndef _JOS_KERNEL_BUILD
 #define EOF (int)(-1)
 #endif 
@@ -30,7 +31,7 @@ static int printdecimal(ctx_t* ctx, long long d, int un_signed)
 		d *= -1;
 	}
 	// simple and dumb but it works...
-	int pow_10 = 1;
+	long long pow_10 = 1;
 	long long dd = d;
 
 	// find highest power of 10 
@@ -46,7 +47,7 @@ static int printdecimal(ctx_t* ctx, long long d, int un_signed)
 		int res = ctx->_putchar(ctx->_that, (int)L'0' + (int)dd);
 		if (res == EOF)
 			return EOF;
-		++written;
+		written+=res;
 		d = d - (dd * pow_10);
 		pow_10 /= 10;
 		if (!pow_10)
@@ -526,7 +527,7 @@ static int buffer_wprint(void* ctx_, const wchar_t* data, size_t length)
 		}
 		length = rem_chars - 1;
 	}
-	size_t escapes = 0;
+	int written = 0;
 	for (unsigned i = 0; i < length; ++i)
 	{
 		wchar_t wc = data[i];
@@ -543,7 +544,7 @@ static int buffer_wprint(void* ctx_, const wchar_t* data, size_t length)
 			static const wchar_t kTab[4] = {L' ',L' ',L' ',L' '};
 			memcpy(ctx->_wp, kTab, sizeof(kTab));
 			ctx->_wp += 4;
-			++escapes;
+			written+=4;
 		}
 		break;
 		//TODO: more of these, if we can be bothered...
@@ -554,16 +555,16 @@ static int buffer_wprint(void* ctx_, const wchar_t* data, size_t length)
 				return EOF;\
 			}\
 			*ctx->_wp++ = c;\
-			++escapes;\
+			++written;\
 			break
 		_JOS_ESCAPED_CHAR(L'\"','"');
 		default:
 			*ctx->_wp++ = wc;
+			++written;
 			break;
 		}
 	}
-
-	return (int)(length+escapes);
+	return written;
 }
 
 static int buffer_print(void* ctx_, const char* data, size_t length)
@@ -615,7 +616,7 @@ int _JOS_LIBC_FUNC_NAME(swprintf) (wchar_t* buffer, size_t bufsz, const wchar_t*
 	va_list parameters;
 	va_start(parameters, format);
 	int written = _vprint_impl(&(ctx_t) {
-		._print = (bufsz ? buffer_print : buffer_wprint_count),
+		._print = (bufsz ? buffer_print : buffer_print_count),
 			._wprint = (bufsz ? buffer_wprint : buffer_wprint_count),
 			._putchar = (bufsz ? buffer_putchar : buffer_putchar_count),
 			._that = (void*)&(buffer_t) { ._wp = buffer, ._end = buffer + bufsz }
@@ -632,7 +633,7 @@ int _JOS_LIBC_FUNC_NAME(vswprintf)(wchar_t* __restrict buffer, size_t bufsz, con
 		return 0;
 
 	int written = _vprint_impl(&(ctx_t) {
-		._print = (bufsz ? buffer_print : buffer_wprint_count),
+		._print = (bufsz ? buffer_print : buffer_print_count),
 			._wprint = (bufsz ? buffer_wprint : buffer_wprint_count),
 			._putchar = (bufsz ? buffer_putchar : buffer_putchar_count),
 			._that = (void*)&(buffer_t) { ._wp = buffer, ._end = buffer + bufsz }
