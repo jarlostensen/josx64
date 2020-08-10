@@ -77,7 +77,7 @@ struct disk_sector_writer
 {
     disk_sector_writer(std::ofstream& ofs, size_t total_sectors)
         : _ofs{ ofs }
-    , _total_sectors{total_sectors}
+        , _total_sectors{ total_sectors }
     {
         _start_pos = _ofs.tellp();
     }
@@ -109,17 +109,50 @@ struct disk_sector_writer
     }
 
     char    _sector[kSectorSizeBytes];
-    std::ofstream&          _ofs;
+    std::ofstream& _ofs;
     std::ofstream::pos_type _start_pos;
     size_t                  _total_sectors = 0;
 };
 
-bool dd(disk_sector_writer& writer)
+struct disk_sector_reader
+{
+    disk_sector_reader(std::ifstream& ifs)
+        : _ifs{ ifs }
+    {
+        _start_pos = _ifs.tellg();
+    }
+
+    bool good() const
+    {
+        return _ifs.is_open() && _ifs.good();
+    }
+
+    void reset() const
+    {
+        if (good())
+            _ifs.seekg(_start_pos, std::ios::beg);
+    }
+
+    bool        read_from(size_t lba)
+    {
+        _ifs.seekg(_start_pos + std::ifstream::pos_type(lba * kSectorSizeBytes), std::ios::beg);
+        if (!_ifs.good())
+            return false;
+        _ifs.read(_sector, kSectorSizeBytes);
+        return _ifs.good();
+    }
+
+    char                    _sector[kSectorSizeBytes];
+    std::ifstream& _ifs;
+    std::ifstream::pos_type _start_pos;
+};
+
+bool create_blank_image(disk_sector_writer& writer)
 {
     writer.reset();
     writer.blank_sector();
     auto sector_count = writer._total_sectors;
-    while(writer.good() && sector_count--)
+    while (writer.good() && sector_count--)
     {
         writer._ofs.write(writer._sector, kSectorSizeBytes);
     }
@@ -246,7 +279,7 @@ namespace fat
         kLongName = kReadOnly | kHidden | kSystem | kVolumeId
     };
 
-    enum class validation_result_t
+    enum class validation_result
     {
         kOk,
         kUninitialisedPartition,
@@ -282,21 +315,21 @@ namespace fat
     static constexpr uint8_t    kShortJmp = 0xeb;
     static constexpr uint8_t    kLongJmp = 0xe9;
 
-    struct disksize_to_sectors_per_cluster_t
+    struct disksize_to_sectors_per_cluster
     {
         size_t		_sector_limit;
         uint8_t		_sectors_per_cluster;
     };
 
     // from Microsoft's FAT format technical design document
-    static constexpr disksize_to_sectors_per_cluster_t kDiskTableFat16[] =
+    static constexpr disksize_to_sectors_per_cluster kDiskTableFat16[] =
     {
         {    262144,   4},   /* disks up to 128 MB,  2k cluster */
         {   524288,    8},   /* disks up to 256 MB,  4k cluster */
         { 1048576,  16},     /* disks up to 512 MB,  8k cluster */
     };
     // from Microsoft's FAT format technical design document
-    static constexpr disksize_to_sectors_per_cluster_t kDiskTableFat32[] =
+    static constexpr disksize_to_sectors_per_cluster kDiskTableFat32[] =
     {
         { 16777216,   8},     /* disks up to     8 GB,    4k cluster */
         { 33554432, 16},      /* disks up to   16 GB,    8k cluster */
@@ -342,7 +375,7 @@ namespace fat
             }
         }
 
-        validation_result_t operator()()
+        validation_result operator()()
         {
             char sector[kSectorSizeBytes];
 
@@ -356,12 +389,12 @@ namespace fat
                 (reinterpret_cast<const uint16_t*>(sector + 510)[0] != kMBRSignature)
                 )
             {
-                return (_validation_result = validation_result_t::kUninitialisedPartition);
+                return (_validation_result = validation_result::kUninitialisedPartition);
             }
 
             if (_boot_sector._bpb._bytes_per_sector != kSectorSizeBytes)
             {
-                return (_validation_result = validation_result_t::kUnsupportedSectorSize);
+                return (_validation_result = validation_result::kUnsupportedSectorSize);
             }
 
             _root_dir_sector_count = ((_boot_sector._bpb._root_entry_count * 32) + (kSectorSizeBytes - 1)) / kSectorSizeBytes;
@@ -374,7 +407,7 @@ namespace fat
             if (num_clusters < 4085)
             {
                 // FAT12, we don't support it
-                return (_validation_result = validation_result_t::kUnsupportedFat12);
+                return (_validation_result = validation_result::kUnsupportedFat12);
             }
             if (num_clusters < 65525)
             {
@@ -387,7 +420,7 @@ namespace fat
 
                 if (sectors_per_fat == 0 || total_sectors == 0)
                 {
-                    return (_validation_result = validation_result_t::kInvalidFat16Structure);
+                    return (_validation_result = validation_result::kInvalidFat16Structure);
                 }
             }
             else
@@ -401,11 +434,11 @@ namespace fat
 
                 if (_boot_sector._bpb._sectors_per_fat16 != 0 || fat32_bpb->_sectors_per_fat == 0 || total_sectors == 0)
                 {
-                    return (_validation_result = validation_result_t::kInvalidFat32Structure);
+                    return (_validation_result = validation_result::kInvalidFat32Structure);
                 }
                 if (fat32_bpb->_version != 0)
                 {
-                    return (_validation_result = validation_result_t::kInvalidVersion);
+                    return (_validation_result = validation_result::kInvalidVersion);
                 }
 
                 // FSInfo
@@ -419,7 +452,7 @@ namespace fat
                     fsinfo->_tail_sig != kFsInfoTailSig
                     )
                 {
-                    return (_validation_result = validation_result_t::kFat32FsInfoCorrupt);
+                    return (_validation_result = validation_result::kFat32FsInfoCorrupt);
                 }
             }
 
@@ -431,12 +464,14 @@ namespace fat
                 &&
                 calc_num_clusters < 65525)
             {
-                return (_validation_result = validation_result_t::kInvalidFatTypeCalculation);
+                return (_validation_result = validation_result::kInvalidFatTypeCalculation);
             }
 
             // first FAT
             _raw_image.seekg(size_t(_partition_start) + _boot_sector._bpb._reserved_sectors * kSectorSizeBytes, std::ios::beg);
             _raw_image.read(sector, kSectorSizeBytes);
+
+            auto root_dir_start_lba = 0u;
 
             if (_type == fat_type::kFat16)
             {
@@ -447,12 +482,12 @@ namespace fat
                     ||
                     (fat16[0] | 0xff) != 0xffff)
                 {
-                    return (_validation_result = validation_result_t::kCorruptFat16);
+                    return (_validation_result = validation_result::kCorruptFat16);
                 }
 
                 if (fat16[1] < kFat16EOC)
                 {
-                    return (_validation_result = validation_result_t::kCorruptFat16);
+                    return (_validation_result = validation_result::kCorruptFat16);
                 }
 
                 // clean shutdown bitmask or hardware error mask
@@ -461,7 +496,7 @@ namespace fat
                     (fat16[1] & 0x4000) == 0
                     )
                 {
-                    return (_validation_result = validation_result_t::kVolumeMayHaveErrors);
+                    return (_validation_result = validation_result::kVolumeMayHaveErrors);
                 }
 
                 // copy FAT#1 
@@ -475,6 +510,8 @@ namespace fat
                     memcpy(fat_sector, sector, kSectorSizeBytes);
                     fat_sector += kSectorSizeBytes;
                 }
+
+                root_dir_start_lba = _boot_sector._bpb._reserved_sectors + (_boot_sector._bpb._num_fats * _boot_sector._bpb._sectors_per_fat16);
             }
             else
             {
@@ -488,12 +525,12 @@ namespace fat
                     ((entry0 | 0xff) != 0x0fffffff)
                     )
                 {
-                    return (_validation_result = validation_result_t::kCorruptFat32);
+                    return (_validation_result = validation_result::kCorruptFat32);
                 }
                 // must be a valid EOC marker
                 if (fat32[1] < kFat32EOC)
                 {
-                    return (_validation_result = validation_result_t::kCorruptFat32);
+                    return (_validation_result = validation_result::kCorruptFat32);
                 }
 
                 // clean shutdown bitmask or hardware error mask
@@ -502,7 +539,7 @@ namespace fat
                     (fat32[1] & 0x04000000) == 0
                     )
                 {
-                    return (_validation_result = validation_result_t::kVolumeMayHaveErrors);
+                    return (_validation_result = validation_result::kVolumeMayHaveErrors);
                 }
 
                 // copy FAT#1 
@@ -519,34 +556,59 @@ namespace fat
 
                 // read and check the root directory
                 //const auto root_dir_fat_entry = fat32[_extended_bpb._fat32._root_cluster];
-                const auto root_dir_start_lba = first_data_lba + ((_extended_bpb._fat32._root_cluster - 2) * _boot_sector._bpb._sectors_per_cluster);
+                root_dir_start_lba = first_data_lba + ((_extended_bpb._fat32._root_cluster - 2) * _boot_sector._bpb._sectors_per_cluster);
                 _raw_image.seekg(size_t(_partition_start) + root_dir_start_lba * kSectorSizeBytes, std::ios::beg);
                 _raw_image.read(sector, kSectorSizeBytes);
                 _root_dir = reinterpret_cast<fat_dir_entry*>(sector);
                 if ((_root_dir->_attrib & uint8_t(fat_file_attribute::kVolumeId)) == 0)
                 {
-                    return (_validation_result = validation_result_t::kFat32CorruptRootDirectory);
+                    return (_validation_result = validation_result::kFat32CorruptRootDirectory);
                 }
-
-                //const auto root_dir_fat_entry = fat32[_extended_bpb._fat32._root_cluster];
-                //if (root_dir_fat_entry == kFat32EOC)
             }
+
+            // read the first root directory cluster
+            _raw_image.seekg(size_t(_partition_start) + root_dir_start_lba * kSectorSizeBytes, std::ios::beg);
+            const auto dir_entries_per_cluster = (kSectorSizeBytes / 32) * _boot_sector._bpb._sectors_per_cluster;
+            _root_dir = new fat_dir_entry[dir_entries_per_cluster];
+            _raw_image.read(reinterpret_cast<char*>(_root_dir), (dir_entries_per_cluster * kSectorSizeBytes * _boot_sector._bpb._sectors_per_cluster));
+
+
 
             // re-set before we exit cleanly
             _raw_image.seekg(_partition_start, std::ios::beg);
-
-            return (_validation_result = validation_result_t::kOk);
+            return (_validation_result = validation_result::kOk);
         }
 
         bool get_volume_label(char* dest, size_t destSize) const
         {
-            if (_validation_result != validation_result_t::kOk || destSize < 12)
+            if (_validation_result != validation_result::kOk || destSize < 12)
                 return false;
 
             memcpy(dest, _root_dir->_short_name, sizeof _root_dir->_short_name);
             dest[11] = 0;
 
             return true;
+        }
+
+        bool check_file_structures()
+        {
+            if (_type == fat_type::kFat16)
+            {
+                auto* dir_entry = _root_dir + 1;
+                while (dir_entry->_attrib != 0)
+                {
+                    auto calculated_size = 0u;
+                    auto next_cluster = dir_entry->_first_cluster_lo;
+                    while (next_cluster != kFat16EOC)
+                    {
+
+                    }
+                }
+            }
+            else
+            {
+                //TODO:
+            }
         }
 
         std::ifstream& _raw_image;
@@ -560,7 +622,7 @@ namespace fat
         }
         _extended_bpb;
 
-        validation_result_t _validation_result = validation_result_t::kNotValidated;
+        validation_result _validation_result = validation_result::kNotValidated;
 
         union
         {
@@ -580,7 +642,7 @@ namespace fat
 
 
 
-    bool format_efi_boot_partition(disk_sector_writer& writer, size_t total_sectors, const char* volumeLabel)
+    bool format_efi_boot_partition(disk_sector_writer& writer, size_t total_sectors, const char* volumeLabel, const void* bootx64_efi, size_t bootx64_efi_size)
     {
         if (!writer.good() || !total_sectors)
             return false;
@@ -711,6 +773,8 @@ namespace fat
         }
         //TODO: support FAT12 for small disks
 
+        const auto bytes_per_cluster = boot_sector._bpb._sectors_per_cluster * kSectorSizeBytes;
+
         const auto root_dir_sector_count = ((boot_sector._bpb._root_entry_count * 32) + (kSectorSizeBytes - 1)) / kSectorSizeBytes;
 
         // this magic piece of calculation is taken from from MS' white paper where it states;
@@ -774,23 +838,67 @@ namespace fat
         //      /BOOT
         //            BOOTX64.EFI
         //
+        // The root (for FAT32), EFI, and BOOT directories all occupy one cluster each that we lay out 
+        // linearly starting at 2. The payload (bootx64.efi) is laid out following the directories, also linearly.
+        //
 
         sector = writer.blank_sector();
 
         const auto first_data_lba = boot_sector._bpb._reserved_sectors + (boot_sector._bpb._num_fats * sectors_per_fat) + root_dir_sector_count;
         auto root_dir_start_lba = 0u;
 
+        // 3 is the first available data cluster and is the one that will hold the BOOT directory
+        auto next_free_cluster = 0u;
+
+        // 2 reserved + 2 directories 
+        auto bootx64_start_cluster = 0u;
+        const auto bootx64_num_clusters = (bootx64_efi_size / bytes_per_cluster) + ((bootx64_efi_size % bytes_per_cluster) != 0 ? 1 : 0);
+
+        auto fat_sector = boot_sector._bpb._reserved_sectors;
+
         // fill in first two FAT entries (cluster 0 and 1) as per standard for either fat16 or fat32
         if (_type == fat_type::kFat16)
         {
             auto* fat16 = reinterpret_cast<uint16_t*>(sector);
+            const auto max_clusters_per_sector = kSectorSizeBytes / sizeof(uint16_t);
+
             fat16[0] = 0xff00 | boot_sector._bpb._media_descriptor;
             fat16[1] = kFat16EOC;
 
-            // root directory, EFI and EFI/BOOT directories reside in the first three clusters and only use one cluster each
+            // EFI and EFI/BOOT directories reside in the first three clusters and only use one cluster each
             fat16[2] = kFat16EOC;
             fat16[3] = kFat16EOC;
-            fat16[4] = kFat16EOC;
+
+            // first available cluster is 2
+            next_free_cluster = 2;
+            // first free after 2 reserved entries + 2 clusters for EFI + BOOT 
+            bootx64_start_cluster = 4;
+
+            auto cluster_counter = bootx64_start_cluster;
+            // each FAT entry points to the *next* cluster in the chain, hence the staggered start.
+            for (size_t n = 1; n < bootx64_num_clusters; ++n)
+            {
+                fat16[cluster_counter++] = n + bootx64_start_cluster;
+            
+                if (cluster_counter == max_clusters_per_sector)
+                {
+                    if (n == (bootx64_num_clusters - 1))
+                    {
+                        fat16[cluster_counter] = kFat16EOC;
+                    }
+
+                    // next FAT sector
+                    writer.write_at(fat_sector++);
+                    fat16 = reinterpret_cast<uint16_t*>(writer.blank_sector());
+                    cluster_counter = 0;
+                }
+            }
+
+            if (cluster_counter)
+            {
+                fat16[cluster_counter] = kFat16EOC;
+                writer.write_at(fat_sector);
+            }
 
             // for FAT16 the root directory is stored before the data area in a fixed size area (as in; it can't grow after it has been created)
             root_dir_start_lba = boot_sector._bpb._reserved_sectors + (boot_sector._bpb._num_fats * boot_sector._bpb._sectors_per_fat16);
@@ -806,26 +914,27 @@ namespace fat
             fat32[3] = kFat32EOC;
             fat32[4] = kFat32EOC;
 
+            // first available cluster after the root directory is 3
+            next_free_cluster = 3;
+            bootx64_start_cluster = 5;
+
             // the root directory of a FAT32 volume is a normal file chain and can grow as large as it needs to be.
             root_dir_start_lba = first_data_lba + ((extended_bpb._fat32._root_cluster - 2) * boot_sector._bpb._sectors_per_cluster);
         }
-        // write first sector of FAT (we ignore the second one, and we've set the mirror flag in the FAT32 BPB to reflect this)
-        // if you run a utility like dosfsck, for example, it will call out that the two FATs don't match.        
-        writer.write_at(boot_sector._bpb._reserved_sectors);
 
         // =======================================================================================
-        // root directory 
+        // directories and files
         //
+        // the root directory comes first and resides inside the reserved area for FAT16 and in the first data cluster for FAT32
+        // subsequent directories (and files) are created linearly from free clusters.
 
-        // 3 is the first free cluster after the "special" root directory cluster (2).
-        auto next_free_cluster = 3;
-
+        // the first entry is always the volume label entry (which must match the volume label set in the BPB)
         auto* dir_entry = reinterpret_cast<fat_dir_entry*>(writer.blank_sector());
-
-        // volume label entry (must match the volume label set in the BPB)
         dir_entry->set_name(volumeLabel);
         dir_entry->_attrib = uint8_t(fat_file_attribute::kVolumeId);
         ++dir_entry;
+
+        // EFI and EFI/BOOT directories
 
         // EFI directory
         dir_entry->set_name("EFI");
@@ -835,17 +944,56 @@ namespace fat
 
         // write root dir sector
         writer.write_at(root_dir_start_lba);
+
+        const auto cluster_2_lba = [&boot_sector, first_data_lba](size_t cluster)
+        {
+            return first_data_lba + ((cluster - 2) * boot_sector._bpb._sectors_per_cluster);
+        };
+
+        // EFI directory contents:
+        //  .
+        //  ..
+        //  BOOT
         dir_entry = reinterpret_cast<fat_dir_entry*>(writer.blank_sector());
 
-        // EFI directory contents        
+        dir_entry->set_name(".");
+        dir_entry->_attrib = uint8_t(fat_file_attribute::kDirectory);
+        dir_entry->_first_cluster_lo = efi_dir_cluster;
+        dir_entry++;
+        dir_entry->set_name("..");
+        dir_entry->_attrib = uint8_t(fat_file_attribute::kDirectory);
+        dir_entry->_first_cluster_lo = 0;
+        dir_entry++;
         dir_entry->set_name("BOOT");
-        dir_entry->_attrib = uint8_t(fat_file_attribute::kDirectory);        
+        dir_entry->_attrib = uint8_t(fat_file_attribute::kDirectory);
         dir_entry->_first_cluster_lo = next_free_cluster++;
+        const auto boot_dir_cluster = dir_entry->_first_cluster_lo;
 
         // write the BOOT sub-directory entry to the efi_dir_cluster
-        const auto efi_dir_lba = first_data_lba + ((efi_dir_cluster - 2) * boot_sector._bpb._sectors_per_cluster);
+        const auto efi_dir_lba = cluster_2_lba(efi_dir_cluster);
         writer.write_at(efi_dir_lba);
 
+        // BOOT directory contents
+        // .
+        // ..
+        // BOOTx64.EFI
+        //
+        dir_entry = reinterpret_cast<fat_dir_entry*>(writer.blank_sector());
+
+        dir_entry->set_name(".");
+        dir_entry->_attrib = uint8_t(fat_file_attribute::kDirectory);
+        dir_entry->_first_cluster_lo = boot_dir_cluster;
+        dir_entry++;
+        dir_entry->set_name("..");
+        dir_entry->_attrib = uint8_t(fat_file_attribute::kDirectory);
+        dir_entry->_first_cluster_lo = efi_dir_cluster;
+        dir_entry++;
+        dir_entry->set_name("BOOTX64 EFI");
+        dir_entry->_size = bootx64_efi_size;
+        dir_entry->_first_cluster_lo = bootx64_start_cluster;
+
+        const auto boot_dir_lba = cluster_2_lba(boot_dir_cluster);
+        writer.write_at(boot_dir_lba);
 
         writer.reset();
         return true;
@@ -1190,6 +1338,7 @@ int main(int argc, char* argv[])
     // dosfsck -l -v -V fat.img
 
     //efi::create_efi_boot_image("..\\..\\build\\BOOTX64.EFI", "boot.dd");
+
     std::ofstream ofat_part{ ".\\fat.img", std::ios::binary | std::ios::trunc };
     if (ofat_part.is_open())
     {
@@ -1197,9 +1346,16 @@ int main(int argc, char* argv[])
         constexpr auto kSectorCount = kSize / kSectorSizeBytes;
 
         disk_sector_writer writer{ ofat_part, kSectorCount };
-        dd(writer);
+        create_blank_image(writer);
 
-        fat::format_efi_boot_partition(writer, kSectorCount, "fat512");
+        std::ifstream payload{ "..\\..\\build\\BOOTX64.EFI", std::ios::binary };
+        payload.seekg(0, std::ios::end);
+        const auto bootx64_size = payload.tellg();
+        payload.seekg(0, std::ios::beg);
+        const auto boot_image = new char[size_t(bootx64_size)];
+        payload.read(boot_image, bootx64_size);
+
+        fat::format_efi_boot_partition(writer, kSectorCount, "fat512", boot_image, bootx64_size);
         ofat_part.close();
 
         std::ifstream ifat_part{ ".\\fat.img", std::ios::binary };
