@@ -62,13 +62,12 @@ st->con_out->output_string(st->con_out, s)
 
     wchar_t buf[256];
     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
-    swprintf(buf, bufcount, L"There are %d entries in the memory map\n\r", mem_desc_entries);
+    swprintf(buf, bufcount, L"There are %d entries in the memory map %c\n\r", mem_desc_entries, (int)0x25b2);
     _EFI_PRINT(buf);
     // traverse memory map and dump it    
     CEfiMemoryDescriptor* desc = memory_map;
     for ( unsigned i = 0; i < mem_desc_entries; ++i )
     {        
-        _EFI_PRINT(buf);
         switch(desc->type)
         {
             case C_EFI_LOADER_CODE:
@@ -110,10 +109,12 @@ st->con_out->output_string(st->con_out, s)
             {
                 _EFI_PRINT(L"unhandled\n\r");
             }
-            break;            
+            break;
         }
         
-        swprintf(buf, bufcount, L"\ttype 0x%x, starts at 0x%llx, %d pages\n\r", desc->type, desc->physical_start, desc->number_of_pages);
+        swprintf(buf, bufcount, L"\ttype 0x%x, starts at 0x%llx, %d pages, %llu Kbytes\n\r", desc->type, desc->physical_start, desc->number_of_pages, (desc->number_of_pages*0x1000)/0x400);
+        _EFI_PRINT(buf);
+        
         desc = (CEfiMemoryDescriptor*)((char*)desc + descriptor_size);
 
         if ( i && i%8==0 )
