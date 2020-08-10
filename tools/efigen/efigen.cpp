@@ -590,27 +590,6 @@ namespace fat
             return true;
         }
 
-        bool check_file_structures()
-        {
-            if (_type == fat_type::kFat16)
-            {
-                auto* dir_entry = _root_dir + 1;
-                while (dir_entry->_attrib != 0)
-                {
-                    auto calculated_size = 0u;
-                    auto next_cluster = dir_entry->_first_cluster_lo;
-                    while (next_cluster != kFat16EOC)
-                    {
-
-                    }
-                }
-            }
-            else
-            {
-                //TODO:
-            }
-        }
-
         std::ifstream& _raw_image;
         std::ios::pos_type      _partition_start;
         fat_boot_sector		_boot_sector{};
@@ -642,7 +621,7 @@ namespace fat
 
 
 
-    bool format_efi_boot_partition(disk_sector_writer& writer, size_t total_sectors, const char* volumeLabel, const void* bootx64_efi, size_t bootx64_efi_size)
+    bool format_efi_boot_partition(disk_sector_writer& writer, size_t total_sectors, const char* volumeLabel, const void* bootx64_efi, size_t bootx64_size)
     {
         if (!writer.good() || !total_sectors)
             return false;
@@ -848,13 +827,11 @@ namespace fat
         auto root_dir_start_lba = 0u;
 
         // 3 is the first available data cluster and is the one that will hold the BOOT directory
-        auto next_free_cluster = 0u;
+        auto next_cluster = 0u;
 
         // 2 reserved + 2 directories 
         auto bootx64_start_cluster = 0u;
-        const auto bootx64_num_clusters = (bootx64_efi_size / bytes_per_cluster) + ((bootx64_efi_size % bytes_per_cluster) != 0 ? 1 : 0);
-
-        auto fat_sector = boot_sector._bpb._reserved_sectors;
+        const auto bootx64_num_clusters = (bootx64_size / bytes_per_cluster) + ((bootx64_size % bytes_per_cluster) != 0 ? 1 : 0);
 
         // fill in first two FAT entries (cluster 0 and 1) as per standard for either fat16 or fat32
         if (_type == fat_type::kFat16)
@@ -870,13 +847,15 @@ namespace fat
             fat16[3] = kFat16EOC;
 
             // first available cluster is 2
-            next_free_cluster = 2;
+            next_cluster = 2;
             // first free after 2 reserved entries + 2 clusters for EFI + BOOT 
             bootx64_start_cluster = 4;
 
             auto cluster_counter = bootx64_start_cluster;
+            auto fat_sector = boot_sector._bpb._reserved_sectors;
+
             // each FAT entry points to the *next* cluster in the chain, hence the staggered start.
-            for (size_t n = 1; n < bootx64_num_clusters; ++n)
+            for (auto n = 1u; n < bootx64_num_clusters; ++n)
             {
                 fat16[cluster_counter++] = n + bootx64_start_cluster;
             
@@ -906,6 +885,8 @@ namespace fat
         else
         {
             auto* fat32 = reinterpret_cast<uint32_t*>(sector);
+            const auto max_clusters_per_sector = kSectorSizeBytes / sizeof(uint32_t);
+
             fat32[0] = 0x0fffff00 | boot_sector._bpb._media_descriptor;
             fat32[1] = kFat32EOC;
 
@@ -915,8 +896,37 @@ namespace fat
             fat32[4] = kFat32EOC;
 
             // first available cluster after the root directory is 3
-            next_free_cluster = 3;
+            next_cluster = 3;
             bootx64_start_cluster = 5;
+
+            auto cluster_counter = bootx64_start_cluster;
+            auto fat_sector = boot_sector._bpb._reserved_sectors;
+
+            // each FAT entry points to the *next* cluster in the chain, hence the staggered start.
+            for (auto n = 1u; n < bootx64_num_clusters; ++n)
+            {
+                //NOTE: FAT32 entries are only 28 bits, the upper 4 bits are reserved and since we are formatting the volume we get to set them to 0
+                fat32[cluster_counter++] = (n + bootx64_start_cluster) & 0x0fffffff;
+            
+                if (cluster_counter == max_clusters_per_sector)
+                {
+                    if (n == (bootx64_num_clusters - 1))
+                    {
+                        fat32[cluster_counter] = kFat32EOC;
+                    }
+
+                    // next FAT sector
+                    writer.write_at(fat_sector++);
+                    fat32 = reinterpret_cast<uint32_t*>(writer.blank_sector());
+                    cluster_counter = 0;
+                }
+            }
+
+            if (cluster_counter)
+            {
+                fat32[cluster_counter] = kFat32EOC;
+                writer.write_at(fat_sector);
+            }
 
             // the root directory of a FAT32 volume is a normal file chain and can grow as large as it needs to be.
             root_dir_start_lba = first_data_lba + ((extended_bpb._fat32._root_cluster - 2) * boot_sector._bpb._sectors_per_cluster);
@@ -939,7 +949,7 @@ namespace fat
         // EFI directory
         dir_entry->set_name("EFI");
         dir_entry->_attrib = uint8_t(fat_file_attribute::kDirectory);
-        dir_entry->_first_cluster_lo = next_free_cluster++;
+        dir_entry->_first_cluster_lo = next_cluster++;
         const auto efi_dir_cluster = dir_entry->_first_cluster_lo;
 
         // write root dir sector
@@ -966,7 +976,7 @@ namespace fat
         dir_entry++;
         dir_entry->set_name("BOOT");
         dir_entry->_attrib = uint8_t(fat_file_attribute::kDirectory);
-        dir_entry->_first_cluster_lo = next_free_cluster++;
+        dir_entry->_first_cluster_lo = next_cluster++;
         const auto boot_dir_cluster = dir_entry->_first_cluster_lo;
 
         // write the BOOT sub-directory entry to the efi_dir_cluster
@@ -989,11 +999,31 @@ namespace fat
         dir_entry->_first_cluster_lo = efi_dir_cluster;
         dir_entry++;
         dir_entry->set_name("BOOTX64 EFI");
-        dir_entry->_size = bootx64_efi_size;
+        dir_entry->_size = bootx64_size;
         dir_entry->_first_cluster_lo = bootx64_start_cluster;
 
         const auto boot_dir_lba = cluster_2_lba(boot_dir_cluster);
         writer.write_at(boot_dir_lba);
+
+        // the contents of BOOTX64.EFI itself are laid out in a linear chain starting at 
+        // bootx64_start_cluster
+        auto bootx64_sector = cluster_2_lba(bootx64_start_cluster);
+        auto bytes_left = bootx64_size;
+        const auto* bytes = reinterpret_cast<const char*>(bootx64_efi);
+        do
+        {
+            memcpy(writer.blank_sector(), bytes, kSectorSizeBytes);
+            writer.write_at(bootx64_sector++);
+            bytes += kSectorSizeBytes;
+            bytes_left -= kSectorSizeBytes;
+        }
+        while(bytes_left >= kSectorSizeBytes);
+
+        if(bytes_left)
+        {
+            memcpy(writer.blank_sector(), bytes, bytes_left);
+            writer.write_at(bootx64_sector);
+        }
 
         writer.reset();
         return true;
