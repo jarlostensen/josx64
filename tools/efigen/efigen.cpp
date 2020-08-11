@@ -6,6 +6,8 @@
 #include <sstream>
 #include <random>
 
+#include "../cxxopts-2.2.0/include/cxxopts.hpp"
+
 namespace utils
 {
     // https://rosettacode.org/wiki/CRC-32#C
@@ -65,14 +67,14 @@ namespace utils
 }
 
 
-namespace diskools
+namespace disktools
 {
     // this is the *only* sector size we support here. UEFI does support other sector sizes but we don't bother and
     // most of the reference literature and definitions assume a 512 byte sector size.
     static constexpr size_t kSectorSizeBytes = 512;
-
     static constexpr uint16_t kMBRSignature = 0xaa55;
 
+    auto _debug = false;
 
     // helper to make it a bit more intuitive to use and write sectors to a file
     struct disk_sector_writer
@@ -1252,7 +1254,7 @@ namespace diskools
         // | protective mbr | primary EFI gpt + GPT partition array | UEFI system partition (FAT format)...[Last usable LBA] | backup GPT partition array + backup GPT |
         //
         //
-        bool create_efi_boot_image(const char* bootIname, const char* oname)
+        bool create_efi_boot_image(const std::string& bootIname, const std::string& oname)
         {
             std::ifstream ifile{ bootIname, std::ios::binary };
             if (!ifile.is_open())
@@ -1392,9 +1394,7 @@ namespace diskools
     }
 }
 
-using namespace diskools;
-
-int main(int argc, char* argv[])
+int main(int argc, char** argv)
 {
     // use 7-zip manager to open the image file and examine the contents.
     //
@@ -1408,29 +1408,37 @@ int main(int argc, char* argv[])
     //
     // to inspect and validate the partition
     //
-    
+    //
+
+    cxxopts::Options options("efigen");
+
+    options.add_options()
+    ("i,input", "source kernel binary, must be BOOTX64.EFI", cxxopts::value<std::string>())
+    ("o,output", "output disk image file", cxxopts::value<std::string>())
+    ("v,verify", "(DEBUG) verify the integrity of the image after creation", cxxopts::value<bool>()->default_value("false"))
+    ("h,help", "usage")
+    ;
+
+    const auto result = options.parse(argc,argv);
+
     std::cout << "------------------------------------\n";
     std::cout << "efigen EFI boot disk creator\n";
-    std::cout << "by jarl.ostensen\n";
+    std::cout << "by jarl.ostensen\n\n";
 
-    const auto print_usage = []()
+    if ( result.count("help") || !result.count("input") || !result.count("output") )
     {
-        std::cerr << "usage:\n";
-        std::cerr << "\tefigen -i [path to BOOTX64.EFI] -o [disk image filename]\n";  
-    };
-
-    if ( argc<5
-        ||
-        _strnicmp("-i", argv[1], 2)!=0
-        ||
-        _strnicmp("-o", argv[3], 2)!=0
-        )
-    {
-        print_usage();
+        std::cerr << options.help() << std::endl;
         return -1;
     }
-    
-    if ( !efi::create_efi_boot_image(argv[2], argv[4]) )
+
+    if ( result.count("debug") )
+    {
+        disktools::_debug = result["debug"].as<bool>();
+    }
+    const auto boot_image_file = result["input"].as<std::string>();
+    const auto output_file = result["output"].as<std::string>();
+
+    if ( !disktools::efi::create_efi_boot_image(boot_image_file, output_file) )
     {
         std::cerr << "\tcreate failed\n";
         return -1;
