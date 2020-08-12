@@ -74,7 +74,7 @@ namespace disktools
     static constexpr size_t kSectorSizeBytes = 512;
     static constexpr uint16_t kMBRSignature = 0xaa55;
 
-    auto _debug = false;
+    auto _verbose = false;
 
     // helper to make it a bit more intuitive to use and write sectors to a file
     struct disk_sector_writer
@@ -152,39 +152,7 @@ namespace disktools
         std::ofstream::pos_type _start_pos;
     };
 
-    struct disk_sector_reader
-    {
-        disk_sector_reader(std::ifstream& ifs)
-            : _ifs{ ifs }
-        {
-            _start_pos = _ifs.tellg();
-        }
-
-        bool good() const
-        {
-            return _ifs.is_open() && _ifs.good();
-        }
-
-        void reset() const
-        {
-            if (good())
-                _ifs.seekg(_start_pos, std::ios::beg);
-        }
-
-        bool        read_from(size_t lba)
-        {
-            _ifs.seekg(_start_pos + std::ifstream::pos_type(lba * kSectorSizeBytes), std::ios::beg);
-            if (!_ifs.good())
-                return false;
-            _ifs.read(_sector, kSectorSizeBytes);
-            return _ifs.good();
-        }
-
-        char                    _sector[kSectorSizeBytes];
-        std::ifstream& _ifs;
-        std::ifstream::pos_type _start_pos;
-    };
-
+    // like "dd"; create a blank image of writer._total_sectors sectors
     bool create_blank_image(disk_sector_writer& writer)
     {
         writer.reset();
@@ -1054,6 +1022,7 @@ namespace disktools
 
     } // namespace fat
 
+    // All things EFI GPT 
     namespace efi
     {
         // UEFI Specification 2.6, Chapter 5
@@ -1065,6 +1034,7 @@ namespace disktools
         static constexpr uint8_t kEfiSystemPartitionUuid[16] = { 0x28, 0x73, 0x2a, 0xc1, 0x1f, 0xf8, 0xd2, 0x11, 0xba, 0x4B, 0x00, 0xa0, 0xc9, 0x3e, 0xc9, 0x3b };
         // as per standard
         static constexpr uint8_t kNoVolumeLabel[11] = { 'N','O',' ','N','A','M','E',' ',' ',' ',' ' };
+        static constexpr uint8_t kEfiBootPartName[] = { 'E', 'F', 'I', ' ', 'B', 'O', 'O', 'T' };
 
 #pragma pack(push,1)
         struct mbr_partition_record
@@ -1116,137 +1086,6 @@ namespace disktools
         };
 #pragma pack(pop)
 
-        struct efi_disk
-        {
-            enum class validation_results_t
-            {
-                kOk,
-                kInvalidImageFileName,
-                kInvalidImageFile,
-                kIncorrectPartitionSignature,
-                kIncorrectRevision,
-                kHeaderChecksumError,
-                kInvalidHeaderLba,
-                kPartitionArrayChecksumError,
-                kBackupHeaderChecksumError,
-                kNotValidated,
-            };
-
-            efi_disk(const wchar_t* image_name, size_t size)
-                :_image_name{ image_name }
-                , _size{ size }
-            {
-            }
-
-            ~efi_disk()
-            {
-                delete[] _part_entries;
-            }
-
-            const wchar_t* image_file_name() const
-            {
-                return _image_name;
-            }
-
-            bool get_partition_info(size_t& startingLba, size_t& endLba) const
-            {
-                if (_validation_result != validation_results_t::kOk)
-                    return false;
-
-                startingLba = _gpt_header._first_usable_lba;
-                endLba = _gpt_header._last_usable_lba;
-                return true;
-            }
-
-            validation_results_t validate()
-            {
-                if (!_image_name || _image_name[0] == 0)
-                    return (_validation_result = validation_results_t::kInvalidImageFileName);
-
-                std::ifstream iimage{ _image_name, std::ios::binary };
-                if (!iimage.is_open())
-                    return (_validation_result = validation_results_t::kInvalidImageFile);
-
-                //NOTE: assuming this size here
-                char sector[kSectorSizeBytes];
-
-                iimage.read(sector, kSectorSizeBytes);
-
-                // protective mbr (or so we expect)
-                memcpy(&_mbr, sector + 446, sizeof mbr_partition_record);
-
-                iimage.read(sector, kSectorSizeBytes);
-
-                // GPT header
-                memcpy(&_gpt_header, sector, sizeof _gpt_header);
-
-                if (_gpt_header._signature != kEfiPartSignature)
-                    return (_validation_result = validation_results_t::kIncorrectPartitionSignature);
-                if (_gpt_header._revision != kEfiRevision)
-                    return (_validation_result = validation_results_t::kIncorrectRevision);
-
-                auto checksum = _gpt_header._header_crc32;
-                _gpt_header._header_crc32 = 0;
-                auto calc_checksum = utils::rc_crc32(0, reinterpret_cast<const char*>(&_gpt_header), sizeof gpt_header);
-                if (checksum != calc_checksum)
-                    return (_validation_result = validation_results_t::kHeaderChecksumError);
-
-                _gpt_header._header_crc32 = checksum;
-
-                if (_gpt_header._my_lba != 1)
-                    return (_validation_result = validation_results_t::kInvalidHeaderLba);
-
-                // seek to start of partition entry array
-                iimage.seekg(_gpt_header._partition_entry_lba * kSectorSizeBytes, std::ios::beg);
-
-                auto bytes_left = 0;
-                gpt_partition_header* sector_entry = nullptr;
-                _part_entries = new gpt_partition_header[_gpt_header._partition_entry_count];
-                for (unsigned i = 0; i < _gpt_header._partition_entry_count; ++i)
-                {
-                    if (bytes_left <= 0)
-                    {
-                        iimage.read(sector, kSectorSizeBytes);
-                        sector_entry = reinterpret_cast<gpt_partition_header*>(sector);
-                        bytes_left = kSectorSizeBytes;
-                    }
-                    memcpy(_part_entries + i, sector_entry++, sizeof gpt_partition_header);
-                    bytes_left -= _gpt_header._partition_entry_size;
-                }
-
-                checksum = utils::rc_crc32(0, reinterpret_cast<char*>(_part_entries), _gpt_header._partition_entry_count * sizeof(gpt_partition_header));
-                if (_gpt_header._partition_array_crc32 != checksum)
-                    return (_validation_result = validation_results_t::kPartitionArrayChecksumError);
-
-                // read and check the backup
-
-                gpt_header backup_gpt;
-                gpt_partition_header backup_part_header;
-                iimage.seekg((_gpt_header._last_usable_lba + 1) * kSectorSizeBytes, std::ios::beg);
-                iimage.read(sector, kSectorSizeBytes);
-                memcpy(&backup_part_header, sector, sizeof gpt_partition_header);
-                iimage.seekg(_gpt_header._alternate_lba * kSectorSizeBytes, std::ios::beg);
-                iimage.read(sector, kSectorSizeBytes);
-                memcpy(&backup_gpt, sector, sizeof gpt_header);
-
-                // validate the backup GPT by its checksum
-                checksum = backup_gpt._header_crc32;
-                backup_gpt._header_crc32 = 0;
-                calc_checksum = utils::rc_crc32(0, reinterpret_cast<const char*>(&backup_gpt), sizeof gpt_header);
-                if (checksum != calc_checksum)
-                    return (_validation_result = validation_results_t::kBackupHeaderChecksumError);
-
-                return (_validation_result = validation_results_t::kOk);
-            }
-
-            mbr_partition_record	_mbr;
-            gpt_header			_gpt_header;
-            gpt_partition_header* _part_entries = nullptr;
-            const wchar_t* _image_name = nullptr;
-            size_t					_size = 0;
-            validation_results_t	_validation_result = validation_results_t::kNotValidated;
-        };
-
         // ======================================================================================================================================================
         //
         // This creates a single partition UEFI disk image which contains the following sections:
@@ -1259,6 +1098,10 @@ namespace disktools
             std::ifstream ifile{ bootIname, std::ios::binary };
             if (!ifile.is_open())
             {
+                if (_verbose)
+                {
+                    std::cerr << bootIname << " not found\n";
+                }
                 return false;
             }
 
@@ -1277,6 +1120,10 @@ namespace disktools
             std::ofstream file{ oname, std::ios::binary | std::ios::trunc };
             if (!file.is_open())
             {
+                if (_verbose)
+                {
+                    std::cerr << oname << " not found\n";
+                }
                 return false;
             }
 
@@ -1292,6 +1139,11 @@ namespace disktools
             // ===============================================
             // create empty file
             create_blank_image(writer);
+
+            if (_verbose)
+            {
+                std::cout << "\timage is " << writer._total_sectors << " sectors, " << size << " bytes\n";
+            }
 
             // ===============================================
             // protective MBR
@@ -1316,6 +1168,11 @@ namespace disktools
             memcpy(sector + 510, &kMBRSignature, sizeof(kMBRSignature));
 
             writer.write_at(0, 1);
+
+            if (_verbose)
+            {
+                std::cout << "\t...protective mbr";
+            }
 
             // ===============================================
             // GPT and EFI PART
@@ -1363,12 +1220,20 @@ namespace disktools
             // bit 0: required partition, can't be deleted
             gpt_partition->_attributes = 1;
 
+            memset(gpt_partition->_name, 0x20, sizeof gpt_partition->_name);
+            memcpy(gpt_partition->_name, kEfiBootPartName, sizeof kEfiBootPartName);
+
             // we're only considering ONE header here
             gpt_header_ptr->_partition_array_crc32 = utils::rc_crc32(0, reinterpret_cast<const char*>(gpt_partition), sizeof gpt_partition_header);
             gpt_header_ptr->_header_crc32 = utils::rc_crc32(0, reinterpret_cast<const char*>(gpt_header_ptr), sizeof gpt_header);
 
             // this writes both header and array sectors
             writer.write_at(1, 2);
+
+            if (_verbose)
+            {
+                std::cout << "...GPT + partition array";
+            }
 
             // link back
             std::swap(gpt_header_ptr->_my_lba, gpt_header_ptr->_alternate_lba);
@@ -1381,6 +1246,11 @@ namespace disktools
             writer.write_at_ex(gpt_header_ptr->_my_lba - 1, 1, 1);
             // backup header
             writer.write_at_ex(gpt_header_ptr->_my_lba, 0, 1);
+
+            if (_verbose)
+            {
+                std::cout << "...backup GPT and partition array\n";
+            }
 
             // ===============================================
             // the data partition will be formatted as FAT
@@ -1413,101 +1283,36 @@ int main(int argc, char** argv)
     cxxopts::Options options("efigen");
 
     options.add_options()
-    ("i,input", "source kernel binary, must be BOOTX64.EFI", cxxopts::value<std::string>())
-    ("o,output", "output disk image file", cxxopts::value<std::string>())
-    ("v,verify", "(DEBUG) verify the integrity of the image after creation", cxxopts::value<bool>()->default_value("false"))
-    ("h,help", "usage")
-    ;
+        ("i,input", "source kernel binary, must be BOOTX64.EFI", cxxopts::value<std::string>())
+        ("o,output", "output disk image file", cxxopts::value<std::string>())
+        ("v,verbose", "output more information about the build process", cxxopts::value<bool>()->default_value("false"))
+        ("h,help", "usage")
+        ;
 
-    const auto result = options.parse(argc,argv);
+    const auto result = options.parse(argc, argv);
 
     std::cout << "------------------------------------\n";
     std::cout << "efigen EFI boot disk creator\n";
     std::cout << "by jarl.ostensen\n\n";
 
-    if ( result.count("help") || !result.count("input") || !result.count("output") )
+    if (result.count("help") || !result.count("input") || !result.count("output"))
     {
         std::cerr << options.help() << std::endl;
         return -1;
     }
 
-    if ( result.count("debug") )
+    if (result.count("verbose"))
     {
-        disktools::_debug = result["debug"].as<bool>();
+        disktools::_verbose = result["verbose"].as<bool>();
     }
     const auto boot_image_file = result["input"].as<std::string>();
     const auto output_file = result["output"].as<std::string>();
 
-    if ( !disktools::efi::create_efi_boot_image(boot_image_file, output_file) )
+    if (!disktools::efi::create_efi_boot_image(boot_image_file, output_file))
     {
         std::cerr << "\tcreate failed\n";
         return -1;
     }
+
     std::cout << "\tboot image created" << std::endl;
 }
-
-
-#ifdef APPENDIX
-
-    //std::ofstream ofat_part{ ".\\fat.img", std::ios::binary | std::ios::trunc };
-    //if (ofat_part.is_open())
-    //{
-    //    constexpr auto kSize = 128 * 1024 * 1024;
-    //    constexpr auto kSectorCount = kSize / kSectorSizeBytes;
-
-    //    disk_sector_writer writer{ ofat_part, kSectorCount };
-    //    create_blank_image(writer);
-
-    //    std::ifstream payload{ "..\\..\\build\\BOOTX64.EFI", std::ios::binary };
-    //    payload.seekg(0, std::ios::end);
-    //    const auto bootx64_size = payload.tellg();
-    //    payload.seekg(0, std::ios::beg);
-    //    const auto boot_image = new char[size_t(bootx64_size)];
-    //    payload.read(boot_image, bootx64_size);
-
-    //    fat::format_efi_boot_partition(writer, kSectorCount, "fat512", boot_image, bootx64_size);
-    //    ofat_part.close();
-
-    //    std::ifstream ifat_part{ ".\\fat.img", std::ios::binary };
-    //    fat::reader fat_reader{ ifat_part, kSectorCount };
-    //    fat_reader();
-
-    //}
-/*std::ofstream ofat_part{ ".\\fat.img", std::ios::binary | std::ios::trunc };
-    if (ofat_part.is_open())
-    {
-        constexpr auto kSize = 0x20000000;
-        constexpr auto kSectorCount = kSize / kSectorSizeBytes;
-
-        fat::format_efi_boot_partition(ofat_part, kSectorCount, "fat512");
-        ofat_part.close();
-
-        std::ifstream ifat_part{ ".\\fat.img", std::ios::binary };
-        fat::reader fat_reader{ ifat_part, kSectorCount };
-        fat_reader();
-
-    }*/
-
-
-
-    //efi::efi_disk image{ L"..\\..\\build\\diskimage2.dd", 0 };
-    //if (image.validate() == efi::efi_disk::validation_results_t::kOk)
-    //{
-    //    size_t fat_start_lba, fat_end_lba;
-    //    image.get_partition_info(fat_start_lba, fat_end_lba);
-
-    //    std::ifstream iimage{ L"fat32_512_usb.img", std::ios::binary };
-    //    if (iimage.is_open())
-    //    {
-
-    //        iimage.seekg(0, std::ios::end);
-    //        const auto image_size = iimage.tellg();
-    //        iimage.seekg(33 * kSectorSizeBytes, std::ios::beg);
-    //        fat::reader fat{ iimage, size_t(image_size) / kSectorSizeBytes };
-    //        fat();
-    //    }
-    //}
-
-    //efi::efi_disk image2{ L"boot.dd", 0 };
-    //image2.validate();
-#endif
