@@ -60,14 +60,24 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 #define _EFI_PRINT(s)\
 st->con_out->output_string(st->con_out, s)
 
+#define _UNI_UP_ARROW (int)0x25b2
+
     wchar_t buf[256];
     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
-    swprintf(buf, bufcount, L"There are %d entries in the memory map %c\n\r", mem_desc_entries, (int)0x25b2);
+    swprintf(buf, bufcount, L"There are %d entries in the memory map %c\n\r", mem_desc_entries, _UNI_UP_ARROW);
     _EFI_PRINT(buf);
+
+    size_t total_usable_RAM = 0;
+
     // traverse memory map and dump it    
     CEfiMemoryDescriptor* desc = memory_map;
     for ( unsigned i = 0; i < mem_desc_entries; ++i )
     {        
+        if ( (desc->attribute & (C_EFI_CONVENTIONAL_MEMORY | C_EFI_BOOT_SERVICES_CODE | C_EFI_BOOT_SERVICES_DATA))!=0 )
+        {  
+            total_usable_RAM += desc->number_of_pages;
+        }
+
         switch(desc->type)
         {
             case C_EFI_LOADER_CODE:
@@ -112,7 +122,7 @@ st->con_out->output_string(st->con_out, s)
             break;
         }
         
-        swprintf(buf, bufcount, L"\ttype 0x%x, starts at 0x%llx, %d pages, %llu Kbytes\n\r", desc->type, desc->physical_start, desc->number_of_pages, (desc->number_of_pages*0x1000)/0x400);
+        swprintf(buf, bufcount, L"\ttype 0x%x, attribute 0x%x, starts at 0x%llx, %d pages, %llu Kbytes\n\r", desc->type, desc->attribute, desc->physical_start, desc->number_of_pages, (desc->number_of_pages*0x1000)/0x400);
         _EFI_PRINT(buf);
         
         desc = (CEfiMemoryDescriptor*)((char*)desc + descriptor_size);
@@ -126,6 +136,8 @@ st->con_out->output_string(st->con_out, s)
         }
     }
 
+    swprintf(buf, bufcount, L"\n\r%lluMBytes of RAM available for use post-boot\n\r\n\r", (total_usable_RAM*0x1000)/0x100000);
+    _EFI_PRINT(buf);    
     _EFI_PRINT(L"\n\rexiting boot services\n\r");
 
     // after this point we can no longer use boot services (only runtime)
