@@ -23,7 +23,7 @@ static vector_t      _memory_map;
 // 4Meg minimum
 #define MINIMUM_MEMORY_AVAILABLE_PAGES  1024
 
-k_status memory_initialise() 
+k_status memory_pre_exit_bootservices_initialise() 
 {
     CEfiStatus status = C_EFI_SUCCESS;
     
@@ -119,6 +119,10 @@ k_status memory_refresh_boot_service_memory_map() {
     g_boot_services->get_memory_map(&_map_size, _boot_service_memory_map, &_map_key, &descriptor_size, &descriptor_version);
 
     return _JOS_K_STATUS_SUCCESS;
+}
+
+k_status memory_post_exit_bootservices_initialise() {
+    return _JOS_K_STATUS_UNIMPLEMENTED;
 }
 
 // ==============================================================

@@ -23,6 +23,10 @@ static size_t _red_shift;
 static size_t _green_shift;
 static size_t _blue_shift;
 
+static uint32_t*    framebuffer_wptr(size_t top, size_t left) {
+    return (uint32_t*)(_framebuffer_base) + top*_info.pixels_per_scan_line + left;
+}
+
 CEfiStatus video_initialise() 
 {
     memset(&_info, 0, sizeof(_info));
@@ -136,3 +140,62 @@ void video_clear_screen(uint32_t colour) {
     }
 }
 
+void video_draw_text_segment(draw_text_segment_args_t* args, const wchar_t* text) {
+
+    if(args->seg_len==0)
+        return;
+
+    uint32_t* wptr = framebuffer_wptr(args->top, args->left);
+
+    // pixel set, or not set
+    uint32_t colour_lut[2] = {args->bg_colour, args->colour};
+    
+    size_t n = args->seg_offs;
+    size_t end = args->seg_offs+args->seg_len;
+    while(n < end) {
+
+        wchar_t c = text[n];
+        size_t gyph_offset = (size_t)((c & 0xff) << 3);
+        size_t line = 0;
+        uint32_t* line_ptr = wptr;
+        while(line < 8) {
+
+            uint8_t pixels = args->font_ptr[gyph_offset + line];
+            switch(pixels) {
+                case 0:
+                {
+                    line_ptr[0] = args->bg_colour; line_ptr[1] = args->bg_colour;
+                    line_ptr[2] = args->bg_colour; line_ptr[3] = args->bg_colour;
+                    line_ptr[4] = args->bg_colour; line_ptr[5] = args->bg_colour;
+                    line_ptr[6] = args->bg_colour; line_ptr[7] = args->bg_colour;
+                }
+                break;
+                case 0xff:
+                {
+                    line_ptr[0] = args->colour; line_ptr[1] = args->colour;
+                    line_ptr[2] = args->colour; line_ptr[3] = args->colour;
+                    line_ptr[4] = args->colour; line_ptr[5] = args->colour;
+                    line_ptr[6] = args->colour; line_ptr[7] = args->colour;
+                }
+                break;
+                default:
+                {
+                    uint8_t index = 0;
+                    while(index<8) {
+                        uint8_t set = pixels & 1;
+                        line_ptr[index] = colour_lut[set];
+                        pixels >>= 1;
+                        ++index;
+                    }
+                }
+                break;
+            }
+            
+            ++line;
+            line_ptr += _info.pixels_per_scan_line;
+        }
+        //NOTE: based on font being 8x8
+        wptr += 8;
+        ++n;
+    }
+}

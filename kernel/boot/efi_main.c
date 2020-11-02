@@ -11,6 +11,8 @@
 #include <kernel/video.h>
 #include <memory.h>
 
+#include "../font8x8/font8x8_basic.h"
+
 //https://github.com/rust-lang/rust/issues/62785/
 // TL;DR linker error we get when building with Clang on Windows 
 int _fltused = 0;
@@ -20,6 +22,7 @@ CEfiSystemTable*    g_st = 0;
 CEfiBootServices * g_boot_services = 0;
 
 static CEfiChar16*   kLoaderHeading = L"| jOSx64 ----------------------------\n\r";
+static wchar_t*      kTestString = L"Hello, this is a test string\n\r";
 
 static uint32_t _read_cr4(void)
 {
@@ -68,7 +71,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     g_st = st;
     g_boot_services = st->boot_services;
 
-    k_status k_stat = memory_initialise();
+    k_status k_stat = memory_pre_exit_bootservices_initialise();
     if ( _JOS_K_FAILED(k_stat) ) {
         swprintf(buf, bufcount, L"***FATAL ERROR: memory initialise returned 0x%x\n\r", k_stat);
         _EFI_PRINT(buf);
@@ -88,6 +91,16 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         st->con_out->output_string(st->con_out, kLoaderHeading);
     }
 
+    video_draw_text_segment(&(draw_text_segment_args_t){
+        .colour = 0xffffffff,
+        .bg_colour = 0x11223344,
+        .font_ptr = font8x8_basic,
+        .left = 100,
+        .top = 100,
+        .seg_len = wcslen(kTestString),        
+    },
+    kTestString);
+
 #ifdef _JOS_KERNEL_BUILD
     st->con_out->output_string(st->con_out, L"kernel build\n\r\n\r");
 #endif
@@ -96,6 +109,8 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     
     _EFI_PRINT(L"Goodbye, we're going to sleep now...\n\r");
     exit_boot_services(h);
+
+    k_stat = memory_post_exit_bootservices_initialise();
     
     __builtin_unreachable(); 
 }
