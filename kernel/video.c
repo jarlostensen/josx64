@@ -220,3 +220,23 @@ void video_draw_text(draw_text_segment_args_t* args, const wchar_t* text) {
     }
     video_draw_text_segment(args, text);
 }
+
+void video_scroll_up_region_full_width(size_t top, size_t bottom, size_t linesToScroll) {
+    size_t strip_stride = linesToScroll * _info.pixels_per_scan_line;
+    uint32_t* wptr = framebuffer_wptr(top,0);
+    uint32_t* rptr = wptr + strip_stride;
+
+    const size_t strips = ((bottom - top)/linesToScroll) -1;
+    const size_t rem_lines = (bottom - top) % linesToScroll;
+    for(size_t strip = 0; strip < strips; ++strip) {
+        memcpy(wptr, rptr, strip_stride<<2);
+        wptr += strip_stride;
+        rptr += strip_stride;
+        ++strip;
+    }
+
+    if (rem_lines) {
+        memcpy(wptr, rptr, rem_lines*(_info.pixels_per_scan_line<<2));
+    }
+}
+

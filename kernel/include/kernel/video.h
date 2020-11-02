@@ -41,4 +41,6 @@ typedef struct _draw_text_segment_args {
 void video_draw_text_segment(draw_text_segment_args_t* args, const wchar_t* text);
 void video_draw_text(draw_text_segment_args_t* args, const wchar_t* text);
 
+void video_scroll_up_region_full_width(size_t top, size_t bottom, size_t linesToScroll);
+
 #endif // _JOS_KERNEL_VIDEO_H
