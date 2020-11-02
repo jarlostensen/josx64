@@ -60,6 +60,7 @@ k_status memory_pre_exit_bootservices_initialise()
             }            
             available += desc->number_of_pages;
         }
+        
         else if ( (desc->attribute & (C_EFI_BOOT_SERVICES_CODE | C_EFI_BOOT_SERVICES_DATA)) == (C_EFI_BOOT_SERVICES_CODE | C_EFI_BOOT_SERVICES_DATA) ) {
             available += desc->number_of_pages;
         }

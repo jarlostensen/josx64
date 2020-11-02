@@ -140,14 +140,27 @@ void video_clear_screen(uint32_t colour) {
     }
 }
 
+video_mode_info_t video_get_video_mode_info() {
+    video_mode_info_t info = {
+        .horisontal_resolution = _info.horizontal_resolution,
+        .vertical_resolution = _info.vertical_resolution,
+        .pixel_format = (_info.pixel_format == PixelBlueGreenRedReserved8BitPerColor ) ? kVideo_Pixel_Format_BGRx : kVideo_Pixel_Format_RBGx,
+    };
+    return info;
+}
+
 void video_draw_text_segment(draw_text_segment_args_t* args, const wchar_t* text) {
+
+    if ( !args || !text || wcslen(text)==0 ) {
+        return;
+    }
 
     if(args->seg_len==0)
         return;
 
     uint32_t* wptr = framebuffer_wptr(args->top, args->left);
 
-    // pixel set, or not set
+     // pixel set, or not set
     uint32_t colour_lut[2] = {args->bg_colour, args->colour};
     
     size_t n = args->seg_offs;
@@ -198,4 +211,12 @@ void video_draw_text_segment(draw_text_segment_args_t* args, const wchar_t* text
         wptr += 8;
         ++n;
     }
+}
+
+void video_draw_text(draw_text_segment_args_t* args, const wchar_t* text) {
+    args->seg_len = wcslen(text);
+    if ( !args || !text || args->seg_len==0 ) {
+        return;
+    }
+    video_draw_text_segment(args, text);
 }

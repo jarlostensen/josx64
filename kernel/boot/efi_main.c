@@ -9,6 +9,7 @@
 
 #include <jos.h>
 #include <kernel/video.h>
+#include <output_console.h>
 #include <memory.h>
 
 #include "../font8x8/font8x8_basic.h"
@@ -22,7 +23,7 @@ CEfiSystemTable*    g_st = 0;
 CEfiBootServices * g_boot_services = 0;
 
 static CEfiChar16*   kLoaderHeading = L"| jOSx64 ----------------------------\n\r";
-static wchar_t*      kTestString = L"Hello, this is a test string\n\r";
+static wchar_t*      kTestString = L"Hello, this is a test string\nAnd this is another line....\n";
 
 static uint32_t _read_cr4(void)
 {
@@ -85,21 +86,13 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         _EFI_PRINT(buf);
         halt_cpu();
     }
-    else
-    {   
-        video_clear_screen(0x6495ed);
-        st->con_out->output_string(st->con_out, kLoaderHeading);
-    }
 
-    video_draw_text_segment(&(draw_text_segment_args_t){
-        .colour = 0xffffffff,
-        .bg_colour = 0x11223344,
-        .font_ptr = font8x8_basic,
-        .left = 100,
-        .top = 100,
-        .seg_len = wcslen(kTestString),        
-    },
-    kTestString);
+    video_clear_screen(0x6495ed);
+    output_console_initialise();
+    output_console_set_font((const uint8_t*)font8x8_basic, 8,8);
+    output_console_set_colour(0xffffffff);
+    output_console_set_bg_colour(0x11223344);
+    output_console_output_string(kTestString);
 
 #ifdef _JOS_KERNEL_BUILD
     st->con_out->output_string(st->con_out, L"kernel build\n\r\n\r");
