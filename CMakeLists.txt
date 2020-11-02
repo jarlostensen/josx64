@@ -33,17 +33,19 @@ SET(CMAKE_SYSTEM_NAME Generic)
 add_library(c STATIC "")
 add_subdirectory(libc)
 
-# TODO: add_library(kernel STATIC "")
-# TODO: add_subdirectory(kernel)
+add_library(kernel STATIC "")
+add_subdirectory(kernel)
 
 add_executable(boot "${CMAKE_SOURCE_DIR}/kernel/boot/efi_main.c")
 target_include_directories(boot PUBLIC 
 "${CMAKE_SOURCE_DIR}/libc/include" 
 "${CMAKE_SOURCE_DIR}/libc" 
 "${CMAKE_SOURCE_DIR}/c-efi"
+"${CMAKE_SOURCE_DIR}/kernel/include"
 )
 
 target_link_libraries(boot PRIVATE libc)
+target_link_libraries(boot PRIVATE kernel)
 set_target_properties(boot PROPERTIES OUTPUT_NAME "BOOTX64.EFI")
 set_target_properties(boot PROPERTIES SUFFIX "")
 
