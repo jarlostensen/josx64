@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "include/jos.h"
 #include "include/kernel/video.h"
 
 // in efi_main.c
@@ -36,6 +37,8 @@ CEfiStatus video_initialise()
     CEfiStatus status = g_boot_services->locate_handle(C_EFI_BY_PROTOCOL, &C_EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID, 0, &handle_buffer_size, handle_buffer);
     if ( status==C_EFI_SUCCESS ) {
 
+        //TODO: this works but it's not science; what makes one handle a better choice than another? 
+        //      we should combine these two tests (handler and resolution) and pick the base from that larger set
         size_t num_handles = handle_buffer_size/sizeof(CEfiHandle);
         for(size_t n = 0; n < num_handles; ++n)
         {
@@ -132,3 +135,4 @@ void video_clear_screen(uint32_t colour) {
         pixels_to_fill -= 8;
     }
 }
+

@@ -7,7 +7,9 @@
 #include <stdio.h>
 #include <wchar.h>
 
+#include <jos.h>
 #include <kernel/video.h>
+#include <memory.h>
 
 //https://github.com/rust-lang/rust/issues/62785/
 // TL;DR linker error we get when building with Clang on Windows 
@@ -35,24 +37,50 @@ static uint32_t _read_cr4(void)
 }
 
 #define _EFI_PRINT(s)\
-st->con_out->output_string(st->con_out, s)
+g_st->con_out->output_string(g_st->con_out, s)
 
+void halt_cpu() {
+    while(1)
+    {
+        __asm volatile ("pause");
+    } 
+    __builtin_unreachable();
+}
 
+void exit_boot_services(CEfiHandle h) {
+
+    memory_refresh_boot_service_memory_map();
+    CEfiStatus status = g_boot_services->exit_boot_services(h, memory_boot_service_get_mapkey());
+    if ( C_EFI_ERROR(status )) {
+        _EFI_PRINT(L"***FATAL ERROR: Unable to exit boot services. Halting.\n\r");
+        halt_cpu();
+    }    
+    g_boot_services = 0;    
+}
 
 CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 {    
     CEfiStatus status;
 
+    wchar_t buf[256];
+    const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
+
     g_st = st;
     g_boot_services = st->boot_services;
+
+    k_status k_stat = memory_initialise();
+    if ( _JOS_K_FAILED(k_stat) ) {
+        swprintf(buf, bufcount, L"***FATAL ERROR: memory initialise returned 0x%x\n\r", k_stat);
+        _EFI_PRINT(buf);
+        halt_cpu();
+    }
 
     status = video_initialise();
     if ( status!=C_EFI_SUCCESS ) {
 
-        wchar_t buf[256];
-        const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
-        swprintf(buf, bufcount, L"***video initialise returned 0x%x\n\r", status);
+        swprintf(buf, bufcount, L"***FATAL ERROR: video initialise returned 0x%x\n\r", status);
         _EFI_PRINT(buf);
+        halt_cpu();
     }
     else
     {   
@@ -64,112 +92,10 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     st->con_out->output_string(st->con_out, L"kernel build\n\r\n\r");
 #endif
 
-    //CEfiInputKey key;
-    //st->con_out->output_string(st->con_out, L"\n\rPress a key, any key...\n\r"); 
-    //CEfiUSize x;
-    //st->boot_services->wait_for_event(1, &st->con_in->wait_for_key, &x);
-
-    CEfiUSize map_size = 0;
-    CEfiMemoryDescriptor *memory_map = 0;
-    CEfiUSize map_key, descriptor_size;
-    CEfiU32 descriptor_version;
-    st->boot_services->get_memory_map(&map_size, memory_map, 0, &descriptor_size, 0);
-    unsigned mem_desc_entries = map_size / descriptor_size;
-
-    // make room for any expansion that might happen when we call "allocate_pool" 
-    map_size += 2*descriptor_size;    
-    status = st->boot_services->allocate_pool(C_EFI_LOADER_DATA, map_size, (void**)&memory_map);
-    st->boot_services->get_memory_map(&map_size, memory_map, &map_key, &descriptor_size, &descriptor_version);
-
-#define _UNI_UP_ARROW (int)0x25b2
-
-    wchar_t buf[256];
-    const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
-    swprintf(buf, bufcount, L"There are %d entries in the memory map %c\n\r", mem_desc_entries, _UNI_UP_ARROW);
-    _EFI_PRINT(buf);
-
-    size_t total_usable_RAM = 0;
-
-    // traverse memory map and dump it    
-    CEfiMemoryDescriptor* desc = memory_map;
-    for ( unsigned i = 0; i < mem_desc_entries; ++i )
-    {        
-        if ( (desc->attribute & (C_EFI_CONVENTIONAL_MEMORY | C_EFI_BOOT_SERVICES_CODE | C_EFI_BOOT_SERVICES_DATA))!=0 )
-        {  
-            total_usable_RAM += desc->number_of_pages;
-        }
-
-        // switch(desc->type)
-        // {
-        //     case C_EFI_LOADER_CODE:
-        //     {
-        //         _EFI_PRINT(L"Loader code\n\r");
-        //     }
-        //     break;
-        //     case C_EFI_LOADER_DATA:
-        //     {
-        //         _EFI_PRINT(L"Loader data\n\r");
-        //     }
-        //     break;
-        //     case C_EFI_BOOT_SERVICES_CODE:
-        //     {
-        //         _EFI_PRINT(L"Boot services code\n\r");
-        //     }
-        //     break;
-        //     case C_EFI_BOOT_SERVICES_DATA:
-        //     {
-        //         _EFI_PRINT(L"Boot services data\n\r");
-        //     }
-        //     break;
-        //     case C_EFI_RUNTIME_SERVICES_CODE:
-        //     {
-        //         _EFI_PRINT(L"Runtime services code\n\r");
-        //     }
-        //     break;
-        //     case C_EFI_RUNTIME_SERVICES_DATA:
-        //     {
-        //         _EFI_PRINT(L"Runtime services data\n\r");
-        //     }
-        //     break;
-        //     case C_EFI_CONVENTIONAL_MEMORY:
-        //     {
-        //         _EFI_PRINT(L"Conventional memory\n\r");
-        //     }
-        //     break;
-        //     default:
-        //     {
-        //         _EFI_PRINT(L"unhandled\n\r");
-        //     }
-        //     break;
-        // }
-        
-        // swprintf(buf, bufcount, L"\ttype 0x%x, attribute 0x%x, starts at 0x%llx, %d pages, %llu Kbytes\n\r", desc->type, desc->attribute, desc->physical_start, desc->number_of_pages, (desc->number_of_pages*0x1000)/0x400);
-        // _EFI_PRINT(buf);
-        
-        desc = (CEfiMemoryDescriptor*)((char*)desc + descriptor_size);
-
-        // if ( i && i%8==0 )
-        // {
-        //     CEfiInputKey key;
-        //     st->con_out->output_string(st->con_out, L"\n\rpress any key...\n\r"); 
-        //     CEfiUSize x;
-        //     st->boot_services->wait_for_event(1, &st->con_in->wait_for_key, &x);
-        // }
-    }
-
-    swprintf(buf, bufcount, L"\n\r%lluMBytes of RAM available for use post-boot\n\r\n\r", (total_usable_RAM*0x1000)/0x100000);
-    _EFI_PRINT(buf);    
-    _EFI_PRINT(L"\n\rexiting boot services\n\r");
-
     // after this point we can no longer use boot services (only runtime)
-    status = st->boot_services->exit_boot_services(h, map_key);
-    g_boot_services = 0;
-
-    _EFI_PRINT(L"Goodbye, we're going to sleep now...\n\r");
     
-    while(1)
-    {
-        __asm volatile ("pause");
-    }
+    _EFI_PRINT(L"Goodbye, we're going to sleep now...\n\r");
+    exit_boot_services(h);
+    
     __builtin_unreachable(); 
 }
