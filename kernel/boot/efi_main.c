@@ -95,15 +95,16 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     output_console_output_string(kTestString);
 
 #ifdef _JOS_KERNEL_BUILD
-    st->con_out->output_string(st->con_out, L"kernel build\n\r\n\r");
+    output_console_output_string(L"\n\nkernel build\n");
 #endif
 
     // after this point we can no longer use boot services (only runtime)
     
-    _EFI_PRINT(L"Goodbye, we're going to sleep now...\n\r");
     exit_boot_services(h);
 
     k_stat = memory_post_exit_bootservices_initialise();
     
+    output_console_set_colour(video_make_color(0xff,0,0));
+    output_console_output_string(L"\nThe kernel has exited!");
     __builtin_unreachable(); 
 }

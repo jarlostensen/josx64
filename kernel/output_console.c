@@ -50,16 +50,18 @@ void output_console_output_string(const wchar_t* text) {
     while(c)
     {
         if ( c == L'\n') {
-            video_draw_text_segment(&(draw_text_segment_args_t){
-                .left = _cursor_pos.x,
-                .top = _cursor_pos.y,
-                .colour = _colour,
-                .bg_colour = _bg_colour,
-                .font_ptr = _font,
-                .seg_offs = start,
-                .seg_len = pos - start,
-            },
-            text);
+            if( (pos - start)>1 ) {
+                video_draw_text_segment(&(draw_text_segment_args_t){
+                    .left = _cursor_pos.x,
+                    .top = _cursor_pos.y,
+                    .colour = _colour,
+                    .bg_colour = _bg_colour,
+                    .font_ptr = _font,
+                    .seg_offs = start,
+                    .seg_len = pos - start,
+                },
+                text);
+            }
             ++pos;
             start = pos;
             //TODO: scroll
@@ -72,16 +74,18 @@ void output_console_output_string(const wchar_t* text) {
         c = text[pos];
     }
     
-    if(start==0) {
-        video_draw_text(&(draw_text_segment_args_t){
+    if(start!=pos) {
+        video_draw_text_segment(&(draw_text_segment_args_t){
             .left = _cursor_pos.x,
             .top = _cursor_pos.y,
             .colour = _colour,
             .bg_colour = _bg_colour,
             .font_ptr = _font,
+            .seg_offs = start,
+            .seg_len = pos-start,
         },
         text);
-        
+
         _cursor_pos.x += pos * CHAR_WIDTH_PIXELS;
     }
 }
