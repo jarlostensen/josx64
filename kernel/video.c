@@ -23,6 +23,7 @@ static size_t _red_shift;
 static size_t _green_shift;
 static size_t _blue_shift;
 
+
 static uint32_t*    framebuffer_wptr(size_t top, size_t left) {
     return (uint32_t*)(_framebuffer_base) + top*_info.pixels_per_scan_line + left;
 }
@@ -240,3 +241,68 @@ void video_scroll_up_region_full_width(size_t top, size_t bottom, size_t linesTo
     }
 }
 
+void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t src_height, size_t dest_top, size_t dest_left, size_t dest_width, size_t dest_height) {
+
+    //TODO: need asserts...
+    if ( !bitmap || !src_width || !src_height || !dest_width || !dest_height ) {
+        return;
+    }
+
+    if ( src_width == dest_width && src_height == dest_height ) {
+
+        // plain copy
+        uint32_t* wptr = framebuffer_wptr(dest_top, dest_left);
+        while(dest_height) {
+            memcpy(wptr, bitmap, dest_width<<2);
+            wptr += _info.pixels_per_scan_line;
+            bitmap += dest_width;
+            --dest_height;
+        }
+    }
+    else
+    {
+        //TODO:
+    }
+}
+
+void video_scale_draw_indexed_bitmap(const uint8_t* bitmap, const uint32_t* colourmap, size_t colourmap_size, 
+                                    size_t src_width, size_t src_height, 
+                                    size_t dest_top, size_t dest_left, size_t dest_width, size_t dest_height) {
+    //TODO: need asserts...
+    // if ( !bitmap || !colourmap || !colourmap_size || !src_width || !src_height || !dest_width || !dest_height ) {
+    //     return;
+    // }
+
+    uint32_t* wptr = framebuffer_wptr(dest_top, dest_left);
+    
+    if ( src_width == dest_width && src_height == dest_height ) {
+
+        // plain copy        
+        while(src_height) {
+            for(size_t p = 0; p < src_width; ++p)
+            {
+                //TODO: assert on index range (in DEBUG)
+                wptr[p] = colourmap[*bitmap++];
+            }
+            wptr += _info.pixels_per_scan_line;
+            --src_height;
+        }
+    }
+    else if ( src_width == dest_width && src_height < dest_height ) {
+
+        // plain copy        
+        while(src_height) {
+            for(size_t p = 0; p < src_width; ++p)
+            {
+                //TODO: assert on index range (in DEBUG)
+                wptr[p] = colourmap[*bitmap++];
+            }
+            wptr += _info.pixels_per_scan_line;
+            --src_height;
+        }
+    }
+    else 
+    {
+        //TODO:
+    }
+}

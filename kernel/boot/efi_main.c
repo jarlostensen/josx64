@@ -54,12 +54,20 @@ void halt_cpu() {
 void exit_boot_services(CEfiHandle h) {
 
     memory_refresh_boot_service_memory_map();
-    CEfiStatus status = g_boot_services->exit_boot_services(h, memory_boot_service_get_mapkey());
+    CEfiStatus status = g_boot_services->exit_boot_services(h, memory_boot_service_get_mapkey());    
     if ( C_EFI_ERROR(status )) {
-        _EFI_PRINT(L"***FATAL ERROR: Unable to exit boot services. Halting.\n\r");
+        output_console_set_colour(video_make_color(0xff,0,0));        
+        output_console_output_string(L"***FATAL ERROR: Unable to exit boot services. Halting.\n");
         halt_cpu();
     }    
     g_boot_services = 0;    
+
+    k_status k_stat = memory_post_exit_bootservices_initialise();
+    if ( _JOS_K_FAILED(k_stat) ) {
+        output_console_set_colour(video_make_color(0xff,0,0));        
+        output_console_output_string(L"***FATAL ERROR: post memory exit failed. Halting.\n");
+        halt_cpu();
+    }
 }
 
 CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
@@ -102,7 +110,21 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     
     exit_boot_services(h);
 
-    k_stat = memory_post_exit_bootservices_initialise();
+    size_t dim;
+    const uint8_t* memory_bitmap = memory_get_memory_bitmap(&dim);
+
+    uint32_t palette[_C_EFI_MEMORY_TYPE_N];
+    uint8_t dc = 0xff/_C_EFI_MEMORY_TYPE_N;
+    for(size_t i = 0; i < _C_EFI_MEMORY_TYPE_N; ++i) {
+        uint8_t c = dc*i;
+        palette[i] = video_make_color(c,c,c);        
+    }
+
+    video_scale_draw_indexed_bitmap( memory_bitmap, palette, _C_EFI_MEMORY_TYPE_N, dim,1, 10,500, dim,1 );
+    video_scale_draw_indexed_bitmap( memory_bitmap, palette, _C_EFI_MEMORY_TYPE_N, dim,1, 11,500, dim,1 );
+    video_scale_draw_indexed_bitmap( memory_bitmap, palette, _C_EFI_MEMORY_TYPE_N, dim,1, 12,500, dim,1 );
+    video_scale_draw_indexed_bitmap( memory_bitmap, palette, _C_EFI_MEMORY_TYPE_N, dim,1, 13,500, dim,1 );
+    video_scale_draw_indexed_bitmap( memory_bitmap, palette, _C_EFI_MEMORY_TYPE_N, dim,1, 14,500, dim,1 );
     
     output_console_set_colour(video_make_color(0xff,0,0));
     output_console_output_string(L"\nThe kernel has exited!");

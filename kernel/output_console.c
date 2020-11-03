@@ -66,7 +66,7 @@ void output_console_output_string(const wchar_t* text) {
             start = pos;
             //TODO: scroll
             _cursor_pos.y += LINE_HEIGHT_PIXELS;
-            _cursor_pos.x = 0;        
+            _cursor_pos.x = 0;
         }
         else {
             ++pos;
