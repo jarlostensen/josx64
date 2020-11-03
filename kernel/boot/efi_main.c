@@ -12,6 +12,8 @@
 #include <output_console.h>
 #include <memory.h>
 
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "../stb/stb_image_resize.h"
 #include "../font8x8/font8x8_basic.h"
 
 //https://github.com/rust-lang/rust/issues/62785/
@@ -113,19 +115,22 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     size_t dim;
     const uint8_t* memory_bitmap = memory_get_memory_bitmap(&dim);
 
-    uint32_t palette[_C_EFI_MEMORY_TYPE_N];
-    uint8_t dc = 0xff/_C_EFI_MEMORY_TYPE_N;
-    for(size_t i = 0; i < _C_EFI_MEMORY_TYPE_N; ++i) {
-        uint8_t c = dc*i;
-        palette[i] = video_make_color(c,c,c);        
-    }
+    const size_t new_w = dim * 8;
+    const size_t new_h = 64;
+    const size_t channels = 4;
+    uint8_t* scaled_bitmap = (uint8_t*)malloc(new_w*new_h*channels);
+    if ( scaled_bitmap )
+    {
+        stbir_resize_uint8(memory_bitmap, dim,1,dim, scaled_bitmap, new_w,new_h, new_w, channels);
 
-    video_scale_draw_indexed_bitmap( memory_bitmap, palette, _C_EFI_MEMORY_TYPE_N, dim,1, 10,500, dim,1 );
-    video_scale_draw_indexed_bitmap( memory_bitmap, palette, _C_EFI_MEMORY_TYPE_N, dim,1, 11,500, dim,1 );
-    video_scale_draw_indexed_bitmap( memory_bitmap, palette, _C_EFI_MEMORY_TYPE_N, dim,1, 12,500, dim,1 );
-    video_scale_draw_indexed_bitmap( memory_bitmap, palette, _C_EFI_MEMORY_TYPE_N, dim,1, 13,500, dim,1 );
-    video_scale_draw_indexed_bitmap( memory_bitmap, palette, _C_EFI_MEMORY_TYPE_N, dim,1, 14,500, dim,1 );
-    
+        uint32_t palette[_C_EFI_MEMORY_TYPE_N];
+        uint8_t dc = 0xff/_C_EFI_MEMORY_TYPE_N;
+        for(size_t i = 0; i < _C_EFI_MEMORY_TYPE_N; ++i) {
+            uint8_t c = dc*i;
+            palette[i] = video_make_color(c,c,c);
+        }
+        video_scale_draw_indexed_bitmap( scaled_bitmap, palette, _C_EFI_MEMORY_TYPE_N, new_w,new_h, 10,500, new_w,new_h );
+    }   
     output_console_set_colour(video_make_color(0xff,0,0));
     output_console_output_string(L"\nThe kernel has exited!");
     __builtin_unreachable(); 

@@ -165,7 +165,7 @@ k_status memory_post_exit_bootservices_initialise() {
     size_t available = 0;
     for ( unsigned i = 0; i < _boot_service_memory_map_entries; ++i )
     {
-        _memory_bitmap[i] = desc[i].type & 0xff;
+        _memory_bitmap[i] = desc[i].type;
     }
     
     return _JOS_K_STATUS_SUCCESS;

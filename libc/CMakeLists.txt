@@ -6,6 +6,12 @@ target_sources(c PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/string/strlen.c"    
     "${CMAKE_CURRENT_SOURCE_DIR}/internal/_vprint.c"    
     "${CMAKE_CURRENT_SOURCE_DIR}/internal/_wchar.c"    
+    "${CMAKE_CURRENT_SOURCE_DIR}/math/pow.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/math/pow_data.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/math/exp_data.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/math/exp2f_data.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/math/ceil.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/math/floor.c"
 )
 target_include_directories(c PUBLIC 
 "${CMAKE_CURRENT_SOURCE_DIR}/include"

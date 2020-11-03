@@ -290,7 +290,7 @@ void video_scale_draw_indexed_bitmap(const uint8_t* bitmap, const uint32_t* colo
     }
     else if ( src_width == dest_width && src_height < dest_height ) {
 
-        // plain copy        
+        // scale up, height
         while(src_height) {
             for(size_t p = 0; p < src_width; ++p)
             {
