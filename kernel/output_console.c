@@ -1,96 +1,91 @@
-#include <kernel/output_console.h>
-#include "../arch/i386/vga.h"
 
-output_console_t _stdout;
-static console_output_driver_t _vga_driver;
-static int _vga_width, _vga_height;
+#include <stdint.h>
+#include <stdbool.h>
 
-void output_console_init(void)
-{
-	vga_init();
-	_vga_driver._blt = vga_blt;
-	_vga_driver._clear = vga_clear_to_val;
-	vga_display_size(&_vga_width, &_vga_height);
+#include <jos.h>
+#include <kernel/video.h>
+#include <output_console.h>
 
-	_stdout._columns = 100;
-	_stdout._rows = 60;
-	_stdout._driver = &_vga_driver;
-	_stdout._attr = vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
-	output_console_create(&_stdout);
+static video_mode_info_t        _video_mode_info;
+static pos_t                    _cursor_pos = {0,0};
+static uint32_t                 _bg_colour = 0;
+static uint32_t                 _colour = 0xffffffff;
+static const uint8_t        *   _font = 0;
+
+#define LINE_HEIGHT_PIXELS 8
+#define CHAR_WIDTH_PIXELS  8
+
+k_status output_console_initialise() {
+
+    k_status status = _JOS_K_STATUS_SUCCESS;
+
+    _video_mode_info = video_get_video_mode_info();
+
+    return status;
 }
 
-void output_console_set_fg(output_console_t* con, uint8_t fgcol)
-{
-	con->_attr &= 0xf0;
-	con->_attr |= fgcol;
+void output_console_set_colour(uint32_t colour) {
+    _colour = colour;
 }
 
-void output_console_set_bg(output_console_t* con, uint8_t bgcol)
-{
-	con->_attr &= 0x0f;
-	con->_attr |= (bgcol << 4);
+void output_console_set_bg_colour(uint32_t bg_colour) {
+    _bg_colour = bg_colour;
 }
 
-void output_console_flush(output_console_t* con)
-{
-	_JOS_ASSERT(con);
-	_JOS_ASSERT(con->_buffer);
-	const size_t input_stride = (size_t)con->_columns * 2;
+k_status output_console_set_font(const uint8_t* font, size_t width, size_t height) {
+    if ( width != CHAR_WIDTH_PIXELS && height != LINE_HEIGHT_PIXELS) {
+        return _JOS_K_STATUS_OUT_OF_RANGE;
+    }
 
-	if (con->_start_row <= con->_row)
-	{
-		int lines_to_flush = min(con->_row + 1, _vga_height);
-		const int flush_start_row = con->_row - min(_vga_height - 1, con->_row - con->_start_row);
-		//NOTE: always flush from col 0
-		con->_driver->_blt(con->_buffer + flush_start_row * con->_columns, 0, input_stride, (size_t)con->_columns, lines_to_flush);
-	}
-	else
-	{
-		const int lines_in_buffer = con->_row + (con->_rows - con->_start_row) + 1; //< +1 to convert _row to count
-		int flush_row = con->_rows - (lines_in_buffer - con->_row - 1); //< as above
-		//NOTE: we always flush from col 0
-		uint16_t cc = flush_row * con->_columns;
-		const size_t lines = con->_rows - flush_row;
-		con->_driver->_blt(con->_buffer + cc, 0, input_stride, (size_t)con->_columns, lines);
-		// next batch from the top
-		con->_driver->_blt(con->_buffer, lines, input_stride, (size_t)con->_columns, con->_row + 1);
-	}
+    _font = font;
+
+    return _JOS_K_STATUS_SUCCESS;
 }
 
-void output_console_print(output_console_t* con, const char* line)
-{
-	_JOS_ASSERT(con);
-	_JOS_ASSERT(con->_buffer);
-	//TODO: horisontal scroll
-	const int output_width = min(strlen(line), con->_columns);
-	uint16_t cc = con->_row * con->_columns + con->_col;
-	const uint16_t attr_mask = ((uint16_t)con->_attr << 8);
-	for (int c = 0; c < output_width; ++c)
-	{
-		switch (line[c])
-		{
-		case '\n':
-		{
-			output_console_println(con);
-			cc = con->_row * con->_columns;
-		}
-		break;
-		case '\t':
-		{
-			//TODO: wrap...?
-			int tabs = min(4, con->_columns - con->_col);
-			while (tabs--)
-			{
-				con->_buffer[cc++] = attr_mask | ' ';
-			}
-		}
-		break;
-		default:
-		{
-			con->_buffer[cc++] = attr_mask | line[c];
-			++con->_col;
-		}
-		break;
-		}
-	}
+void output_console_output_string(const wchar_t* text) {
+
+    size_t start = 0;
+    size_t pos = 0;
+    wchar_t c = *text;
+    while(c)
+    {
+        if ( c == L'\n') {
+            if( (pos - start)>1 ) {
+                video_draw_text_segment(&(draw_text_segment_args_t){
+                    .left = _cursor_pos.x,
+                    .top = _cursor_pos.y,
+                    .colour = _colour,
+                    .bg_colour = _bg_colour,
+                    .font_ptr = _font,
+                    .seg_offs = start,
+                    .seg_len = pos - start,
+                },
+                text);
+            }
+            ++pos;
+            start = pos;
+            //TODO: scroll
+            _cursor_pos.y += LINE_HEIGHT_PIXELS;
+            _cursor_pos.x = 0;
+        }
+        else {
+            ++pos;
+        }
+        c = text[pos];
+    }
+    
+    if(start!=pos) {
+        video_draw_text_segment(&(draw_text_segment_args_t){
+            .left = _cursor_pos.x,
+            .top = _cursor_pos.y,
+            .colour = _colour,
+            .bg_colour = _bg_colour,
+            .font_ptr = _font,
+            .seg_offs = start,
+            .seg_len = pos-start,
+        },
+        text);
+
+        _cursor_pos.x += pos * CHAR_WIDTH_PIXELS;
+    }
 }

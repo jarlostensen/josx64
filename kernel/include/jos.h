@@ -2,6 +2,31 @@
 #ifndef _JOS_H
 #define _JOS_H
 
+typedef uint32_t k_status;
+#define _JOS_K_STATUS_WIDTH                     (sizeof(k_status)/8)
+#define _JOS_K_STATUS_SUCCESS                   0x80000000
+#define _JOS_K_STATUS_ERROR_MASK                0x70000000
+#define _JOS_K_SUCCEEDED(status)                (!!((status) & _JOS_K_STATUS_SUCCESS))
+#define _JOS_K_FAILED(status)                   (!!((status) & _JOS_K_STATUS_ERROR_MASK))
+#define _JOS_K_STATUS_ERROR(error_code)         (((error_code) & 0xfffffff) | _JOS_K_STATUS_ERROR_MASK)
+
+// codes straight out of the Google playbook because I use these elsewhere in my code(s) and they work
+#define _JOS_K_STATUS_CANCELLED                 _JOS_K_STATUS_ERROR(1)
+#define _JOS_K_STATUS_UNKNOWN                   _JOS_K_STATUS_ERROR(2)
+#define _JOS_K_STATUS_DEADLINE_EXCEEDED         _JOS_K_STATUS_ERROR(3)
+#define _JOS_K_STATUS_NOT_FOUND                 _JOS_K_STATUS_ERROR(4)
+#define _JOS_K_STATUS_ALREADY_EXISTS            _JOS_K_STATUS_ERROR(5)
+#define _JOS_K_STATUS_PERMISSION_DENIED         _JOS_K_STATUS_ERROR(6)
+#define _JOS_K_STATUS_UNAUTHENTICATED           _JOS_K_STATUS_ERROR(7)
+#define _JOS_K_STATUS_RESOURCE_EXHAUSTED        _JOS_K_STATUS_ERROR(8)
+#define _JOS_K_STATUS_FAILED_PRECONDITION       _JOS_K_STATUS_ERROR(9)
+#define _JOS_K_STATUS_ABORTED                   _JOS_K_STATUS_ERROR(10)
+#define _JOS_K_STATUS_OUT_OF_RANGE              _JOS_K_STATUS_ERROR(11)
+#define _JOS_K_STATUS_UNIMPLEMENTED             _JOS_K_STATUS_ERROR(12)
+#define _JOS_K_STATUS_INTERNAL                  _JOS_K_STATUS_ERROR(13)
+#define _JOS_K_STATUS_UNAVAILABLE               _JOS_K_STATUS_ERROR(14)
+#define _JOS_K_STATUS_DATA_LOSS                 _JOS_K_STATUS_ERROR(15)
+
 #ifdef _JOS_KERNEL_BUILD
 #define _JOS_MAYBE_UNUSED __attribute__((unused))
 #define _JOS_INLINE_FUNC __attribute__((unused)) static
