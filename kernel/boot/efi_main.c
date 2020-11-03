@@ -11,6 +11,7 @@
 #include <kernel/video.h>
 #include <output_console.h>
 #include <memory.h>
+#include <serial.h>
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "../stb/stb_image_resize.h"
@@ -88,6 +89,9 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         _EFI_PRINT(buf);
         halt_cpu();
     }
+
+    serial_initialise();
+    serial_write(kCom1, "hello world!", 13);
 
     status = video_initialise();
     if ( status!=C_EFI_SUCCESS ) {
