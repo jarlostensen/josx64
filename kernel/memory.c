@@ -186,3 +186,28 @@ void* malloc(size_t size) {
 void free(void* block) {
     return vmem_arena_free(_bootstrap_arena, block);
 }
+
+void *calloc(size_t nmemb, size_t size)
+{
+    if(!nmemb || !size)
+        return 0;
+    return vmem_arena_alloc(_bootstrap_arena, nmemb * size);
+}
+
+void *realloc(void *ptr, size_t size)
+{
+    if(!ptr)
+        return vmem_arena_alloc(_bootstrap_arena, size);
+    
+    if(!size)
+    {
+        vmem_arena_free(_bootstrap_arena, ptr);
+        return ptr;
+    }
+
+    //TODO: built in realloc, using knowledge of size of allocation
+    void* new_ptr = vmem_arena_alloc(_bootstrap_arena, size);
+    if(new_ptr)
+        vmem_arena_free(_bootstrap_arena, ptr);
+    return new_ptr;
+}

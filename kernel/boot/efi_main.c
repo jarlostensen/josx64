@@ -114,10 +114,43 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     output_console_initialise();
     output_console_set_font((const uint8_t*)font8x8_basic, 8,8);
     output_console_set_colour(0xffffffff);
-    output_console_set_bg_colour(0x11223344);
+    output_console_set_bg_colour(0x6495ed);
+    output_console_output_string(L"\nvideo is good\n");
     
-    swprintf(buf, 256, L"%d processors detected\n", processors_get_processor_count());
+    size_t bsp_id = processors_get_bsp_id();
+    swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", processors_get_processor_count(), bsp_id);
     output_console_output_string(buf);
+    for ( size_t p = processors_get_processor_count(); p>0; --p ) {
+        processor_information_t info;
+        k_stat = processor_get_processor_information(&info, p-1);
+        if ( _JOS_K_SUCCEEDED(k_stat) ) {
+            if ( (p-1) == bsp_id ) {
+                swprintf(buf, 256, L"\tBSP vendor is \"%s\",%S hypervisor detected ", 
+                    info._vendor_string,
+                    info._has_hypervisor?L" ":L" no");            
+                output_console_output_string(buf);
+                if ( info._has_hypervisor ) {
+                    swprintf(buf, 256, L"\"%s\"\n", info._hypervisor_id);
+                    output_console_output_string(buf);
+                }
+                else {
+                    output_console_output_string(L"\n");
+                }
+            }
+            
+            if ( info._has_local_apic ) {
+                swprintf(buf, 256, L"\t\tlocal APIC id %d, base address 0x%x\n", info._local_apic_info._id >> 24, info._local_apic_info._base_address);
+                output_console_output_string(buf);
+            }
+            output_console_output_string(L"\n");
+        }
+        else
+        {
+            swprintf(buf, 256, L"processors_get_processor_information returned %x\n", k_stat);
+            output_console_output_string(buf);
+        }
+    }
+    
 
 #ifdef _JOS_KERNEL_BUILD
     output_console_output_string(L"\n\nkernel build\n");
@@ -144,7 +177,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
             uint8_t c = dc*i;
             palette[i] = video_make_color(c,c,c);
         }
-        video_scale_draw_indexed_bitmap( scaled_bitmap, palette, _C_EFI_MEMORY_TYPE_N, new_w,new_h, 10,500, new_w,new_h );
+        video_scale_draw_indexed_bitmap( scaled_bitmap, palette, _C_EFI_MEMORY_TYPE_N, new_w,new_h, 200,500, new_w,new_h );
     }   
     output_console_set_colour(video_make_color(0xff,0,0));    
     output_console_output_string(L"\nThe kernel has exited!");

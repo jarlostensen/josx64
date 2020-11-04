@@ -12,7 +12,7 @@ static uint32_t                 _bg_colour = 0;
 static uint32_t                 _colour = 0xffffffff;
 static const uint8_t        *   _font = 0;
 
-#define LINE_HEIGHT_PIXELS 8
+#define LINE_HEIGHT_PIXELS 10
 #define CHAR_WIDTH_PIXELS  8
 
 k_status output_console_initialise() {

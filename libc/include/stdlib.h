@@ -8,9 +8,15 @@
 extern "C" {
 #endif
 
-__attribute__((__noreturn__))
-void abort(void);
+__attribute__((__noreturn__))  void abort(void);
 
+#ifdef NULL
+#undef NULL
+#define NULL (0)
+#endif
+
+//NOTE: 
+// implemented in kernel::memory.c for now
 void *malloc(size_t size);
 void free(void *ptr);
 void *calloc(size_t nmemb, size_t size);
