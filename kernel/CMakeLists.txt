@@ -10,6 +10,7 @@ target_sources(kernel PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/memory.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/output_console.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/serial.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/processors.c"
 )
 
 #ZZZ: there's a mismash of .a and .lib suffixes being generated and this is probably not really the right way of fixing that....

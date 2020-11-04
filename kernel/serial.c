@@ -22,14 +22,14 @@ void serial_initialise()
 
 int serial_data_ready(short port)
 {
-    _JOS_ASSERT(port==kCom1 || port==kCom2);
+    //_JOS_ASSERT(port==kCom1 || port==kCom2);
     // line status register, DR bit
     return io_inb(port + 5) & 1;
 }
 
 char serial_getch(short port, int wait)
 {
-    _JOS_ASSERT(port==kCom1 || port==kCom2);
+    //_JOS_ASSERT(port==kCom1 || port==kCom2);
     while(wait && !serial_data_ready(port))
     {
         asm volatile ("pause");
@@ -39,14 +39,14 @@ char serial_getch(short port, int wait)
 
 int serial_transmit_empty(short port)
 {
-    _JOS_ASSERT(port==kCom1 || port==kCom2);    
+    // _JOS_ASSERT(port==kCom1 || port==kCom2);    
     // line status register, transmitter empty bit
     return io_inb(port + 5) & 0x20;
 }
 
 void serial_putch(short port, char data, int wait)
 {
-    _JOS_ASSERT(port==kCom1 || port==kCom2);    
+    // _JOS_ASSERT(port==kCom1 || port==kCom2);    
     while(wait && !serial_transmit_empty(port))
     {
         asm volatile ("pause");
@@ -56,7 +56,7 @@ void serial_putch(short port, char data, int wait)
 
 void serial_flush(short port)
 {
-    _JOS_ASSERT(port==kCom1 || port==kCom2);    
+    //_JOS_ASSERT(port==kCom1 || port==kCom2);    
     while(!serial_transmit_empty(port))
     {
         asm volatile ("pause");
@@ -65,10 +65,19 @@ void serial_flush(short port)
 
 void serial_write(short port, const char* data, size_t len)
 {
-    _JOS_ASSERT(port==kCom1 || port==kCom2);
+    //_JOS_ASSERT(port==kCom1 || port==kCom2);
     while(len)
     {
         serial_putch(port, *data++, 1);
         len--;
+    }
+}
+
+void serial_write_str(short port, const char* str)
+{
+    // _JOS_ASSERT(port==kCom1 || port==kCom2);
+    while(*str)
+    {
+        serial_putch(port, *str++, 1);
     }
 }

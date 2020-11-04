@@ -2,6 +2,9 @@
 #ifndef _JOS_H
 #define _JOS_H
 
+#include <stdint.h>
+#include <stdbool.h>
+
 typedef uint32_t k_status;
 #define _JOS_K_STATUS_WIDTH                     (sizeof(k_status)/8)
 #define _JOS_K_STATUS_SUCCESS                   0x80000000

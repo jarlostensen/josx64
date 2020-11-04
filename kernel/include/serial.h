@@ -20,5 +20,7 @@ void serial_putch(short port, char data, int wait);
 void serial_flush(short port);
 // write len bytes to port
 void serial_write(short port, const char* data, size_t len);
+// write a 0 terminated string to the port
+void serial_write_str(short port, const char* str);
 
 #endif // _JOS_SERIAL_H
