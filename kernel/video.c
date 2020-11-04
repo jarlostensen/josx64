@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "include/jos.h"
-#include "include/kernel/video.h"
+#include "include/video.h"
 
 // in efi_main.c
 extern CEfiBootServices * g_boot_services;

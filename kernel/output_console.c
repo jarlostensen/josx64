@@ -2,9 +2,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include <jos.h>
-#include <kernel/video.h>
-#include <output_console.h>
+#include "jos.h"
+#include "video.h"
+#include "output_console.h"
 
 static video_mode_info_t        _video_mode_info;
 static pos_t                    _cursor_pos = {0,0};

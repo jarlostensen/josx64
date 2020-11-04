@@ -3,6 +3,8 @@
 #include <string.h>
 #include <c-efi-protocol-multi-processor.h>
 
+#include <collections.h>
+
 // in efi_main.c
 extern CEfiBootServices * g_boot_services;
 extern CEfiSystemTable  * g_st;

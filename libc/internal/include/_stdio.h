@@ -22,5 +22,6 @@ typedef struct _ctx_struct
 } ctx_t;
 
 int _vprint_impl(ctx_t* ctx, const wchar_t* __restrict format, va_list parameters);
+int _wvprint_impl(ctx_t* ctx, const wchar_t* __restrict format, va_list parameters);
 
 #endif // _JOS_LIBC_INTERNAL_STDIO_H

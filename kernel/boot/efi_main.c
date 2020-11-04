@@ -8,7 +8,7 @@
 #include <wchar.h>
 
 #include <jos.h>
-#include <kernel/video.h>
+#include <video.h>
 #include <output_console.h>
 #include <memory.h>
 #include <serial.h>
@@ -118,7 +118,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     
     swprintf(buf, 256, L"%d processors detected\n", processors_get_processor_count());
     output_console_output_string(buf);
-    
+
 #ifdef _JOS_KERNEL_BUILD
     output_console_output_string(L"\n\nkernel build\n");
 #endif
