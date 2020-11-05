@@ -118,8 +118,11 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     output_console_output_string(L"\nvideo is good\n");
     
     size_t bsp_id = processors_get_bsp_id();
-    swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", processors_get_processor_count(), bsp_id);
+    swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", processors_get_processor_count(), bsp_id);    
     output_console_output_string(buf);
+    if ( processor_has_acpi_20() ) {
+        output_console_output_string(L"ACPI 2.0 configuration enabled\n");
+    }
     for ( size_t p = processors_get_processor_count(); p>0; --p ) {
         processor_information_t info;
         k_stat = processor_get_processor_information(&info, p-1);
@@ -143,10 +146,6 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
                 output_console_output_string(buf);
             }
             output_console_output_string(L"\n");
-
-            if ( processor_has_acpi_20() ) {
-                output_console_output_string(L"ACPI 2.0 configuration enabled\n");
-            }
         }
         else
         {
