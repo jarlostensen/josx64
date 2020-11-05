@@ -67,7 +67,7 @@ void exit_boot_services(CEfiHandle h) {
     }    
     g_boot_services = 0;    
 
-    k_status k_stat = memory_post_exit_bootservices_initialise();
+    jos_status_t k_stat = memory_post_exit_bootservices_initialise();
     if ( _JOS_K_FAILED(k_stat) ) {
         output_console_set_colour(video_make_color(0xff,0,0));        
         output_console_output_string(L"***FATAL ERROR: post memory exit failed. Halting.\n");
@@ -85,7 +85,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     g_st = st;
     g_boot_services = st->boot_services;
 
-    k_status k_stat = memory_pre_exit_bootservices_initialise();
+    jos_status_t k_stat = memory_pre_exit_bootservices_initialise();
     if ( _JOS_K_FAILED(k_stat) ) {
         swprintf(buf, bufcount, L"***FATAL ERROR: memory initialise returned 0x%x\n\r", k_stat);
         _EFI_PRINT(buf);
@@ -139,10 +139,14 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
             }
             
             if ( info._has_local_apic ) {
-                swprintf(buf, 256, L"\t\tlocal APIC id %d, base address 0x%x\n", info._local_apic_info._id >> 24, info._local_apic_info._base_address);
+                swprintf(buf, 256, L"\t\tlocal APIC id %d\n", info._local_apic_info._id >> 24);
                 output_console_output_string(buf);
             }
             output_console_output_string(L"\n");
+
+            if ( processor_has_acpi_20() ) {
+                output_console_output_string(L"ACPI 2.0 configuration enabled\n");
+            }
         }
         else
         {

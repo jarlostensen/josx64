@@ -15,9 +15,9 @@ static const uint8_t        *   _font = 0;
 #define LINE_HEIGHT_PIXELS 10
 #define CHAR_WIDTH_PIXELS  8
 
-k_status output_console_initialise() {
+jos_status_t output_console_initialise() {
 
-    k_status status = _JOS_K_STATUS_SUCCESS;
+    jos_status_t status = _JOS_K_STATUS_SUCCESS;
 
     _video_mode_info = video_get_video_mode_info();
 
@@ -32,7 +32,7 @@ void output_console_set_bg_colour(uint32_t bg_colour) {
     _bg_colour = bg_colour;
 }
 
-k_status output_console_set_font(const uint8_t* font, size_t width, size_t height) {
+jos_status_t output_console_set_font(const uint8_t* font, size_t width, size_t height) {
     if ( width != CHAR_WIDTH_PIXELS && height != LINE_HEIGHT_PIXELS) {
         return _JOS_K_STATUS_OUT_OF_RANGE;
     }

@@ -29,7 +29,7 @@ static uint8_t*      _memory_bitmap = 0;
 // 4Meg minimum
 #define MINIMUM_MEMORY_AVAILABLE_PAGES  1024
 
-k_status memory_pre_exit_bootservices_initialise() 
+jos_status_t memory_pre_exit_bootservices_initialise() 
 {
     CEfiStatus status = C_EFI_SUCCESS;
     
@@ -123,7 +123,7 @@ CEfiUSize memory_boot_service_get_mapkey() {
     return _map_key;
 }
 
-k_status memory_refresh_boot_service_memory_map() {
+jos_status_t memory_refresh_boot_service_memory_map() {
 
     if ( !g_boot_services ) {
         return _JOS_K_STATUS_PERMISSION_DENIED;
@@ -150,7 +150,7 @@ k_status memory_refresh_boot_service_memory_map() {
     return _JOS_K_STATUS_SUCCESS;
 }
 
-k_status memory_post_exit_bootservices_initialise() {
+jos_status_t memory_post_exit_bootservices_initialise() {
     
     _memory_bitmap = vmem_arena_alloc(_bootstrap_arena, _boot_service_memory_map_entries);
     if ( !_memory_bitmap )

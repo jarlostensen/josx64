@@ -28,9 +28,10 @@ typedef struct _processor_information {
     
 } processor_information_t;
 
-k_status    processors_initialise();
-size_t      processors_get_processor_count();
-size_t      processors_get_bsp_id();
-k_status    processor_get_processor_information(processor_information_t* out_info, size_t processor_index);
+jos_status_t        processors_initialise();
+size_t              processors_get_processor_count();
+size_t              processors_get_bsp_id();
+jos_status_t        processor_get_processor_information(processor_information_t* out_info, size_t processor_index);
+bool                processor_has_acpi_20();
 
 #endif //_JOS_KERNEL_PROCESSORS_H_

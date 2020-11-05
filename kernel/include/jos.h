@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef uint32_t k_status;
-#define _JOS_K_STATUS_WIDTH                     (sizeof(k_status)/8)
+typedef uint32_t jos_status_t;
+#define _JOS_K_STATUS_WIDTH                     (sizeof(jos_status_t)/8)
 #define _JOS_K_STATUS_SUCCESS                   0x80000000
 #define _JOS_K_STATUS_ERROR_MASK                0x70000000
 #define _JOS_K_SUCCEEDED(status)                (!!((status) & _JOS_K_STATUS_SUCCESS))

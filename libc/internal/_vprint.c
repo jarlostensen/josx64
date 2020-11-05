@@ -283,28 +283,6 @@ int _vprint_impl(ctx_t* ctx, const wchar_t* __restrict format, va_list parameter
 			break;
 			case L's':
 			{
-				const wchar_t* str = va_arg(parameters, const wchar_t*);
-				//NOTE: this is *not* standard, supporting a width modifier for %s
-				size_t len = width ? (size_t)width : wcslen(str);
-				if (maxrem < len)
-				{
-					// TODO: Set errno to EOVERFLOW.
-					return EOF;
-				}
-				if (len)
-				{
-					int result = ctx->_wprint(ctx->_that, str, len);
-					if (result == EOF)
-					{
-						// TODO: Set errno to EOVERFLOW.
-						return EOF;
-					}
-					written += result;
-				}
-			}
-			break;
-			case L'S':
-			{
 				const char* str = va_arg(parameters, const char*);
 				//NOTE: this is *not* standard, supporting a width modifier for %s
 				size_t len = width ? (size_t)width : strlen(str);
@@ -316,6 +294,28 @@ int _vprint_impl(ctx_t* ctx, const wchar_t* __restrict format, va_list parameter
 				if (len)
 				{
 					int result = ctx->_print(ctx->_that, str, len);
+					if (result == EOF)
+					{
+						// TODO: Set errno to EOVERFLOW.
+						return EOF;
+					}
+					written += result;
+				}
+			}
+			break;
+			case L'S':
+			{
+				const wchar_t* str = va_arg(parameters, const wchar_t*);
+				//NOTE: this is *not* standard, supporting a width modifier for %s
+				size_t len = width ? (size_t)width : wcslen(str);
+				if (maxrem < len)
+				{
+					// TODO: Set errno to EOVERFLOW.
+					return EOF;
+				}
+				if (len)
+				{
+					int result = ctx->_wprint(ctx->_that, str, len);
 					if (result == EOF)
 					{
 						// TODO: Set errno to EOVERFLOW.

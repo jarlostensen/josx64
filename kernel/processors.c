@@ -23,6 +23,97 @@ static size_t   _num_enabled_processors = 1;
 
 static processor_information_t* _processors = 0;
 
+// ===================================================================================================
+// TODO: move this into a separate acpi module, should be "internal"
+
+extern CEfiSystemTable*    g_st;
+static char kRSDPSignature[8] = {'R','S','D','P',' ','P','T','R'};
+
+// https://wiki.osdev.org/RSDP
+typedef struct _rsdp_descriptor {
+    char        _signature[8];
+    uint8_t     _checksum;
+    char        _oem_id[6];
+    uint8_t     _revision;
+    uint32_t    _rsdt_address;
+} rsdp_descriptor_t;
+
+typedef struct _rsdp_descriptor20 {
+
+    rsdp_descriptor_t   _rsdp_descriptor;
+    uint32_t            _length;
+    uint64_t            _xsdt_address;
+    uint8_t             _checksum;
+    uint8_t             _reserved[3];
+
+} rsdp_descriptor20_t;
+
+// see for example: https://wiki.osdev.org/XSDT 
+typedef struct _acpi_sdt_header {
+
+    char        _signature[4];
+    uint32_t    _length;
+    uint8_t     _revision;
+    uint8_t     _checksum;
+    char        _oem_id[6];
+    char        _oem_table_id[8];
+    uint32_t    _oem_revision;
+    uint32_t    _creator_id;
+    uint32_t    _creator_revision;
+
+} acpi_sdt_header_t;
+
+typedef struct _xsdt_header {
+
+    acpi_sdt_header_t   _std;
+    uint64_t*           _table_ptr;
+
+} _xsdt_header_t;
+
+const rsdp_descriptor20_t*  _rsdp_desc_20 = 0;
+const _xsdt_header_t*       _xsdt = 0;
+
+bool do_checksum(const uint8_t*ptr, size_t length) {
+    uint8_t checksum = 0;
+    while(length) {
+        checksum += *ptr++;
+        --length;
+    }
+    return checksum==0;
+}
+
+#define C_EFI_ACPI_1_0_GUID         C_EFI_GUID(0xeb9d2d30, 0x2d88, 0x11d3, 0x9a, 0x16, 0x00, 0x90, 0x27, 0x3f, 0xc1, 0x4d)
+#define C_EFI_ACPI_2_0_GUID         C_EFI_GUID(0x8868e871, 0xe4f1, 0x11d3, 0xbc, 0x22, 0x00, 0x80, 0xc7, 0x3c, 0x88, 0x81)
+
+jos_status_t    intitialise_acpi() {
+    
+    // we require ACPI 2.0 
+    CEfiConfigurationTable* config_tables = (CEfiConfigurationTable*)g_st->configuration_table;
+    for(size_t n=0; n < g_st->number_of_table_entries; ++n) {
+
+        if ( memcmp(&C_EFI_ACPI_2_0_GUID, &config_tables[n].vendor_guid, sizeof(CEfiGuid))==0 ) {
+
+            _rsdp_desc_20 = (const rsdp_descriptor20_t*)config_tables[n].vendor_table;
+            // check RSDP signature (we still need to, don't trust anyone)
+            if ( memcmp(_rsdp_desc_20->_rsdp_descriptor._signature, kRSDPSignature, sizeof(kRSDPSignature))==0 ) {
+                break;
+            }
+        }
+    }
+
+    if ( _rsdp_desc_20 ) {
+        _xsdt = (const _xsdt_header_t*)_rsdp_desc_20->_xsdt_address;
+        if ( do_checksum((const uint8_t*)&_xsdt->_std, _xsdt->_std._length) ) {
+            return _JOS_K_STATUS_SUCCESS;
+        }
+        _xsdt = 0;
+    }
+
+    return _JOS_K_STATUS_NOT_FOUND;
+}
+
+// ==================================================================================================
+
 static uint32_t read_local_apic_register(processor_information_t* info, uint16_t reg) {
     uint64_t register_address = info->_local_apic_info._base_address | (uint64_t)reg;
     const uint32_t* reg_ptr = (const uint32_t*)register_address;
@@ -71,35 +162,35 @@ static void collect_ap_information(void* arg) {
     info->_is_good = true;
 }
 
-k_status    processors_initialise() {
+jos_status_t    processors_initialise() {
 
     CEfiHandle handle_buffer[3];
     CEfiUSize handle_buffer_size = sizeof(handle_buffer);
     memset(handle_buffer,0,sizeof(handle_buffer));
 
-    CEfiStatus status = g_boot_services->locate_handle(C_EFI_BY_PROTOCOL, &C_EFI_MULTI_PROCESSOR_PROTOCOL_GUID, 0, &handle_buffer_size, handle_buffer);
-    if ( status==C_EFI_SUCCESS ) {
+    CEfiStatus efi_status = g_boot_services->locate_handle(C_EFI_BY_PROTOCOL, &C_EFI_MULTI_PROCESSOR_PROTOCOL_GUID, 0, &handle_buffer_size, handle_buffer);
+    if ( efi_status==C_EFI_SUCCESS ) {
 
         //TODO: this works but it's not science; what makes one handle a better choice than another? 
         //      we should combine these two tests (handler and resolution) and pick the base from that larger set
         size_t num_handles = handle_buffer_size/sizeof(CEfiHandle);
         for(size_t n = 0; n < num_handles; ++n)
         {
-            status = g_boot_services->handle_protocol(handle_buffer[n], &C_EFI_MULTI_PROCESSOR_PROTOCOL_GUID, (void**)&_mpp);
-            if ( status == C_EFI_SUCCESS )
+            efi_status = g_boot_services->handle_protocol(handle_buffer[n], &C_EFI_MULTI_PROCESSOR_PROTOCOL_GUID, (void**)&_mpp);
+            if ( efi_status == C_EFI_SUCCESS )
             {
                 break;
             }            
         }
         
-        if ( status == C_EFI_SUCCESS ) {                
-            status = _mpp->who_am_i(_mpp, &_bsp_id);
-            if ( status != C_EFI_SUCCESS ) {
+        if ( efi_status == C_EFI_SUCCESS ) {                
+            efi_status = _mpp->who_am_i(_mpp, &_bsp_id);
+            if ( efi_status != C_EFI_SUCCESS ) {
                 return _JOS_K_STATUS_INTERNAL;
             }
 
-            status = _mpp->get_number_of_processors(_mpp, &_num_processors, &_num_enabled_processors);
-            if ( status != C_EFI_SUCCESS ) {
+            efi_status = _mpp->get_number_of_processors(_mpp, &_num_processors, &_num_enabled_processors);
+            if ( efi_status != C_EFI_SUCCESS ) {
                 return _JOS_K_STATUS_INTERNAL;
             }
 
@@ -110,12 +201,12 @@ k_status    processors_initialise() {
 
             for(size_t p = 0; p < _num_processors; ++p) {
                 if( p != _bsp_id ) {
-                    status = _mpp->get_processor_info(_mpp, p, &_processors[p]._uefi_info);
-                    if ( status == C_EFI_SUCCESS ) {
+                    efi_status = _mpp->get_processor_info(_mpp, p, &_processors[p]._uefi_info);
+                    if ( efi_status == C_EFI_SUCCESS ) {
                         // execute the information collect function on this processor
                         //NOTE: infinite timeout....
-                        status = _mpp->startup_this_ap(_mpp, collect_ap_information, p, NULL, 0, (void*)(_processors+p), NULL);
-                        if ( status != C_EFI_SUCCESS ) {
+                        efi_status = _mpp->startup_this_ap(_mpp, collect_ap_information, p, NULL, 0, (void*)(_processors+p), NULL);
+                        if ( efi_status != C_EFI_SUCCESS ) {
                             _processors[p]._is_good = false;
                         }
                     }
@@ -131,6 +222,12 @@ k_status    processors_initialise() {
         _processors->_is_good = true;
     }
 
+    // ACPI 
+    jos_status_t status = intitialise_acpi();
+    if ( !_JOS_K_SUCCEEDED(status) ) {
+        return status;
+    }
+
     return _JOS_K_STATUS_SUCCESS;        
 }
 
@@ -142,7 +239,7 @@ size_t processors_get_bsp_id() {
     return _bsp_id;
 }
 
-k_status        processor_get_processor_information(processor_information_t* out_info, size_t processor_index)
+jos_status_t        processor_get_processor_information(processor_information_t* out_info, size_t processor_index)
 {
     if ( processor_index >= _num_processors ) {
         return _JOS_K_STATUS_OUT_OF_RANGE;
@@ -150,4 +247,8 @@ k_status        processor_get_processor_information(processor_information_t* out
 
     memcpy(out_info, _processors+processor_index, sizeof(processor_information_t));
     return _JOS_K_STATUS_SUCCESS;
+}
+
+bool processor_has_acpi_20() {
+    return _xsdt != 0;
 }
