@@ -10,7 +10,7 @@ endif()
 set(CMAKE_C_FLAGS 
 "${CMAKE_C_FLAGS} -D_JOS_KERNEL_BUILD -target x86_64-unknown-windows -isystem="${CMAKE_SOURCE_DIR}/sysroot/include" -DGNU_EFI_USE_MS_ABI -g -m64 -nostdinc -ffreestanding -mcmodel=small -fshort-wchar -mno-red-zone -fno-builtin-setjmp -fno-builtin-longjmp -fomit-frame-pointer -fno-delete-null-pointer-checks -fno-common -fno-zero-initialized-in-bss -fno-exceptions -fno-stack-protector -fno-stack-check -fno-strict-aliasing -fno-merge-all-constants --std=c11 -Wall -Wextra -Wdouble-promotion -Wpedantic ")
 
-# NOTE: it appears we need both nodefaultlibs and nodefaultlibs to completly purge the spirit of Windows libriaries from the build
+# NOTE: it appears we need both nostdlib and nodefaultlibs to completly purge the spirit of Windows libriaries from the build
 set(CMAKE_C_LINK_FLAGS 
 "-target x86_64-unknown-windows -nostdlib -nodefaultlibs -Wl,-machine:x64 -Wl,-entry:efi_main -Wl,-subsystem:efi_application -fuse-ld=lld-link")
 
@@ -22,6 +22,12 @@ project(jOSx64 VERSION 1.0
         DESCRIPTION "64 bit jOS kernel - UEFI"
         LANGUAGES C ASM
         )
+
+enable_language(ASM_NASM)
+if(CMAKE_ASM_NASM_COMPILER_LOADED)
+  set(CAN_USE_ASSEMBLER TRUE)
+  file(GLOB_RECURSE ENGINE_ASM_FILES "kernel/*.asm")
+endif(CMAKE_ASM_NASM_COMPILER_LOADED)
 
 set(CMAKE_CROSSCOMPILING TRUE)
 SET(CMAKE_SYSTEM_NAME Generic)
