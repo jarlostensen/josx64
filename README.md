@@ -30,3 +30,5 @@ If you find it useful then that's great.
 # Tips and sources
 I recommend having the standard ready, there's a lot of important information to read there: https://uefi.org/specifications.
 OSDEV is as always as invaluable source, for example; https://wiki.osdev.org/UEFI
+<br/>
+Configuration table GUIDs: https://blog.fpmurphy.com/2015/10/list-efi-configuration-table-entries.html 

@@ -11,7 +11,7 @@
 // Intel IA dev guide 10-6 VOL 3A
 #define LOCAL_APIC_REGISTER_ID      0x20
 #define LOCAL_APIC_REGISTER_VERSION 0x30
-
+#define LOCAL_APIC_REGISTER_SPIV    0xf0
 
 // in efi_main.c
 extern CEfiBootServices * g_boot_services;
@@ -23,8 +23,11 @@ static size_t   _num_enabled_processors = 1;
 
 static processor_information_t* _processors = 0;
 
+// used as a placeholder event for 
+static CEfiEvent    _ap_event = 0;
+
 // ===================================================================================================
-// TODO: move this into a separate acpi module, should be "internal"
+// TODO: move this into a separate acpi module, should be "internal"?
 
 extern CEfiSystemTable*    g_st;
 static char kRSDPSignature[8] = {'R','S','D','P',' ','P','T','R'};
@@ -36,7 +39,7 @@ typedef struct _rsdp_descriptor {
     char        _oem_id[6];
     uint8_t     _revision;
     uint32_t    _rsdt_address;
-} rsdp_descriptor_t;
+} _JOS_PACKED_ rsdp_descriptor_t;
 
 typedef struct _rsdp_descriptor20 {
 
@@ -46,7 +49,7 @@ typedef struct _rsdp_descriptor20 {
     uint8_t             _checksum;
     uint8_t             _reserved[3];
 
-} rsdp_descriptor20_t;
+} _JOS_PACKED_ rsdp_descriptor20_t;
 
 // see for example: https://wiki.osdev.org/XSDT 
 typedef struct _acpi_sdt_header {
@@ -61,14 +64,14 @@ typedef struct _acpi_sdt_header {
     uint32_t    _creator_id;
     uint32_t    _creator_revision;
 
-} acpi_sdt_header_t;
+} _JOS_PACKED_ acpi_sdt_header_t;
 
 typedef struct _xsdt_header {
 
     acpi_sdt_header_t   _std;
     uint64_t*           _table_ptr;
 
-} _xsdt_header_t;
+} _JOS_PACKED_ _xsdt_header_t;
 
 const rsdp_descriptor20_t*  _rsdp_desc_20 = 0;
 const _xsdt_header_t*       _xsdt = 0;
@@ -146,20 +149,27 @@ static void collect_this_cpu_information(processor_information_t* info) {
 
     info->_has_local_apic = (edx & (1<<9)) == (1<<9);
     if (info->_has_local_apic) {
+        // yes, but is it enabled?
+        uint32_t spiv = read_local_apic_register(info, LOCAL_APIC_REGISTER_SPIV);
+        // IA dev guide Vol 3a, figure 10-24
+        info->_local_apic_info._enabled = (spiv & (1<<8)) == (1<<8);
         uint32_t apic_lo, apic_hi;
         x86_64_rdmsr(IA32_APIC_BASE_MSR, &apic_lo, &apic_hi);
         info->_local_apic_info._base_address = (((uint64_t)apic_hi << 32) | (uint64_t)apic_lo) & 0xfffff000;
         info->_local_apic_info._id = read_local_apic_register(info, LOCAL_APIC_REGISTER_ID);
         info->_local_apic_info._version = read_local_apic_register(info, LOCAL_APIC_REGISTER_VERSION);
-    }
+        info->_local_apic_info._has_x2apic = (ecx & (1<<21)) == (1<<21);
+    }  
+
+    //NOTE: if x2APIC is supported we can use 1b or b CPUID functions for topology information as well
+    
+    info->_is_good = true;
 }
 
-// called on each AP
+// wrapper for UEFI callback protocol
 static void collect_ap_information(void* arg) {
 
-    processor_information_t* info = (processor_information_t*)arg;
-    collect_this_cpu_information(info);
-    info->_is_good = true;
+    collect_this_cpu_information((processor_information_t*)arg);
 }
 
 jos_status_t    processors_initialise() {
@@ -172,7 +182,7 @@ jos_status_t    processors_initialise() {
     if ( efi_status==C_EFI_SUCCESS ) {
 
         //TODO: this works but it's not science; what makes one handle a better choice than another? 
-        //      we should combine these two tests (handler and resolution) and pick the base from that larger set
+        //      
         size_t num_handles = handle_buffer_size/sizeof(CEfiHandle);
         for(size_t n = 0; n < num_handles; ++n)
         {
@@ -201,10 +211,11 @@ jos_status_t    processors_initialise() {
 
             for(size_t p = 0; p < _num_processors; ++p) {
                 if( p != _bsp_id ) {
+                    // note that this only works for processors that support x2APIC (i.e. 1f and b CPUID leafs)
                     efi_status = _mpp->get_processor_info(_mpp, p, &_processors[p]._uefi_info);
                     if ( efi_status == C_EFI_SUCCESS ) {
                         // execute the information collect function on this processor
-                        //NOTE: infinite timeout....
+                        //NOTE: infinite timeout here because the callback is quick, if that changes this has to be re-considered
                         efi_status = _mpp->startup_this_ap(_mpp, collect_ap_information, p, NULL, 0, (void*)(_processors+p), NULL);
                         if ( efi_status != C_EFI_SUCCESS ) {
                             _processors[p]._is_good = false;
@@ -239,7 +250,7 @@ size_t processors_get_bsp_id() {
     return _bsp_id;
 }
 
-jos_status_t        processor_get_processor_information(processor_information_t* out_info, size_t processor_index)
+jos_status_t        processors_get_processor_information(processor_information_t* out_info, size_t processor_index)
 {
     if ( processor_index >= _num_processors ) {
         return _JOS_K_STATUS_OUT_OF_RANGE;
@@ -249,6 +260,54 @@ jos_status_t        processor_get_processor_information(processor_information_t*
     return _JOS_K_STATUS_SUCCESS;
 }
 
-bool processor_has_acpi_20() {
+bool processors_has_acpi_20() {
     return _xsdt != 0;
+}
+
+jos_status_t        processors_startup_aps(ap_worker_function_t ap_worker_function, void* per_ap_data_, size_t per_ap_data_stride) {
+
+    if(!g_boot_services) {
+        return _JOS_K_STATUS_PERMISSION_DENIED;
+    }
+
+    if (!ap_worker_function || (per_ap_data_ && !per_ap_data_stride) || (!per_ap_data_ && per_ap_data_stride)) {
+        return _JOS_K_STATUS_FAILED_PRECONDITION;
+    }
+
+    if ( _num_enabled_processors==1 ) {
+        return _JOS_K_STATUS_RESOURCE_EXHAUSTED;
+    }
+
+    if ( _ap_event ) {
+        // can't do this twice, there's only one try
+        return _JOS_K_STATUS_PERMISSION_DENIED;
+    }
+
+    CEfiStatus efi_status;
+    // efi_status = g_boot_services->create_event(C_EFI_EVT_RUNTIME,  C_EFI_TPL_APPLICATION, NULL, NULL, &_ap_event);
+    // if ( efi_status != C_EFI_SUCCESS ) {
+    //     return _JOS_K_STATUS_INTERNAL;
+    // }
+
+    CEfiUSize this_id;
+    _mpp->who_am_i(_mpp, &this_id);
+    if ( this_id!=_bsp_id ) {
+        return _JOS_K_STATUS_PERMISSION_DENIED;
+    }
+
+    uint8_t* per_ap_data = (uint8_t*)per_ap_data_;
+    for(size_t p = 0; p < _num_processors; ++p) {
+        if( p != _bsp_id ) {
+
+            // execute the information collect function on this processor
+            efi_status = _mpp->startup_this_ap(_mpp, ap_worker_function, p, NULL, 100, (void*)(per_ap_data), NULL);
+            if ( efi_status != C_EFI_SUCCESS ) {
+                return _JOS_K_STATUS_CANCELLED;
+            }
+        }
+
+        per_ap_data += per_ap_data_stride;
+    }
+
+    return _JOS_K_STATUS_SUCCESS;
 }
