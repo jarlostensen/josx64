@@ -6,12 +6,8 @@
 #include <x86_64.h>
 #include <collections.h>
 #include <processors.h>
+#include <apic.h>
 
-
-// Intel IA dev guide 10-6 VOL 3A
-#define LOCAL_APIC_REGISTER_ID      0x20
-#define LOCAL_APIC_REGISTER_VERSION 0x30
-#define LOCAL_APIC_REGISTER_SPIV    0xf0
 
 // in efi_main.c
 extern CEfiBootServices * g_boot_services;
@@ -117,11 +113,6 @@ jos_status_t    intitialise_acpi() {
 
 // ==================================================================================================
 
-static uint32_t read_local_apic_register(processor_information_t* info, uint16_t reg) {
-    uint64_t register_address = info->_local_apic_info._base_address | (uint64_t)reg;
-    const uint32_t* reg_ptr = (const uint32_t*)register_address;
-    return *reg_ptr;
-}
 
 static void collect_this_cpu_information(processor_information_t* info) {
 
@@ -149,15 +140,7 @@ static void collect_this_cpu_information(processor_information_t* info) {
 
     info->_has_local_apic = (edx & (1<<9)) == (1<<9);
     if (info->_has_local_apic) {
-        // yes, but is it enabled?
-        uint32_t spiv = read_local_apic_register(info, LOCAL_APIC_REGISTER_SPIV);
-        // IA dev guide Vol 3a, figure 10-24
-        info->_local_apic_info._enabled = (spiv & (1<<8)) == (1<<8);
-        uint32_t apic_lo, apic_hi;
-        x86_64_rdmsr(IA32_APIC_BASE_MSR, &apic_lo, &apic_hi);
-        info->_local_apic_info._base_address = (((uint64_t)apic_hi << 32) | (uint64_t)apic_lo) & 0xfffff000;
-        info->_local_apic_info._id = read_local_apic_register(info, LOCAL_APIC_REGISTER_ID);
-        info->_local_apic_info._version = read_local_apic_register(info, LOCAL_APIC_REGISTER_VERSION);
+        apic_collect_this_cpu_information(info);
         info->_local_apic_info._has_x2apic = (ecx & (1<<21)) == (1<<21);
     }  
 

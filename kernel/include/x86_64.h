@@ -3,9 +3,6 @@
 
 #include <jos.h>
 
-// Intel IA dev guide, 10.4
-#define IA32_APIC_BASE_MSR      0x1b
-
 
 // read MSR
 inline void x86_64_rdmsr(uint32_t msr, uint32_t* lo, uint32_t* hi)
