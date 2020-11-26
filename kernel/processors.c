@@ -138,6 +138,7 @@ static void collect_this_cpu_information(processor_information_t* info) {
         memcpy(info->_hypervisor_id, regs + 1, 3 * sizeof(regs[0]));
     }
 
+    //NOTE: this should ALWAYS be true for x64
     info->_has_local_apic = (edx & (1<<9)) == (1<<9);
     if (info->_has_local_apic) {
         apic_collect_this_cpu_information(info);

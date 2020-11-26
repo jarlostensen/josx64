@@ -8,12 +8,14 @@
 #include <wchar.h>
 
 #include <jos.h>
+#include <kernel.h>
 #include <video.h>
 #include <output_console.h>
 #include <memory.h>
 #include <serial.h>
 #include <processors.h>
 #include <atomic.h>
+#include <interrupts.h>
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "../stb/stb_image_resize.h"
@@ -57,15 +59,6 @@ void ap_idle_func(void* arg) {
 }
 
 // ==============================================================
-
-__attribute__((__noreturn__)) void halt_cpu() {
-    serial_write_str(kCom1, "\n\nkernel halting\n");
-    while(1)
-    {
-        __asm volatile ("pause");
-    } 
-    __builtin_unreachable();
-}
 
 void exit_boot_services(CEfiHandle h) {
 
@@ -220,6 +213,9 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     // after this point we can no longer use boot services (only runtime)
     
     exit_boot_services(h);
+
+    //ZZZ:
+    interrupts_initialise_early();
 
     size_t dim;
     const uint8_t* memory_bitmap = memory_get_memory_bitmap(&dim);

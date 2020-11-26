@@ -19,7 +19,8 @@ The project uses CMake and Ninja to manage and generate build files and builds u
 
 To generate the ninja build files run ```genbuild.bat``` in the root folder. This will generate a build folder with all the CMake gubbins and the ninja.build file. To build the project you run ```build.bat``` and to clean it you run ```clean.bat```, that's it.
 
-The output of the build will be a file called ```BOOTX64.EFI``` in the build folder which can be converted to a FAT image using the ```makefat.sh``` (*nix!) script. I'll find some way of doing that without using *nix, but for the time being I rely on tools like ```dd``` and ```mformat```, so WSL to the rescue for that one last piece.
+The output of the build will be a file called ```BOOTX64.EFI``` in the build folder which can be converted to a FAT image using my tool ```efibootgen``` which is included in the release in addition to being available in full source from https://github.com/jarlostensen/efibootgen .
+For my own use I've also included a call to VirtualBoxManage in order to generate an image bootable with VBox. You can edit ```build.bat``` to remove or modify that to your needs.
 
 To run the image I use QEMU and ```run_qemu.bat``` has the command line which requires the Tianocore UEFI ROM image included in the external folder.
 

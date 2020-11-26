@@ -36,6 +36,8 @@ extern uint16_t kJosKernelCS;
 #define _JOS_MAYBE_UNUSED __attribute__((unused))
 #define _JOS_INLINE_FUNC __attribute__((unused)) static
 
+#define _JOS_ALWAYS_INLINE __attribute__((always_inline))
+
 #define _JOS_PACKED_ __attribute((packed))
 
 void _k_trace(const char* channel, const char* msg,...);
@@ -79,6 +81,8 @@ if(!(cond))\
 #define _JOS_MAYBE_UNUSED
 #define _JOS_INLINE_FUNC static
 #define _JOS_BOCHS_DBGBREAK() __debugbreak()
+
+#define _JOS_ALWAYS_INLINE
 
 #define _JOS_BOCHS_DBGBREAK_TRACE() __debugbreak()
 #define _JOS_GDB_DBGBREAK() __debugbreak()

@@ -63,6 +63,8 @@ section .text
 
 ; --------------------------------------------------------------------------
 
+extern interrupts_check_return_stack
+
 ; ISRs
 ; in interrupts.c
 extern interrupts_isr_handler
@@ -70,9 +72,17 @@ isr_handler_stub:
 
     PUSHAQ
     cld 
+    ; rcx = rsp for fastcall argument 0; ptr to isr_stack_t
+    mov rcx, rsp
     call interrupts_isr_handler
-
+    
     POPAQ
+    ; drop error code and handler id
+    add rsp, 16
+
+    mov rcx, rsp
+    call interrupts_check_return_stack
+
     iret 
 
 ; an isr/fault/trap that doesn't provide an error code
@@ -83,9 +93,7 @@ interrupts_isr_handler_%1:
     ; empty error code
     push qword 0
     ; isr id
-    push qword %1
-    ; rcx = rsp for ptr argument
-    mov rcx, rsp
+    push qword %1    
     jmp isr_handler_stub
 %endmacro
 
@@ -96,9 +104,7 @@ interrupts_isr_handler_%1:
     cli     
     ; error code is already pushed
     ; isr id
-    push qword %1
-    ; rcx = rsp for ptr argument
-    mov rcx, rsp
+    push qword %1    
     jmp isr_handler_stub
 %endmacro
 
