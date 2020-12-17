@@ -123,6 +123,30 @@ EXTERN_ISR_HANDLER(29);
 EXTERN_ISR_HANDLER(30);
 EXTERN_ISR_HANDLER(31);
 
+#define EXTERN_IRQ_HANDLER(N)\
+    extern void interrupts_irq_handler_##N(void)
+
+EXTERN_IRQ_HANDLER(0);
+EXTERN_IRQ_HANDLER(1);
+EXTERN_IRQ_HANDLER(2);
+EXTERN_IRQ_HANDLER(3);
+EXTERN_IRQ_HANDLER(4);
+EXTERN_IRQ_HANDLER(5);
+EXTERN_IRQ_HANDLER(6);
+EXTERN_IRQ_HANDLER(7);
+EXTERN_IRQ_HANDLER(8);
+EXTERN_IRQ_HANDLER(9);
+EXTERN_IRQ_HANDLER(10);
+EXTERN_IRQ_HANDLER(11);
+EXTERN_IRQ_HANDLER(12);
+EXTERN_IRQ_HANDLER(13);
+EXTERN_IRQ_HANDLER(14);
+EXTERN_IRQ_HANDLER(15);
+EXTERN_IRQ_HANDLER(16);
+EXTERN_IRQ_HANDLER(17);
+EXTERN_IRQ_HANDLER(18);
+EXTERN_IRQ_HANDLER(19);
+
 // returns 64 bit RIP of interrupt handler from entry
 static uint64_t idt_get_rip(idt_entry_t* entry) {
     return (uint64_t)entry->offset_lo | (uint64_t)(entry->offset_mid << 16) | ((uint64_t)(entry->offset_hi) << 32);
@@ -169,15 +193,17 @@ void interrupts_isr_handler(isr_stacx86_64_t *stack) {
     }
 }
 
-void interrupts_check_return_stack(uint64_t* rsp)
-{
+void interrupts_check_return_stack(uint64_t* rsp) {
     wchar_t wbuf[64];
     swprintf(wbuf, sizeof(wbuf)/sizeof(wchar_t), L"->rip = 0x%llx\n", rsp[0]);
     output_console_output_string(wbuf);
 }
 
-static void init_legacy_pic(void)
-{    
+void interrupts_irq_handler(int irqId) {
+
+}
+
+static void init_legacy_pic(void) {    
     // http://www.brokenthorn.com/Resources/OSDevPic.html
     // start initialising PIC1 and PIC2 
     x86_64_outb(PIC1_COMMAND , ICW1_INIT | ICW1_ICW4);
@@ -241,12 +267,32 @@ void interrupts_initialise_early(void) {
     SET_ISR_HANDLER(29);
     SET_ISR_HANDLER(30);
     SET_ISR_HANDLER(31);
+
+#define SET_IRQ_HANDLER(N)\
+    idt_init(_idt+IRQ_BASE_OFFSET+N, interrupts_irq_handler_##N)
+
+    SET_IRQ_HANDLER(0);
+    SET_IRQ_HANDLER(1);
+    SET_IRQ_HANDLER(2);
+    SET_IRQ_HANDLER(3);
+    SET_IRQ_HANDLER(4);
+    SET_IRQ_HANDLER(5);
+    SET_IRQ_HANDLER(6);
+    SET_IRQ_HANDLER(7);
+    SET_IRQ_HANDLER(8);
+    SET_IRQ_HANDLER(9);
+    SET_IRQ_HANDLER(10);
+    SET_IRQ_HANDLER(11);
+    SET_IRQ_HANDLER(12);
+    SET_IRQ_HANDLER(13);
+    SET_IRQ_HANDLER(14);
+    SET_IRQ_HANDLER(15);
     
     x86_64_load_idt(&_idt_desc);
 
     //TEST:
     asm volatile (
-        "push $0x42\r\n"
+        "nop\r\n"
         "int $0x3\r\n"
         "nop\r\n"        
         );

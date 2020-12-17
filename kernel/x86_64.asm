@@ -63,7 +63,10 @@ section .text
 
 ; --------------------------------------------------------------------------
 
-extern interrupts_check_return_stack
+; nop-handler stub used for testing
+isr_null_handler:
+    add rsp, 16
+    iretq
 
 ; ISRs
 ; in interrupts.c
@@ -80,10 +83,7 @@ isr_handler_stub:
     ; drop error code and handler id
     add rsp, 16
 
-    mov rcx, rsp
-    call interrupts_check_return_stack
-
-    iret 
+    iretq
 
 ; an isr/fault/trap that doesn't provide an error code
 %macro ISR_HANDLER 1
@@ -94,7 +94,7 @@ interrupts_isr_handler_%1:
     push qword 0
     ; isr id
     push qword %1    
-    jmp isr_handler_stub
+    jmp isr_handler_stub    
 %endmacro
 
 ; some faults (but not all) provide an error code
@@ -166,6 +166,69 @@ ISR_HANDLER 29
 ISR_HANDLER_ERROR_CODE 30
 ; "fpu error interrupt"
 ISR_HANDLER 31
+
+; =====================================================================================
+; IRQs
+
+PIC1_COMMAND equ 0x20
+PIC2_COMMAND equ 0x0a
+
+; handler; forwards call to the registered handler via argument 0
+extern interrupts_irq_handler
+
+irq_handler_stub:
+
+    push qword [rsp]    ; for EOI check below
+
+    ; chain to handler, irq number is first arg
+    call interrupts_irq_handler
+    add rsp, 8
+
+    ; send EOI to the right PIC
+    pop rax
+    cmp al, 8
+    jl .irq_handler_stub_1
+
+    ; EOI to PIC2
+    mov al, 0x20
+    out PIC2_COMMAND, al
+    ; always send EOI to master (PIC1)
+
+.irq_handler_stub_1:
+    ; EOI to PIC1
+    mov al, 0x20
+    out PIC1_COMMAND, al
+
+.irq_handler_stub_2:
+    iret
+
+%macro IRQ_HANDLER 1
+global interrupts_irq_handler_%1
+interrupts_irq_handler_%1:        
+    push qword %1
+    jmp irq_handler_stub
+%endmacro
+
+IRQ_HANDLER 0 
+IRQ_HANDLER 1
+IRQ_HANDLER 2
+IRQ_HANDLER 3
+IRQ_HANDLER 4
+IRQ_HANDLER 5
+IRQ_HANDLER 6
+IRQ_HANDLER 7
+IRQ_HANDLER 8
+IRQ_HANDLER 9
+IRQ_HANDLER 10 
+IRQ_HANDLER 11
+IRQ_HANDLER 12
+IRQ_HANDLER 13
+IRQ_HANDLER 14
+IRQ_HANDLER 15
+IRQ_HANDLER 16
+IRQ_HANDLER 17
+IRQ_HANDLER 18
+IRQ_HANDLER 19
 
 ; ===================================================================================
 ; general stuff
