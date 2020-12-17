@@ -200,7 +200,7 @@ irq_handler_stub:
     out PIC1_COMMAND, al
 
 .irq_handler_stub_2:
-    iret
+    iretq
 
 %macro IRQ_HANDLER 1
 global interrupts_irq_handler_%1
