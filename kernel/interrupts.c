@@ -193,12 +193,6 @@ void interrupts_isr_handler(isr_stacx86_64_t *stack) {
     }
 }
 
-void interrupts_check_return_stack(uint64_t* rsp) {
-    wchar_t wbuf[64];
-    swprintf(wbuf, sizeof(wbuf)/sizeof(wchar_t), L"->rip = 0x%llx\n", rsp[0]);
-    output_console_output_string(wbuf);
-}
-
 void interrupts_irq_handler(int irqId) {
 
 }
@@ -228,9 +222,10 @@ static void init_legacy_pic(void) {
 
 void interrupts_initialise_early(void) {
 
+    //NOTE: this isn't needed to make isr's work
     init_legacy_pic();
 
-    // load IDT with the initial handlers
+    // load IDT with reserved ISRs
 
 #define SET_ISR_HANDLER(N)\
     idt_init(_idt+N, interrupts_isr_handler_##N)

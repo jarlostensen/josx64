@@ -202,12 +202,14 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         {
             ids[n] = n;
         }
-        jos_status_t status = processors_startup_aps(ap_idle_func, (void*)ids, sizeof(size_t));
-        if ( _JOS_K_FAILED(status )) {
-            output_console_set_colour(video_make_color(0xff,0,0));
-            swprintf(buf, bufcount, L"\tstartup aps failed with 0x%x\n", status);
-            output_console_output_string(buf);
-        }
+        
+        //ZZZ:
+        // jos_status_t status = processors_startup_aps(ap_idle_func, (void*)ids, sizeof(size_t));
+        // if ( _JOS_K_FAILED(status )) {
+        //     output_console_set_colour(video_make_color(0xff,0,0));
+        //     swprintf(buf, bufcount, L"\tstartup aps failed with 0x%x\n", status);
+        //     output_console_output_string(buf);
+        // }
     }
 
     // after this point we can no longer use boot services (only runtime)
@@ -236,15 +238,6 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         }
         video_scale_draw_indexed_bitmap( scaled_bitmap, palette, _C_EFI_MEMORY_TYPE_N, new_w,new_h, 200,500, new_w,new_h );
     } 
-
-    if(processors_get_processor_count()>1)
-    {
-        _ap_counter._val = 1;
-        while( _ap_counter._val < processors_get_processor_count())
-        {
-            asm volatile("pause");
-        }
-    }
 
     output_console_set_colour(video_make_color(0xff,0,0));
     output_console_output_string(L"\nThe kernel has exited!");

@@ -176,14 +176,21 @@ PIC2_COMMAND equ 0x0a
 ; handler; forwards call to the registered handler via argument 0
 extern interrupts_irq_handler
 
+;ZZZ: this is not correct for 64 bit
 irq_handler_stub:
 
+    ; push a copy of irq number
     push qword [rsp]    ; for EOI check below
+
+    PUSHAQ
 
     ; chain to handler, irq number is first arg
     call interrupts_irq_handler
-    add rsp, 8
 
+    POPAQ
+
+    add rsp, 8
+    
     ; send EOI to the right PIC
     pop rax
     cmp al, 8
