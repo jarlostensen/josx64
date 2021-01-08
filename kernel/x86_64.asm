@@ -61,6 +61,8 @@ section .text
     pop     r8
 %endmacro
 
+%define STACK_REL(idx) [rsp+8*idx]
+
 ; --------------------------------------------------------------------------
 
 ; nop-handler stub used for testing
@@ -179,19 +181,15 @@ extern interrupts_irq_handler
 ;ZZZ: this is not correct for 64 bit
 irq_handler_stub:
 
-    ; push a copy of irq number
-    push qword [rsp]    ; for EOI check below
-
     PUSHAQ
 
-    ; chain to handler, irq number is first arg
+    ; handler(irq number)
+    mov rcx, STACK_REL(15)
     call interrupts_irq_handler
 
     POPAQ
-
-    add rsp, 8
     
-    ; send EOI to the right PIC
+    ; send EOI to the right PIC based on the IRQ number
     pop rax
     cmp al, 8
     jl .irq_handler_stub_1
@@ -212,6 +210,7 @@ irq_handler_stub:
 %macro IRQ_HANDLER 1
 global interrupts_irq_handler_%1
 interrupts_irq_handler_%1:        
+    ; needed for EOI check later
     push qword %1
     jmp irq_handler_stub
 %endmacro

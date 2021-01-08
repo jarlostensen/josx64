@@ -14,6 +14,7 @@ target_sources(kernel PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/interrupts.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/apic.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/kernel.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/clock.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/x86_64.asm"
 )
 

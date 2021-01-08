@@ -16,6 +16,7 @@
 #include <processors.h>
 #include <atomic.h>
 #include <interrupts.h>
+#include <clock.h>
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "../stb/stb_image_resize.h"
@@ -218,6 +219,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 
     //ZZZ:
     interrupts_initialise_early();
+    clock_initialise();
 
     size_t dim;
     const uint8_t* memory_bitmap = memory_get_memory_bitmap(&dim);

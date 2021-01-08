@@ -4,6 +4,7 @@
 #include <kernel.h>
 #include <string.h>
 #include <x86_64.h>
+#include <pic.h>
 
 #include <stdio.h>
 #include <output_console.h>
@@ -37,27 +38,14 @@ enum {
     kTaskGate       = 0x5,
 };
 
-// ==============================================================================
-// PIC
-// https://wiki.osdev.org/PIC
-#define PIC1		0x20        // master PIC
-#define PIC2		0xA0		// slave PIC
-#define PIC1_COMMAND	PIC1
-#define PIC1_DATA	(PIC1+1)
-#define PIC2_COMMAND	PIC2
-#define PIC2_DATA	(PIC2+1)
-#define ICW1_ICW4	0x01		/* ICW4 (not) needed */
-#define ICW1_SINGLE	0x02		/* Single (cascade) mode */
-#define ICW1_INTERVAL4	0x04	/* Call address interval 4 (8) */
-#define ICW1_LEVEL	0x08		/* Level triggered (edge) mode */
-#define ICW1_INIT	0x10		/* Initialization - required! */
-#define ICW4_8086	0x01		/* 8086/88 (MCS-80/85) mode */
-#define ICW4_AUTO	0x02		/* Auto (normal) EOI */
-#define ICW4_BUF_SLAVE	0x08	/* Buffered mode/slave */
-#define ICW4_BUF_MASTER	0x0C	/* Buffered mode/master */
-#define ICW4_SFNM	0x10		/* Special fully nested (not) */
-#define IRQ_BASE_OFFSET 0x20    // the offset we apply to the IRQs to map them outside of the lower reserved ISR range
+static isr_handler_func_t _isr_handlers[256];
+static irq_handler_func_t _irq_handlers[32];
+// we use this to control interrupts at a "soft" level; if this flag is true we forward interrupts to ISR handlers
+// if false we don't, and we may filter some IRQs as well
+static bool _interrupts_enabled = true;
 
+// IRQ enabled bitmask, 0 when no IRQs enabled
+static unsigned int _irq_mask = 0;
 
 // Intel IA dev guide Vol 3 6.14.1 64-Bit Mode IDT
 typedef struct _idt_64_entry {
@@ -167,37 +155,74 @@ static void idt_init(idt_entry_t* entry, void* handler) {
     idt_set_rip(entry, (uint64_t)handler);
 }
 
+void interrupts_isr_set_handler(int i, isr_handler_func_t handler) {
+    //TODO: assert on handler already being set
+    x86_64_cli();
+    _isr_handlers[i] = handler;
+    x86_64_sti();
+}
+
 void interrupts_isr_handler(isr_stacx86_64_t *stack) {
 
-    //ZZZ:
-    wchar_t buf[128];
-    const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
+    if ( _interrupts_enabled )
+    {
+        if( _isr_handlers[stack->handler_id] ) {
+            _isr_handlers[stack->handler_id](stack->error_code, stack->cs, stack->rip);
+            return;
+        }
 
-    // past ss and rsp
-    uint64_t rsp = ((uint64_t*)stack->rsp)[0];
-    uint64_t ss = ((uint64_t*)stack->rsp)[8];
-    uint64_t arg = ((uint64_t*)stack->rsp)[16];
+        // =============================================================
+        //ZZZ:
+        wchar_t buf[128];
+        const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
 
-    swprintf(buf,bufcount,L"int 0x%x, error code 0x%x: *rip : 0x%llx[0] = 0x%x, rsp = 0x%llx, arg = 0x%llx\n", 
-        stack->handler_id, 
-        stack->error_code,
-        stack->rip,
-        ((uint8_t*)stack->rip)[0],
-        ss,rsp,
-        arg);
-    output_console_output_string(buf);
+        swprintf(buf,bufcount,L"UNHANDLED: int 0x%x, error code 0x%x: rip : 0x%llx\n", 
+            stack->handler_id, 
+            stack->error_code,
+            stack->rip);
+        output_console_output_string(buf);
 
+    }
+    //TODO: else ... soft handling of masked interrupts?
+
+    // and hard handling, like this one
     if ( stack->handler_id == 0xd ) {
         output_console_output_string(L"\nGPF, halting...");
         halt_cpu();   
     }
 }
 
-void interrupts_irq_handler(int irqId) {
-
+void interrupts_set_isr_handler(int i, isr_handler_func_t handler) {
+    //TODO: assert on handler already being set
+    x86_64_cli();
+    _isr_handlers[i] = handler;
+    x86_64_sti();
 }
 
-static void init_legacy_pic(void) {    
+void interrupts_irq_handler(int irq) {
+    
+    //TODO: IRQ stats
+
+    if ( !_irq_mask )
+        // no IRQ handlers enabled
+        return;
+
+    if ( _irq_handlers[irq] 
+        &&
+        (_irq_mask & (1<<irq)) == (1<<irq) ) {
+        _irq_handlers[irq](irq);
+        return;
+    }
+    
+    //TODO: no handler registered, or this IRQ is masked
+}
+
+void interrupts_set_irq_handler(int irqId, irq_handler_func_t handler) {
+    //TODO: check if this IRQ is enabled or not, it shouldn't be (for now we only allow one handler ever)
+    _irq_handlers[irqId] = handler;
+}
+
+static void init_PIC(void) {    
     // http://www.brokenthorn.com/Resources/OSDevPic.html
     // start initialising PIC1 and PIC2 
     x86_64_outb(PIC1_COMMAND , ICW1_INIT | ICW1_ICW4);
@@ -214,16 +239,45 @@ static void init_legacy_pic(void) {
 	x86_64_outb(PIC1_DATA , 0x01);
 	x86_64_outb(PIC2_DATA , 0x01);	
     x86_64_io_wait();    
-	// disable all IRQs for now, only enable when someone registers an IRQ handler.
+
+	//NOTE: disable all IRQs for now, only enable when someone registers an IRQ handler.
 	x86_64_outb(PIC1_DATA, 0xff);
 	x86_64_outb(PIC2_DATA, 0xff);
     x86_64_io_wait();   
 }
 
+void interrupts_PIC_enable_irq(int i)
+{
+    if(i < 8)
+    {
+        // unmask IRQ in PIC1
+	    x86_64_outb(PIC1_DATA, x86_64_inb(PIC1_DATA) & ~(1<<i));
+    }
+    else
+    {
+        // unmask IRQ in PIC2
+	    x86_64_outb(PIC2_DATA, x86_64_inb(PIC2_DATA) & ~(1<<(i-8)));
+    } 
+}
+
+void interrupts_PIC_disable_irq(int i)
+{
+    if(i < 8)
+    {
+        // mask IRQ in PIC1
+	    x86_64_outb(PIC1_DATA, x86_64_inb(PIC1_DATA) | (1<<i));
+    }
+    else
+    {
+        // nmask IRQ in PIC2
+	    x86_64_outb(PIC2_DATA, x86_64_inb(PIC2_DATA) | (1<<(i-8)));
+    } 
+}
+
 void interrupts_initialise_early(void) {
 
-    //NOTE: this isn't needed to make isr's work
-    init_legacy_pic();
+    //NOTE: this isn't needed to make isr's work, but it is needed for IRQs
+    init_PIC();
 
     // load IDT with reserved ISRs
 
