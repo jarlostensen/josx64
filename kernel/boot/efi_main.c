@@ -224,29 +224,29 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     debugger_initialise();
     clock_initialise();
 
-    size_t dim;
-    const uint8_t* memory_bitmap = memory_get_memory_bitmap(&dim);
+    // size_t dim;
+    // const uint8_t* memory_bitmap = memory_get_memory_bitmap(&dim);
+    // const size_t new_w = dim * 8;
+    // const size_t new_h = 64;
+    // const size_t channels = 4;
+    // uint8_t* scaled_bitmap = (uint8_t*)malloc(new_w*new_h*channels);
+    // if ( scaled_bitmap )
+    // {
+    //     stbir_resize_uint8(memory_bitmap, dim,1,dim, scaled_bitmap, new_w,new_h, new_w, channels);
 
-    const size_t new_w = dim * 8;
-    const size_t new_h = 64;
-    const size_t channels = 4;
-    uint8_t* scaled_bitmap = (uint8_t*)malloc(new_w*new_h*channels);
-    if ( scaled_bitmap )
-    {
-        stbir_resize_uint8(memory_bitmap, dim,1,dim, scaled_bitmap, new_w,new_h, new_w, channels);
-
-        uint32_t palette[_C_EFI_MEMORY_TYPE_N];
-        uint8_t dc = 0xff/_C_EFI_MEMORY_TYPE_N;
-        for(size_t i = 0; i < _C_EFI_MEMORY_TYPE_N; ++i) {
-            uint8_t c = dc*i;
-            palette[i] = video_make_color(c,c,c);
-        }
-        video_scale_draw_indexed_bitmap( scaled_bitmap, palette, _C_EFI_MEMORY_TYPE_N, new_w,new_h, 200,500, new_w,new_h );
-    } 
+    //     uint32_t palette[_C_EFI_MEMORY_TYPE_N];
+    //     uint8_t dc = 0xff/_C_EFI_MEMORY_TYPE_N;
+    //     for(size_t i = 0; i < _C_EFI_MEMORY_TYPE_N; ++i) {
+    //         uint8_t c = dc*i;
+    //         palette[i] = video_make_color(c,c,c);
+    //     }
+    //     video_scale_draw_indexed_bitmap( scaled_bitmap, palette, _C_EFI_MEMORY_TYPE_N, new_w,new_h, 200,500, new_w,new_h );
+    // } 
 
     //TEST:
     asm volatile (
         "nop\r\n"
+        "movq $0x1234567812345678, %r11\r\n"
         "int $0x3\r\n"
         "nop\r\n"   
         );
