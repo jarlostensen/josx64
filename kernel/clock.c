@@ -9,36 +9,47 @@
 // http://www.brokenthorn.com/Resources/OSDev16.html
 
 #define PIT_COMMAND 0x43
-#define PIT_DATA_0  0x40
-#define PIT_DATA_2  0x42
+#define PIT_DATA_0  0x40    // channel/counter 0; IRQ0 generator
+#define PIT_DATA_1  0x41    // channel/counter 1; (deprectated) memory refresh signal [not used]
+#define PIT_DATA_2  0x42    // channel/counter 2; PC speaker
 
 // PIT command word flags
 #define PIT_COUNTER_0           0
-#define PIT_COUNTER_1           0x20
-#define PIT_COUNTER_2           0x40
+#define PIT_COUNTER_1           (1u<<5)
+#define PIT_COUNTER_2           (2u<<5)
 
 #define PIT_MODE_SQUAREWAVE     0x06     // binary, square wave
-#define PIT_RL_DATA             0x30    // LSB, then MSB
-#define PIT_MODE_ONESHOT        0x01
+#define PIT_RL_DATA             0x30     // LSB, then MSB
+#define PIT_MODE_ONESHOT        0x01     // strictly one-shot in BCD counting mode
 
 // wait for one 18 Hz period (~55ms)
 static void _wait_one_55ms_interval(void)
 {
+    // channel 2 enable (see for example a nice overview of the 8253 here https://www.cs.usfca.edu/~cruse/cs630f08/lesson15.ppt)
+    // this enables GATE2 on the PIT (bit 0 = 1) which means that channel 2 will generate a signal, 
+    // but also disables the speaker output (bit 1 = 0)
+    x86_64_outb(0x61,(x86_64_inb(0x61) & ~0x02) | 0x01);
+
     x86_64_outb(PIT_COMMAND, PIT_COUNTER_2 | PIT_MODE_ONESHOT);
     // set the timer to be the max interval, i.e. 18.2 Hz
     x86_64_outb(PIT_DATA_2, 0xff);
     x86_64_outb(PIT_DATA_2, 0xff);
+    
+    uint8_t p61status = x86_64_inb(0x61);
+    while((p61status & 0x20)==0) {
+        p61status = x86_64_inb(0x61);
+    }
 
-    // channel 2 enable (see for example a nice overview of the 8254 here https://www.cs.usfca.edu/~cruse/cs630f08/lesson15.ppt)
-    x86_64_outb(0x61,(x86_64_inb(0x61) & ~0x02) | 0x01);
+    // disable GATE2 channel 2 timer
+    x86_64_outb(0x61,(x86_64_inb(0x61) & ~0x02));
 
-    // dummy read, give time for the next edge rise
-    x86_64_inb(PIT_DATA_2);
-    char msb = x86_64_inb(PIT_DATA_2);
-    do {
-        x86_64_inb(PIT_DATA_2);
-        msb = x86_64_inb(PIT_DATA_2);
-    } while(msb);
+    // // dummy read, give time for the next edge rise
+    // x86_64_inb(PIT_DATA_2);
+    // char msb = x86_64_inb(PIT_DATA_2);
+    // do {
+    //     x86_64_inb(PIT_DATA_2);
+    //     msb = x86_64_inb(PIT_DATA_2);
+    // } while(msb);
 }
 
 //TODO: this needs to be moved into cpu.h/c and made per-core
@@ -72,10 +83,23 @@ static uint64_t _est_cpu_freq(void)
 }
 
 void clock_initialise(void) {
+
+    //ZZZ: this hangs and the note in i8253.c (Linux arch\x86) suggests it may be disabled:
+    /*
+        * Modern chipsets can disable the PIT clock which makes it unusable. It
+        * would be possible to enable the clock but the registers are chipset
+        * specific and not discoverable. Avoid the whack a mole game.
+        *
+        * These platforms have discoverable TSC/CPU frequencies but this also
+        * requires to know the local APIC timer frequency as it normally is
+        * calibrated against the PIT interrupt.
+    */
+   // HOWEVER: Qemu reports APIC disabled, so why should the PIT also be disabled..?
+
     uint64_t bsp_freq = _est_cpu_freq();
     wchar_t buf[128];
     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
 
-    swprintf(buf,bufcount,L"clock: bsp freq estimated ~ %llu Hz\n", bsp_freq);
+    swprintf(buf,bufcount,L"clock: bsp freq estimated ~ %llu MHz\n", bsp_freq/1000000);
     output_console_output_string(buf);
 }

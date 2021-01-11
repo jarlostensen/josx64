@@ -2,12 +2,17 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <wchar.h>
+
+#include <jos.h>
+#include <output_console.h>
+
 #include "hex_dump.h"
 
 typedef struct _line_ctx
 {
-	char		_line[128];
-	char*		_wp;
+	wchar_t		_line[128];
+	wchar_t*	_wp;
 	size_t		_chars_left;
 	void*		_mem;
 	
@@ -19,58 +24,61 @@ static void _hex_dump_line_init(line_ctx_t* ctx, void* mem)
 	ctx->_mem = mem;
 	ctx->_chars_left = sizeof(ctx->_line);	
 	// address prefix
-	size_t n = _JOS_LIBC_FUNC_NAME(sprintf_s)(ctx->_wp, ctx->_chars_left,"%08x ", (uintptr_t)mem);
+	size_t n = swprintf(ctx->_wp, ctx->_chars_left,L"%08x ", (uintptr_t)mem);
 	ctx->_wp += n;
 	ctx->_chars_left -= n;
 }
 
 static void _hex_dump_line_write_byte(line_ctx_t* ctx, unsigned char byte, int fmtIdx)
 {
-	static const char* kFmt[2] = {"%02x ", "%02x"};
-	size_t n = _JOS_LIBC_FUNC_NAME(sprintf_s)(ctx->_wp, ctx->_chars_left, kFmt[fmtIdx], byte);	
+	static const wchar_t* kFmt[2] = {L"%02x ", L"%02x"};
+	size_t n = swprintf(ctx->_wp, ctx->_chars_left, kFmt[fmtIdx], byte);
 	ctx->_wp += n;
 	ctx->_chars_left -= n;
 }
 
 static void _hex_dump_line_write_word(line_ctx_t* ctx, unsigned short word)
 {
-	size_t n = _JOS_LIBC_FUNC_NAME(sprintf_s)(ctx->_wp, ctx->_chars_left, "%04x ", word);
+	size_t n = swprintf(ctx->_wp, ctx->_chars_left, L"%04x ", word);
 	ctx->_wp += n;
 	ctx->_chars_left -= n;
 }
 
 static void _hex_dump_line_write_dword(line_ctx_t* ctx, unsigned int dword)
 {
-	size_t n = _JOS_LIBC_FUNC_NAME(sprintf_s)(ctx->_wp, ctx->_chars_left, "%08lx ", dword);
+	size_t n = swprintf(ctx->_wp, ctx->_chars_left, L"%08lx ", dword);
 	ctx->_wp += n;
 	ctx->_chars_left -= n;
 }
 
 static void _hex_dump_line_write_qword(line_ctx_t* ctx, unsigned long long qword)
 {
-	size_t n = _JOS_LIBC_FUNC_NAME(sprintf_s)(ctx->_wp, ctx->_chars_left, "%016llx ", qword);
+	size_t n = swprintf(ctx->_wp, ctx->_chars_left, L"%016llx ", qword);
 	ctx->_wp += n;
 	ctx->_chars_left -= n;
 }
 
 static void _hex_dump_line_write_raw(line_ctx_t* ctx, size_t byte_run)
 {
-	// right aligned	
-	memset(ctx->_wp, ' ', ctx->_chars_left);	
-	char* wp = ctx->_line + 58;
-	ctx->_chars_left = sizeof(ctx->_line) - 58;
-	const unsigned char* rp = (unsigned char*)ctx->_mem;
+	// right aligned
+	for(unsigned i = 0u; i < ctx->_chars_left; ++i) {
+		ctx->_wp[i] = L' ';
+	}
+	
+	wchar_t* wp = ctx->_line + 58u;
+	ctx->_chars_left = (sizeof(ctx->_line)/sizeof(wchar_t)) - 58u;
+	const wchar_t* rp = (wchar_t*)ctx->_mem;
 	for (unsigned i = 0u; i < byte_run; ++i)
 	{
-		const char c = (char)*rp++;
+		const unsigned short c = (wchar_t)*rp++;
 		size_t n;
 		if(c >= 32 && c < 127)
 		{
-			n = _JOS_LIBC_FUNC_NAME(sprintf_s)(wp, ctx->_chars_left, "%c", c);
+			n = swprintf(wp, ctx->_chars_left, L"%c", c);
 		}
 		else
 		{
-			n = _JOS_LIBC_FUNC_NAME(sprintf_s)(wp, ctx->_chars_left, ".");
+			n = swprintf(wp, ctx->_chars_left, L".");
 		}
 		ctx->_chars_left -= n;
 		wp += n;
@@ -91,10 +99,10 @@ static size_t _hex_dump_hex_line(void* mem, size_t bytes, enum hex_dump_unit_siz
 		{
 		case k8bitInt:
 		{
-			char* rp = (char*)mem;
+			unsigned char* rp = (unsigned char*)mem;
 			for (unsigned i = 0u; i < byte_run; ++i)
 			{
-				_hex_dump_line_write_byte(&ctx, (unsigned char)*rp++,0);
+				_hex_dump_line_write_byte(&ctx, *rp++,0);
 				++read;
 			}
 		}
@@ -166,8 +174,9 @@ static size_t _hex_dump_hex_line(void* mem, size_t bytes, enum hex_dump_unit_siz
 	}
 	
 	if(read)
-	{				
-		_JOS_LIBC_FUNC_NAME(printf)("%s\n",ctx._line);
+	{		
+		output_console_output_string(ctx._line);
+		output_console_line_break();
 	}
 	return read;
 }

@@ -85,7 +85,7 @@ static int printhex(ctx_t* ctx, int width, long long d)
 
 #ifdef _JOS_KERNEL_BUILD
 		unsigned long d_width;
-		(d_width = __builtin_clzll(d), ++d_width);
+		(d_width = 63 - __builtin_clzll(d), ++d_width);
 #else
 		unsigned long d_width;
 		(_BitScanReverse64(&d_width, d), ++d_width);

@@ -3,10 +3,7 @@
 #ifndef _JOS_KERNEL_HEX_DUMP_H
 #define _JOS_KERNEL_HEX_DUMP_H
 
-#include <stdint.h>
-
-#include "jos.h"
-#include "../../libc/internal/include/libc_internal.h"
+#include <jos.h>
 
 enum hex_dump_unit_size
 {

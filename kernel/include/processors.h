@@ -25,6 +25,8 @@ typedef struct _processor_information {
     local_apic_information_t        _local_apic_info;
     
     bool                            _has_hypervisor;
+    bool                            _has_tsc;
+    bool                            _has_msr;
     bool                            _has_local_apic;
     bool                            _is_good;
     

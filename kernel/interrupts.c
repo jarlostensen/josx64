@@ -29,7 +29,7 @@ typedef struct _isr_stack
     uint64_t        rsp;
     uint64_t        ss;     // <- top of stack (rsp + 184)
 
-} _JOS_PACKED_ isr_stacx86_64_t;
+} _JOS_PACKED_ isr_stack_t;
 
 enum {
     kInterruptGate  = 0xe,
@@ -162,12 +162,21 @@ void interrupts_isr_set_handler(int i, isr_handler_func_t handler) {
     x86_64_sti();
 }
 
-void interrupts_isr_handler(isr_stacx86_64_t *stack) {
+void interrupts_isr_handler(isr_stack_t *stack) {
 
     if ( _interrupts_enabled )
-    {
+    {        
         if( _isr_handlers[stack->handler_id] ) {
-            _isr_handlers[stack->handler_id](stack->error_code, stack->cs, stack->rip);
+
+            // provide a read only context for the handler
+            isr_context_t ctx;
+            memcpy(&ctx.rdi, &stack->rdi, 15*sizeof(uint64_t));
+            ctx.handler_code = stack->error_code;
+            ctx.rip = stack->rip;
+            ctx.cs = stack->cs;
+            ctx.rflags = stack->rflags;
+
+            _isr_handlers[stack->handler_id](&ctx);
             return;
         }
 
@@ -339,13 +348,7 @@ void interrupts_initialise_early(void) {
     
     x86_64_load_idt(&_idt_desc);
 
-    //TEST:
-    asm volatile (
-        "nop\r\n"
-        "int $0x3\r\n"
-        "nop\r\n"        
-        );
-
+    //ZZZ: trace
     output_console_output_string(L"interrupts initialised\n");
 }
 

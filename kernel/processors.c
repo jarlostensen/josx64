@@ -137,13 +137,16 @@ static void collect_this_cpu_information(processor_information_t* info) {
         info->_hypervisor_id[12] = 0;
         memcpy(info->_hypervisor_id, regs + 1, 3 * sizeof(regs[0]));
     }
+    
+    info->_has_tsc = (edx & 0x10);
+    info->_has_msr = (edx & 0x20);
 
     //NOTE: this should ALWAYS be true for x64
     info->_has_local_apic = (edx & (1<<9)) == (1<<9);
     if (info->_has_local_apic) {
         apic_collect_this_cpu_information(info);
         info->_local_apic_info._has_x2apic = (ecx & (1<<21)) == (1<<21);
-    }  
+    }
 
     //NOTE: if x2APIC is supported we can use 1b or b CPUID functions for topology information as well
     

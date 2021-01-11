@@ -5,9 +5,23 @@
 
 #define _JOS_KERNEL_NUM_EXCEPTIONS      32
 
+// ISR handlers get access to a copy of the interrupt context
+typedef struct _isr_context {
+
+    uint64_t        handler_code;
+
+    uint64_t        rdi, rsi, rbp, rdx, rcx, rbx, rax;
+    uint64_t        r15, r14, r13, r12, r11, r10, r9, r8;
+
+    uint64_t        rip;    
+    uint64_t        cs;
+    uint64_t        rflags;
+    
+} isr_context_t;
+
 void interrupts_initialise_early();
 
-typedef void (*isr_handler_func_t)(uint32_t error_code, uint16_t caller_cs, uint32_t caller_eip);
+typedef void (*isr_handler_func_t)(const isr_context_t * context);
 // register a handler for the given interrupt.
 // this  can be done at any time after initialisation and the handler will be effective from the 
 // next interrupt.

@@ -17,6 +17,7 @@
 #include <atomic.h>
 #include <interrupts.h>
 #include <clock.h>
+#include <debugger.h>
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "../stb/stb_image_resize.h"
@@ -140,7 +141,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     wchar_t buf[256];
     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
     size_t bsp_id = processors_get_bsp_id();
-    swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", processors_get_processor_count(), bsp_id);    
+    swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", processors_get_processor_count(), bsp_id);
     output_console_output_string(buf);
     if ( processors_has_acpi_20() ) {
         output_console_output_string(L"ACPI 2.0 configuration enabled\n");
@@ -150,12 +151,13 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         jos_status_t status = processors_get_processor_information(&info, p-1);
         if ( _JOS_K_SUCCEEDED(status) ) {
 
-            swprintf(buf, 256, L"\tid %d, status 0x%x, package %d, core %d, thread %d\n", 
+            swprintf(buf, 256, L"\tid %d, status 0x%x, package %d, core %d, thread %d, TSC is %s\n", 
                     info._uefi_info.processor_id,
                     info._uefi_info.status_flag,
                     info._uefi_info.extended_information.location.package,
                     info._uefi_info.extended_information.location.core,
-                    info._uefi_info.extended_information.location.thread
+                    info._uefi_info.extended_information.location.thread,
+                    info._has_tsc ? "enabled":"disabled"
                     );
             output_console_output_string(buf);
 
@@ -219,6 +221,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 
     //ZZZ:
     interrupts_initialise_early();
+    debugger_initialise();
     clock_initialise();
 
     size_t dim;
@@ -241,8 +244,15 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         video_scale_draw_indexed_bitmap( scaled_bitmap, palette, _C_EFI_MEMORY_TYPE_N, new_w,new_h, 200,500, new_w,new_h );
     } 
 
+    //TEST:
+    asm volatile (
+        "nop\r\n"
+        "int $0x3\r\n"
+        "nop\r\n"   
+        );
+
     output_console_set_colour(video_make_color(0xff,0,0));
-    output_console_output_string(L"\nThe kernel has exited!");
+    output_console_output_string(L"\nThe kernel has exited!");    
     
     halt_cpu();
 }
