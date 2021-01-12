@@ -22,6 +22,8 @@ int vswprintf(wchar_t *__restrict buffer, size_t bufsz, const wchar_t * __restri
 int printf(const char* __restrict, ...);
 int puts(const char*);
 
+typedef void* FILE;
+
 #ifdef __cplusplus
 }
 #endif

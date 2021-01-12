@@ -1,17 +1,17 @@
 
-#include "io.h"
-#include "serial.h"
+#include <x86_64.h>
+#include <serial.h>
 
 static void init_port(short port)
 {
     // https://wiki.osdev.org/Serial_Ports
-    io_outb(port + 1, 0x00);    // Disable all interrupts
-    io_outb(port + 3, 0x80);    // Enable DLAB (set baud rate divisor)
-    io_outb(port + 0, 0x03);    // Set divisor to 3 (lo byte) 38400 baud
-    io_outb(port + 1, 0x00);    //                  (hi byte)
-    io_outb(port + 3, 0x03);    // 8 bits, no parity, one stop bit
-    io_outb(port + 2, 0xc7);    // Enable FIFO, clear them, with 14-byte threshold
-    io_outb(port + 4, 0x0b);    // IRQs enabled, RTS/DSR set
+    x86_64_outb(port + 1, 0x00);    // Disable all interrupts
+    x86_64_outb(port + 3, 0x80);    // Enable DLAB (set baud rate divisor)
+    x86_64_outb(port + 0, 0x03);    // Set divisor to 3 (lo byte) 38400 baud
+    x86_64_outb(port + 1, 0x00);    //                  (hi byte)
+    x86_64_outb(port + 3, 0x03);    // 8 bits, no parity, one stop bit
+    x86_64_outb(port + 2, 0xc7);    // Enable FIFO, clear them, with 14-byte threshold
+    x86_64_outb(port + 4, 0x0b);    // IRQs enabled, RTS/DSR set
 }
 
 void serial_initialise()
@@ -24,7 +24,7 @@ int serial_data_ready(short port)
 {
     //_JOS_ASSERT(port==kCom1 || port==kCom2);
     // line status register, DR bit
-    return io_inb(port + 5) & 1;
+    return x86_64_inb(port + 5) & 1;
 }
 
 char serial_getch(short port, int wait)
@@ -34,14 +34,14 @@ char serial_getch(short port, int wait)
     {
         asm volatile ("pause");
     }
-    return io_inb(port);
+    return x86_64_inb(port);
 }
 
 int serial_transmit_empty(short port)
 {
     // _JOS_ASSERT(port==kCom1 || port==kCom2);    
     // line status register, transmitter empty bit
-    return io_inb(port + 5) & 0x20;
+    return x86_64_inb(port + 5) & 0x20;
 }
 
 void serial_putch(short port, char data, int wait)
@@ -51,7 +51,7 @@ void serial_putch(short port, char data, int wait)
     {
         asm volatile ("pause");
     }
-    io_outb(port, data);
+    x86_64_outb(port, data);
 }
 
 void serial_flush(short port)

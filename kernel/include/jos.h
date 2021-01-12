@@ -30,9 +30,15 @@ typedef uint32_t jos_status_t;
 #define _JOS_K_STATUS_UNAVAILABLE               _JOS_K_STATUS_ERROR(14)
 #define _JOS_K_STATUS_DATA_LOSS                 _JOS_K_STATUS_ERROR(15)
 
+extern uint16_t kJosKernelCS;
+
 #ifdef _JOS_KERNEL_BUILD
 #define _JOS_MAYBE_UNUSED __attribute__((unused))
 #define _JOS_INLINE_FUNC __attribute__((unused)) static
+
+#define _JOS_ALWAYS_INLINE __attribute__((always_inline))
+
+#define _JOS_PACKED_ __attribute((packed))
 
 void _k_trace(const char* channel, const char* msg,...);
 #define _JOS_KTRACE_CHANNEL(channel, msg,...) _k_trace(channel, msg,##__VA_ARGS__)
@@ -76,10 +82,12 @@ if(!(cond))\
 #define _JOS_INLINE_FUNC static
 #define _JOS_BOCHS_DBGBREAK() __debugbreak()
 
+#define _JOS_ALWAYS_INLINE
+
 #define _JOS_BOCHS_DBGBREAK_TRACE() __debugbreak()
 #define _JOS_GDB_DBGBREAK() __debugbreak()
 
-#define _JOS_PACKED
+#define _JOS_PACKED_
 #define _JOS_NORETURN
 
 #define _JOS_KERNEL_PANIC()

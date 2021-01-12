@@ -12,6 +12,10 @@ target_sources(c PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/math/exp2f_data.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/math/ceil.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/math/floor.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/internal/_toupper.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/internal/_tolower.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/internal/_isupper.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/internal/_islower.c"
 )
 target_include_directories(c PUBLIC 
 "${CMAKE_CURRENT_SOURCE_DIR}/include"

@@ -2,7 +2,7 @@
 external\ninja.exe -C build
 
 if %ERRORLEVEL% EQU 0 (
-    tools\efigen.exe -i build\BOOTX64.EFI -o build\boot.dd -v
+    tools\efibootgen.exe -v -b build\BOOTX64.EFI -o build\boot.dd -l "josx64"
 
     if %ERRORLEVEL% equ 0 (
         del build\josx64_boot.vdi

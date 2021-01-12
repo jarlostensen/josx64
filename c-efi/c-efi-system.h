@@ -351,6 +351,15 @@ typedef struct CEfiMemoryAttributesTable {
         CEfiMemoryDescriptor entry[];
 } CEfiMemoryAttributesTable;
 
+
+//*******************************************************
+// Task Priority Levels
+//*******************************************************
+#define C_EFI_TPL_APPLICATION                           4
+#define C_EFI_TPL_CALLBACK                              8
+#define C_EFI_TPL_NOTIFY                                16
+#define C_EFI_TPL_HIGH_LEVEL                            31
+
 /*
  * Global Tables
  *

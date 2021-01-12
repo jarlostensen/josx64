@@ -42,6 +42,12 @@ jos_status_t output_console_set_font(const uint8_t* font, size_t width, size_t h
     return _JOS_K_STATUS_SUCCESS;
 }
 
+void output_console_line_break(void) {
+    //TODO: scroll
+    _cursor_pos.y += LINE_HEIGHT_PIXELS;
+    _cursor_pos.x = 0;
+}
+
 void output_console_output_string(const wchar_t* text) {
 
     size_t start = 0;
