@@ -11,13 +11,13 @@ This project provides those things and is where I'm moving my personal kernel de
 
 <br/>
 A huge thanks goes out to the now defunct repo https://github.com/KNNSpeed/Simple-UEFI-Bootloader which really helped get me over the hurdle of even considering my own UEFI loader and getting it building on Windows. Thanks KNNSpeed, whoever you are!<br/>
-
+<br/>
 # Setup and Tools
 All the binaries required to build the project are included and can be downloaded 7zip'd from the releases.<br/>
 The archive must be extracted into a folder called "external" in the root directory of the repo. <br/>
 The project uses CMake and Ninja to manage and generate build files and builds using Clang and GCC (both included in the externals folder).<br/>
 
-
+The project includes some submodules so after cloning you need to run ```git submodule update --init --recursive``` to get the dependencies.<br/>
 
 To generate the ninja build files run ```genbuild.bat``` in the root folder. This will generate a build folder with all the CMake gubbins and the ninja.build file. To build the project you run ```build.bat``` and to clean it you run ```clean.bat```, that's it.
 
