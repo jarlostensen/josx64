@@ -21,14 +21,14 @@ static void _int_3_handler(const isr_context_t * context) {
 
     // dump registers
     swprintf(buf, bufcount,
-    L"\trax 0x%016llx\trbx 0x%016llx\n\trcx 0x%016llx\trdx 0x%016llx\n"
-    L"\trsi 0x%016llx\trdi 0x%016llx\n\trbp 0x%016llx\n\trflags 0x%016llx\n"
-    L"\tr8  0x%016llx\tr9  0x%016llx\n\tr10 0x%016llx\tr11 0x%016llx\n"
-    L"\tr12 0x%016llx\tr13 0x%016llx\n\tr14 0x%016llx\tr15 0x%016llx\n",
-    context->rax, context->rbx, context->rcx, context->rdx,
-    context->rsi, context->rdi, context->rbp, context->rflags,
-    context->r8, context->r9, context->r10, context->r11,
-    context->r12, context->r13, context->r14, context->r15
+        L"\trax 0x%016llx\trbx 0x%016llx\n\trcx 0x%016llx\trdx 0x%016llx\n"
+        L"\trsi 0x%016llx\trdi 0x%016llx\n\trbp 0x%016llx\n\trflags 0x%016llx\n"
+        L"\tr8  0x%016llx\tr9  0x%016llx\n\tr10 0x%016llx\tr11 0x%016llx\n"
+        L"\tr12 0x%016llx\tr13 0x%016llx\n\tr14 0x%016llx\tr15 0x%016llx\n",
+        context->rax, context->rbx, context->rcx, context->rdx,
+        context->rsi, context->rdi, context->rbp, context->rflags,
+        context->r8, context->r9, context->r10, context->r11,
+        context->r12, context->r13, context->r14, context->r15
     );
 
     output_console_line_break();
@@ -46,8 +46,6 @@ static void _int_3_handler(const isr_context_t * context) {
     ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
 
     // Loop over the instructions in our buffer.
-    // The runtime-address (instruction pointer) is chosen arbitrary here in order to better
-    // visualize relative addressing
     ZyanU64 runtime_address = context->rip;
     ZyanUSize offset = 0;
     const ZyanUSize length = 50;

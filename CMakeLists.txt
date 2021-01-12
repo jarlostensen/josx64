@@ -1,10 +1,16 @@
 # https://cliutils.gitlab.io/modern-cmake/
 
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
 
-if(${CMAKE_VERSION} VERSION_LESS 3.12)
+if(${CMAKE_VERSION} VERSION_LESS 3.13)
     cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
 endif()
+
+# overriding options for sub modules
+cmake_policy(SET CMP0077 NEW)
+
+set(CMAKE_VERBOSE_MAKEFILE ON)
+message("CMAKE system name is \"${CMAKE_SYSTEM_NAME}\"")
 
 # https://wiki.osdev.org/UEFI_Bare_Bones#What_to_do_next.3F
 set(CMAKE_C_FLAGS 
@@ -30,7 +36,6 @@ if(CMAKE_ASM_NASM_COMPILER_LOADED)
   set(CAN_USE_ASSEMBLER TRUE)
 
 #NOTE: all of the below is needed to force CMake+NASM to output win64 COFF object files.
-
   set(CMAKE_ASM_NASM_OBJECT_FORMAT win64)  
   set(CMAKE_ASM_NASM_FLAGS "-D_JOS_KERNEL_BUILD")
   set(CMAKE_ASM_NASM_COMPILE_OBJECT "<CMAKE_ASM_NASM_COMPILER> <INCLUDES> <FLAGS> -f ${CMAKE_ASM_NASM_OBJECT_FORMAT} -o <OBJECT> <SOURCE>")
@@ -44,19 +49,24 @@ set(CMAKE_SYSTEM_PREFIX_PATH  "${CMAKE_SOURCE_DIR}/libc/include")
 # https://stackoverflow.com/questions/28597351/how-do-i-add-a-library-path-in-cmake
 # https://stackoverflow.com/questions/34709286/cmake-configure-deep-sub-folder-tree
 
+# overide the .a suffix globally
+# NOTE: this may need a platform check if we want to build this in a non-Windows environment
+set(CMAKE_STATIC_LIBRARY_SUFFIX ".lib")
+
+# libc, including bits of MUSL
 add_library(c STATIC "")
 add_subdirectory(libc)
 
+# the core kernel binary
 add_library(kernel STATIC "")
 add_subdirectory(kernel)
 
-#TODO: do these actually propagate through to the sub-modules? How does this whole "options and caching" work...?
-option(ZYDIS_BUILD_TOOLS "" OFF)
-option(ZYDIS_BUILD_EXAMPLES "" OFF)
-#option(ZYDIS_MINIMAL_MODE "" ON)
-option(ZYAN_NO_LIBC
-    "Don't use any C standard library functions (for exotic build-envs like kernel drivers)"
-    ON)
+# Zydis disassembler
+# switch off the things we don't want from Zydis/Zycore
+set(ZYDIS_BUILD_TOOLS OFF CACHE BOOL "")
+set(ZYDIS_BUILD_EXAMPLES OFF CACHE BOOL "")
+# this one is important!
+set(ZYAN_NO_LIBC ON CACHE BOOL "")
 add_subdirectory("deps/zydis")
 
 add_executable(boot "${CMAKE_SOURCE_DIR}/kernel/boot/efi_main.c")
@@ -71,7 +81,8 @@ target_include_directories(boot PUBLIC
 
 target_link_libraries(boot PRIVATE libc)
 target_link_libraries(boot PRIVATE kernel)
-target_link_libraries(boot PRIVATE "deps/zydis/libzydis")
+target_link_libraries(boot PRIVATE "Zydis")
+target_link_libraries(boot PRIVATE "Zycore")
 set_target_properties(boot PROPERTIES OUTPUT_NAME "BOOTX64.EFI")
 set_target_properties(boot PROPERTIES SUFFIX "")
 
