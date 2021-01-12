@@ -20,7 +20,7 @@
 #include <debugger.h>
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
-#include "../stb/stb_image_resize.h"
+#include <stb/stb_image_resize.h>
 #include "../font8x8/font8x8_basic.h"
 
 //https://github.com/rust-lang/rust/issues/62785/
@@ -249,6 +249,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         "movq $0x1234567812345678, %r11\r\n"
         "int $0x3\r\n"
         "nop\r\n"   
+        "movq $0x1234567812345678, %r12\r\n"
         );
 
     output_console_set_colour(video_make_color(0xff,0,0));

@@ -8,7 +8,7 @@ endif()
 
 # https://wiki.osdev.org/UEFI_Bare_Bones#What_to_do_next.3F
 set(CMAKE_C_FLAGS 
-"${CMAKE_C_FLAGS} -D_JOS_KERNEL_BUILD -target x86_64-unknown-windows -isystem="${CMAKE_SOURCE_DIR}/sysroot/include" -DGNU_EFI_USE_MS_ABI -g -m64 -nostdinc -ffreestanding -mcmodel=small -fshort-wchar -S  -mam-verbose -masm-intel -mno-red-zone -fno-builtin-setjmp -fno-builtin-longjmp -fomit-frame-pointer -fno-delete-null-pointer-checks -fno-common -fno-zero-initialized-in-bss -fno-exceptions -fno-stack-protector -fno-stack-check -fno-strict-aliasing -fno-merge-all-constants --std=c11 -Wall -Wextra -Wdouble-promotion -Wpedantic ")
+"${CMAKE_C_FLAGS} -D_JOS_KERNEL_BUILD -target x86_64-unknown-windows -isystem="${CMAKE_SOURCE_DIR}/libc/include" -DGNU_EFI_USE_MS_ABI -g -m64 -nostdinc -ffreestanding -mcmodel=small -fshort-wchar -S  -mam-verbose -masm-intel -mno-red-zone -fno-builtin-setjmp -fno-builtin-longjmp -fomit-frame-pointer -fno-delete-null-pointer-checks -fno-common -fno-zero-initialized-in-bss -fno-exceptions -fno-stack-protector -fno-stack-check -fno-strict-aliasing -fno-merge-all-constants --std=c11 -Wall -Wextra -Wdouble-promotion -Wpedantic ")
 
 # NOTE: it appears we need both nostdlib and nodefaultlibs to completly purge the spirit of Windows libriaries from the build
 # NOTE: DEBUG 
@@ -37,7 +37,8 @@ if(CMAKE_ASM_NASM_COMPILER_LOADED)
 endif(CMAKE_ASM_NASM_COMPILER_LOADED)
 
 set(CMAKE_CROSSCOMPILING TRUE)
-SET(CMAKE_SYSTEM_NAME Generic)
+set(CMAKE_SYSTEM_NAME Generic)
+set(CMAKE_SYSTEM_PREFIX_PATH  "${CMAKE_SOURCE_DIR}/libc/include")
 
 # https://metricpanda.com/rival-fortress-update-27-compiling-with-clang-on-windows/
 # https://stackoverflow.com/questions/28597351/how-do-i-add-a-library-path-in-cmake
@@ -49,16 +50,28 @@ add_subdirectory(libc)
 add_library(kernel STATIC "")
 add_subdirectory(kernel)
 
+#TODO: do these actually propagate through to the sub-modules? How does this whole "options and caching" work...?
+option(ZYDIS_BUILD_TOOLS "" OFF)
+option(ZYDIS_BUILD_EXAMPLES "" OFF)
+#option(ZYDIS_MINIMAL_MODE "" ON)
+option(ZYAN_NO_LIBC
+    "Don't use any C standard library functions (for exotic build-envs like kernel drivers)"
+    ON)
+add_subdirectory("deps/zydis")
+
 add_executable(boot "${CMAKE_SOURCE_DIR}/kernel/boot/efi_main.c")
 target_include_directories(boot PUBLIC 
+"${CMAKE_SOURCE_DIR}/deps/zydis/include" 
 "${CMAKE_SOURCE_DIR}/libc/include" 
 "${CMAKE_SOURCE_DIR}/libc" 
 "${CMAKE_SOURCE_DIR}/c-efi"
 "${CMAKE_SOURCE_DIR}/kernel/include"
+"${CMAKE_SOURCE_DIR}/deps" 
 )
 
 target_link_libraries(boot PRIVATE libc)
 target_link_libraries(boot PRIVATE kernel)
+target_link_libraries(boot PRIVATE "deps/zydis/libzydis")
 set_target_properties(boot PROPERTIES OUTPUT_NAME "BOOTX64.EFI")
 set_target_properties(boot PROPERTIES SUFFIX "")
 

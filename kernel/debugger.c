@@ -5,6 +5,8 @@
 #include <hex_dump.h>
 #include <debugger.h>
 
+#include <Zydis/Zydis.h>
+
 #include <stdio.h>
 #include <output_console.h>
 
@@ -31,8 +33,40 @@ static void _int_3_handler(const isr_context_t * context) {
 
     output_console_line_break();
     output_console_output_string(buf);
+
     output_console_line_break();
-    hex_dump_mem((void*)context->rip, 32, k8bitInt);
+
+    // Initialize decoder context
+    ZydisDecoder decoder;
+    ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
+
+    // Initialize formatter. Only required when you actually plan to do instruction
+    // formatting ("disassembling"), like we do here
+    ZydisFormatter formatter;
+    ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
+
+    // Loop over the instructions in our buffer.
+    // The runtime-address (instruction pointer) is chosen arbitrary here in order to better
+    // visualize relative addressing
+    ZyanU64 runtime_address = context->rip;
+    ZyanUSize offset = 0;
+    const ZyanUSize length = 50;
+    ZydisDecodedInstruction instruction;
+    while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, (const void*)(context->rip + offset), length - offset,
+        &instruction)))
+    {
+        // Format & print the binary instruction structure to human readable format
+        char buffer[256];
+        ZydisFormatterFormatInstruction(&formatter, &instruction, buffer, sizeof(buffer),
+            runtime_address);
+        
+        swprintf(buf,bufcount, L"%016llx  %s\n", runtime_address, buffer);
+        output_console_output_string(buf);
+
+        offset += instruction.length;
+        runtime_address += instruction.length;
+    }
+
     output_console_line_break();
 }
 

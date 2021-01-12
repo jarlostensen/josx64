@@ -17,6 +17,8 @@ All the binaries required to build the project are included and can be downloade
 The archive must be extracted into a folder called "external" in the root directory of the repo. <br/>
 The project uses CMake and Ninja to manage and generate build files and builds using Clang and GCC (both included in the externals folder).<br/>
 
+
+
 To generate the ninja build files run ```genbuild.bat``` in the root folder. This will generate a build folder with all the CMake gubbins and the ninja.build file. To build the project you run ```build.bat``` and to clean it you run ```clean.bat```, that's it.
 
 The output of the build will be a file called ```BOOTX64.EFI``` in the build folder which can be converted to a FAT image using my tool ```efibootgen``` which is included in the release in addition to being available in full source from https://github.com/jarlostensen/efibootgen .

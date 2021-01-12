@@ -250,3 +250,9 @@ x86_64_get_cs:
     xor     rax, rax
     mov     ax, cs
     ret
+
+; apparently one does not simply disable chkstk insertion on Clang, so this is the second best thing
+; https://metricpanda.com/rival-fortress-update-45-dealing-with-__chkstk-__chkstk_ms-when-cross-compiling-for-windows/
+global __chkstk
+__chkstk:
+    ret
