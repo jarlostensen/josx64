@@ -2,10 +2,6 @@
 
 cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
 
-if(${CMAKE_VERSION} VERSION_LESS 3.13)
-    cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
-endif()
-
 # overriding options for sub modules
 cmake_policy(SET CMP0077 NEW)
 

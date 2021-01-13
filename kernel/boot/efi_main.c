@@ -14,7 +14,6 @@
 #include <memory.h>
 #include <serial.h>
 #include <processors.h>
-#include <atomic.h>
 #include <interrupts.h>
 #include <clock.h>
 #include <debugger.h>
@@ -39,31 +38,6 @@ static CEfiChar16*   kLoaderHeading = L"| jOSx64 ----------------------------\n\
 g_st->con_out->output_string(g_st->con_out, s)
 
 // ==============================================================
-
-atomic_int_t    _ap_counter = {0};
-
-void ap_idle_func(void* arg) {
-
-    size_t my_id = ((size_t*)arg)[0];
-    wchar_t buf[64];
-    swprintf(buf,64,L" -> this is AP %d waiting for the signal\n", my_id);
-    output_console_output_string(buf);
-
-    while(_ap_counter._val!=my_id) {        
-        __asm volatile ("pause");
-    }
-
-    swprintf(buf,64,L" -> this is AP %d idling\n", my_id);
-    output_console_output_string(buf);
-    while(1)
-    {
-        __asm volatile ("pause");
-    } 
-    __builtin_unreachable();
-}
-
-// ==============================================================
-
 void exit_boot_services(CEfiHandle h) {
 
     memory_refresh_boot_service_memory_map();
@@ -231,16 +205,10 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     while(keys_pressed < 10) {
         if ( keyboard_has_key() ) {
             uint8_t key = keyboard_TESTING_get_last_key();
+            
             ++keys_pressed;
             swprintf(buf, bufcount, L"got key 0x%x\n", key);
             output_console_output_string(buf);
-
-            uint64_t start = __rdtsc();
-            uint64_t end   = __rdtsc();
-            while((end-start) < 100000) {
-                x86_64_pause_cpu();
-                end   = __rdtsc();
-            }
         }        
     }
 
