@@ -18,6 +18,8 @@
 #include <interrupts.h>
 #include <clock.h>
 #include <debugger.h>
+#include <keyboard.h>
+#include <x86_64.h>
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include <stb/stb_image_resize.h>
@@ -223,6 +225,24 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     interrupts_initialise_early();
     debugger_initialise();
     clock_initialise();
+    keyboard_initialise();
+
+    int keys_pressed = 0;
+    while(keys_pressed < 10) {
+        if ( keyboard_has_key() ) {
+            uint8_t key = keyboard_TESTING_get_last_key();
+            ++keys_pressed;
+            swprintf(buf, bufcount, L"got key 0x%x\n", key);
+            output_console_output_string(buf);
+
+            uint64_t start = __rdtsc();
+            uint64_t end   = __rdtsc();
+            while((end-start) < 100000) {
+                x86_64_pause_cpu();
+                end   = __rdtsc();
+            }
+        }        
+    }
 
     // size_t dim;
     // const uint8_t* memory_bitmap = memory_get_memory_bitmap(&dim);

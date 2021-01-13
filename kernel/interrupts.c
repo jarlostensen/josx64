@@ -229,6 +229,7 @@ void interrupts_irq_handler(int irq) {
 void interrupts_set_irq_handler(int irqId, irq_handler_func_t handler) {
     //TODO: check if this IRQ is enabled or not, it shouldn't be (for now we only allow one handler ever)
     _irq_handlers[irqId] = handler;
+
 }
 
 static void init_PIC(void) {    
@@ -267,6 +268,9 @@ void interrupts_PIC_enable_irq(int i)
         // unmask IRQ in PIC2
 	    x86_64_outb(PIC2_DATA, x86_64_inb(PIC2_DATA) & ~(1<<(i-8)));
     } 
+
+    // enable in irq mask
+    _irq_mask |= (1<<i);
 }
 
 void interrupts_PIC_disable_irq(int i)
@@ -281,6 +285,9 @@ void interrupts_PIC_disable_irq(int i)
         // nmask IRQ in PIC2
 	    x86_64_outb(PIC2_DATA, x86_64_inb(PIC2_DATA) | (1<<(i-8)));
     } 
+
+    // disable in irq mask
+    _irq_mask &= ~(1<<i);
 }
 
 void interrupts_initialise_early(void) {
