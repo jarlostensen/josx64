@@ -1,6 +1,6 @@
 # https://cliutils.gitlab.io/modern-cmake/
 
-cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
 # overriding options for sub modules
 cmake_policy(SET CMP0077 NEW)

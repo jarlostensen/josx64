@@ -14,6 +14,7 @@ static void lock_initialise(lock_t* lock) {
     lock->_val = 0;
 }
 
+// a very basic spinlock implementation
 static void lock_spinlock(lock_t* lock) {
     static int kZero = 0;
     // it can be weak, we expect to have to spin a few times
@@ -25,5 +26,7 @@ static void lock_spinlock(lock_t* lock) {
 static void lock_unlock(lock_t* lock) {
     atomic_store(&lock->_val, 0);
 }
+
+
 
 #endif // _JOS_KERNEL_KERNEL_H

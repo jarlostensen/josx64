@@ -8,6 +8,7 @@
 // similar for a..z and A..Z
 
 typedef struct _keyboard_state {
+    uint8_t     set;
     uint8_t     lshift:1;
     uint8_t     rshift:1;
     uint8_t     lctrl:1;
@@ -45,10 +46,12 @@ typedef struct _keyboard_state {
 #define KEYBOARD_VK_F11             0xa1
 #define KEYBOARD_VK_F12             0xa2
 
-#define KEYBOARD_VK_PRESSED(vk)   ((vk) & 0x80000000)
+#define KEYBOARD_VK_PRESSED(vk)   (((vk) & 0x80000000)==0)
 #define KEYBOARD_VK_CHAR(vk)      ((vk)&0xffff)
+#define KEYBOARD_VK_SCANCODE(vk)  (((vk) & 0xff000000)>>24)
 
 void        keyboard_initialise(void);
+short       keyboard_get_id(void);
 bool        keyboard_has_key(void);
 void        keyboard_get_state(keyboard_state_t* state);
 uint32_t    keyboard_get_last_key(void);

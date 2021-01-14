@@ -208,22 +208,61 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     swprintf(buf, bufcount, L"port 0x80 wait took ~ %d cycles\n", elapsed);
     output_console_output_string(buf);
 
+    keyboard_state_t kbd_state;
+    keyboard_get_state(&kbd_state);
+    swprintf(buf,bufcount,L"keyboard controller id is 0x%x, scan code set 0x%x\n", keyboard_get_id(), kbd_state.set);
+    output_console_output_string(buf);
+
     bool done = false;
     while(!done) {
         if ( keyboard_has_key() ) {
             uint32_t key = keyboard_get_last_key();
             if ( KEYBOARD_VK_PRESSED(key) ) {
-                char c = KEYBOARD_VK_CHAR(key);
+                short c = (short)KEYBOARD_VK_CHAR(key);
+                swprintf(buf, bufcount, L"%c (%x) ", c, KEYBOARD_VK_SCANCODE(key));
+                output_console_output_string(buf);
                 switch(c) {
                     case KEYBOARD_VK_ESC:
                         output_console_output_string(L"\ngot ESC\n");
                         done = true;
                         break;
+                    // case KEYBOARD_VK_F1:
+                    //     output_console_output_string(L" F1 ");
+                    //     break;
+                    // case KEYBOARD_VK_F2:
+                    //     output_console_output_string(L" F2 ");
+                    //     break;
+                    // case KEYBOARD_VK_F3:
+                    //     output_console_output_string(L" F3 ");
+                    //     break;
+                    // case KEYBOARD_VK_F4:
+                    //     output_console_output_string(L" F4 ");
+                    //     break;
+                    // case KEYBOARD_VK_F5:
+                    //     output_console_output_string(L" F5 ");
+                    //     break;
+                    // case KEYBOARD_VK_F6:
+                    //     output_console_output_string(L" F6 ");
+                    //     break;
+                    // case KEYBOARD_VK_F7:
+                    //     output_console_output_string(L" F7 ");
+                    //     break;
+                    // case KEYBOARD_VK_F8:
+                    //     output_console_output_string(L" F8 ");
+                    //     break;
+                    // case KEYBOARD_VK_F9:
+                    //     output_console_output_string(L" F9 ");
+                    //     break;
+                    // case KEYBOARD_VK_F10:
+                    //     output_console_output_string(L" F10 ");
+                    //     break;
+                    // case KEYBOARD_VK_F11:
+                    //     output_console_output_string(L" F11 ");
+                    //     break;
+                    // case KEYBOARD_VK_F12:
+                    //     output_console_output_string(L" F12 ");
+                    //     break;
                     default:
-                    {
-                        swprintf(buf, bufcount, L"%c", c);
-                        output_console_output_string(buf);
-                    }
                     break;
                 }                
             }
