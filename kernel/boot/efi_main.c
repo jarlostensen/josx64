@@ -201,16 +201,35 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     clock_initialise();
     keyboard_initialise();
 
-    int keys_pressed = 0;
-    while(keys_pressed < 10) {
+    uint64_t elapsed = __rdtsc();
+    x86_64_io_wait();
+    elapsed = __rdtsc() - elapsed;
+
+    swprintf(buf, bufcount, L"port 0x80 wait took ~ %d cycles\n", elapsed);
+    output_console_output_string(buf);
+
+    bool done = false;
+    while(!done) {
         if ( keyboard_has_key() ) {
-            uint8_t key = keyboard_TESTING_get_last_key();
-            
-            ++keys_pressed;
-            swprintf(buf, bufcount, L"got key 0x%x\n", key);
-            output_console_output_string(buf);
-        }        
+            uint32_t key = keyboard_get_last_key();
+            if ( KEYBOARD_VK_PRESSED(key) ) {
+                char c = KEYBOARD_VK_CHAR(key);
+                switch(c) {
+                    case KEYBOARD_VK_ESC:
+                        output_console_output_string(L"\ngot ESC\n");
+                        done = true;
+                        break;
+                    default:
+                    {
+                        swprintf(buf, bufcount, L"%c", c);
+                        output_console_output_string(buf);
+                    }
+                    break;
+                }                
+            }
+        }
     }
+    output_console_line_break();
 
     // size_t dim;
     // const uint8_t* memory_bitmap = memory_get_memory_bitmap(&dim);

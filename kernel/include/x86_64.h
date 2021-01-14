@@ -42,6 +42,7 @@ static _JOS_ALWAYS_INLINE void x86_64_pause_cpu(void) {
     asm volatile ("pause");
 }
 
+// (safe) dummy write to POST port, this usually provides a ~usecond delay
 #define x86_64_io_wait() x86_64_outb(0x80, 0)
 
 #endif // _JOS_KERNEL_X86_64_H_
