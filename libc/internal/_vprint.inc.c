@@ -587,6 +587,7 @@ static int WA_NAME(buffer_print)(void* ctx_, const CHAR* data, size_t length)
 	return written;
 }
 
+
 static int WA_NAME(buffer_putchar_count)(void* ctx_, int c)
 {
 	(void)ctx_;

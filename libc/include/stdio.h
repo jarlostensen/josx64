@@ -15,7 +15,8 @@ int snprintf(char* __restrict buffer, size_t sizeOfBuffer, const char* __restric
 int vswprintf(wchar_t *__restrict buffer, size_t bufsz, const wchar_t * __restrict format, va_list vlist);
 int vswprintf(wchar_t *__restrict buffer, size_t bufsz, const wchar_t * __restrict format, va_list parameters);
 
-int printf(const char* __restrict, ...);
+//TODO:
+int printf(const char* __restrict format, ...);
 int puts(const char*);
 
 typedef void* FILE;
