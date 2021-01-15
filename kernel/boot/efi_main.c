@@ -14,10 +14,11 @@
 #include <memory.h>
 #include <serial.h>
 #include <processors.h>
-#include <atomic.h>
 #include <interrupts.h>
 #include <clock.h>
 #include <debugger.h>
+#include <keyboard.h>
+#include <x86_64.h>
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include <stb/stb_image_resize.h>
@@ -37,31 +38,6 @@ static CEfiChar16*   kLoaderHeading = L"| jOSx64 ----------------------------\n\
 g_st->con_out->output_string(g_st->con_out, s)
 
 // ==============================================================
-
-atomic_int_t    _ap_counter = {0};
-
-void ap_idle_func(void* arg) {
-
-    size_t my_id = ((size_t*)arg)[0];
-    wchar_t buf[64];
-    swprintf(buf,64,L" -> this is AP %d waiting for the signal\n", my_id);
-    output_console_output_string(buf);
-
-    while(_ap_counter._val!=my_id) {        
-        __asm volatile ("pause");
-    }
-
-    swprintf(buf,64,L" -> this is AP %d idling\n", my_id);
-    output_console_output_string(buf);
-    while(1)
-    {
-        __asm volatile ("pause");
-    } 
-    __builtin_unreachable();
-}
-
-// ==============================================================
-
 void exit_boot_services(CEfiHandle h) {
 
     memory_refresh_boot_service_memory_map();
@@ -223,6 +199,76 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     interrupts_initialise_early();
     debugger_initialise();
     clock_initialise();
+    keyboard_initialise();
+
+    uint64_t elapsed = __rdtsc();
+    x86_64_io_wait();
+    elapsed = __rdtsc() - elapsed;
+
+    swprintf(buf, bufcount, L"port 0x80 wait took ~ %d cycles\n", elapsed);
+    output_console_output_string(buf);
+
+    keyboard_state_t kbd_state;
+    keyboard_get_state(&kbd_state);
+    swprintf(buf,bufcount,L"keyboard controller id is 0x%x, scan code set 0x%x\n", keyboard_get_id(), kbd_state.set);
+    output_console_output_string(buf);
+
+    bool done = false;
+    while(!done) {
+        if ( keyboard_has_key() ) {
+            uint32_t key = keyboard_get_last_key();
+            if ( KEYBOARD_VK_PRESSED(key) ) {
+                short c = (short)KEYBOARD_VK_CHAR(key);
+                swprintf(buf, bufcount, L"%c (%x) ", c, KEYBOARD_VK_SCANCODE(key));
+                output_console_output_string(buf);
+                switch(c) {
+                    case KEYBOARD_VK_ESC:
+                        output_console_output_string(L"\ngot ESC\n");
+                        done = true;
+                        break;
+                    // case KEYBOARD_VK_F1:
+                    //     output_console_output_string(L" F1 ");
+                    //     break;
+                    // case KEYBOARD_VK_F2:
+                    //     output_console_output_string(L" F2 ");
+                    //     break;
+                    // case KEYBOARD_VK_F3:
+                    //     output_console_output_string(L" F3 ");
+                    //     break;
+                    // case KEYBOARD_VK_F4:
+                    //     output_console_output_string(L" F4 ");
+                    //     break;
+                    // case KEYBOARD_VK_F5:
+                    //     output_console_output_string(L" F5 ");
+                    //     break;
+                    // case KEYBOARD_VK_F6:
+                    //     output_console_output_string(L" F6 ");
+                    //     break;
+                    // case KEYBOARD_VK_F7:
+                    //     output_console_output_string(L" F7 ");
+                    //     break;
+                    // case KEYBOARD_VK_F8:
+                    //     output_console_output_string(L" F8 ");
+                    //     break;
+                    // case KEYBOARD_VK_F9:
+                    //     output_console_output_string(L" F9 ");
+                    //     break;
+                    // case KEYBOARD_VK_F10:
+                    //     output_console_output_string(L" F10 ");
+                    //     break;
+                    // case KEYBOARD_VK_F11:
+                    //     output_console_output_string(L" F11 ");
+                    //     break;
+                    // case KEYBOARD_VK_F12:
+                    //     output_console_output_string(L" F12 ");
+                    //     break;
+                    default:
+                    break;
+                }                
+            }
+        }
+    }
+    output_console_line_break();
 
     // size_t dim;
     // const uint8_t* memory_bitmap = memory_get_memory_bitmap(&dim);
