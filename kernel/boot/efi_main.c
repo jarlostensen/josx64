@@ -61,6 +61,29 @@ void exit_boot_services(CEfiHandle h) {
 //TODO: kernel variables that could be dynamic like this should live somewhere else, a basic key-value store somewhere perhaps?
 uint16_t kJosKernelCS;
 
+CEfiLoadedImageProtocol * _lip = 0;
+void image_protocol_info(CEfiHandle h) {
+
+    CEfiHandle handle_buffer[3];
+    CEfiUSize handle_buffer_size = sizeof(handle_buffer);
+    memset(handle_buffer,0,sizeof(handle_buffer));
+
+    _JOS_KTRACE_CHANNEL("image_protocol","locating image protocol...");
+
+    CEfiStatus efi_status = g_boot_services->handle_protocol(h, &C_EFI_LOADED_IMAGE_PROTOCOL_GUID, (void**)&_lip);
+    if ( efi_status==C_EFI_SUCCESS ) {
+
+        wchar_t buf[256];
+        const size_t bufcount = sizeof(buf)/sizeof(wchar_t);        
+        swprintf(buf, bufcount, L"image is %llu bytes, loaded at 0x%016llx\n", _lip->image_size, _lip->image_base);
+        output_console_output_string(buf);
+    }    
+
+    if (!_lip) {
+        _JOS_KTRACE_CHANNEL("image protocol", "not found");
+    }    
+}
+
 extern uint16_t x86_64_get_cs(void);
 extern uint64_t x86_64_get_rflags(void);
 
@@ -115,6 +138,8 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 
     pre_exit_boot_services();
     
+    image_protocol_info(h);
+
     wchar_t buf[256];
     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
     size_t bsp_id = processors_get_bsp_id();
