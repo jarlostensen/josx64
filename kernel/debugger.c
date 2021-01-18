@@ -12,6 +12,8 @@
 
 static void _int_3_handler(const isr_context_t * context) {
 
+    _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx\n", context->rip);
+
     //ZZZ: ============================================================
     wchar_t buf[1024];
     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);

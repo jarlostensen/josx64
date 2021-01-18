@@ -13,6 +13,7 @@
 #include <output_console.h>
 #include <memory.h>
 #include <serial.h>
+#include <trace.h>
 #include <processors.h>
 #include <interrupts.h>
 #include <clock.h>
@@ -70,15 +71,15 @@ void pre_exit_boot_services() {
     uint64_t rflags = x86_64_get_rflags();
     kJosKernelCS = x86_64_get_cs();
 
+    serial_initialise();
+    _JOS_KTRACE_CHANNEL("efi_main","pre exit boot services");
+
     jos_status_t status = memory_pre_exit_bootservices_initialise();
     if ( _JOS_K_FAILED(status) ) {
         swprintf(buf, bufcount, L"***FATAL ERROR: memory initialise returned 0x%x\n\r", status);
         _EFI_PRINT(buf);
         halt_cpu();
     }
-
-    serial_initialise();
-    serial_write_str(kCom1, "kernel starting\n");
 
     status = processors_initialise();
     if ( !_JOS_K_SUCCEEDED(status) ) {
@@ -101,8 +102,8 @@ void pre_exit_boot_services() {
     output_console_set_colour(0xffffffff);
     output_console_set_bg_colour(0x6495ed);
 
-    swprintf(buf, bufcount, L"CS = 0x%x, RFLAGS = 0x%x\n", kJosKernelCS, rflags);
-    output_console_output_string(buf);
+    _JOS_KTRACE_CHANNEL("efi_main","CS = 0x%x, RFLAGS = 0x%x\n", kJosKernelCS, rflags);
+    _JOS_KTRACE_CHANNEL("efi_main","kernel starting");
 
 }
 
@@ -193,8 +194,11 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 
     // after this point we can no longer use boot services (only runtime)
     
+    _JOS_KTRACE_CHANNEL("efi_main","exiting boot services...");
     exit_boot_services(h);
+    _JOS_KTRACE_CHANNEL("efi_main","boot services exited");
 
+    _JOS_KTRACE_CHANNEL("efi_main","kernel setup");
     //ZZZ:
     interrupts_initialise_early();
     debugger_initialise();
@@ -205,14 +209,12 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     x86_64_io_wait();
     elapsed = __rdtsc() - elapsed;
 
-    swprintf(buf, bufcount, L"port 0x80 wait took ~ %d cycles\n", elapsed);
-    output_console_output_string(buf);
-
+    _JOS_KTRACE_CHANNEL("efi_main", "port 0x80 wait took ~ %d cycles\n", elapsed);
+    
     keyboard_state_t kbd_state;
     keyboard_get_state(&kbd_state);
-    swprintf(buf,bufcount,L"keyboard controller id is 0x%x, scan code set 0x%x\n", keyboard_get_id(), kbd_state.set);
-    output_console_output_string(buf);
-
+    _JOS_KTRACE_CHANNEL("efi_main", "keyboard controller id is 0x%x, scan code set 0x%x\n", keyboard_get_id(), kbd_state.set);
+    
     bool done = false;
     while(!done) {
         if ( keyboard_has_key() ) {
@@ -300,6 +302,6 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 
     output_console_set_colour(video_make_color(0xff,0,0));
     output_console_output_string(L"\nThe kernel has exited!");    
-    
+
     halt_cpu();
 }
