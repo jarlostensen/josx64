@@ -19,9 +19,6 @@
     <Filter Include="libc">
       <UniqueIdentifier>{6f7f3ddc-571b-4b8b-b997-8019658d6c1c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="kernel\arch">
-      <UniqueIdentifier>{ab7d9b07-4611-4b77-9b58-5dd7a290ad13}</UniqueIdentifier>
-    </Filter>
     <Filter Include="libc\internal">
       <UniqueIdentifier>{8385f9c3-af96-4323-8151-4b8eaebd9916}</UniqueIdentifier>
     </Filter>
@@ -36,13 +33,5 @@
     <ClCompile Include="..\libc\internal\_wchar.c">
       <Filter>libc</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\libc\libc_internal.h">
-      <Filter>libc\internal</Filter>
-    </ClInclude>
-    <ClInclude Include="..\libc\internal\include\_stdio.h">
-      <Filter>libc\internal</Filter>
-    </ClInclude>
   </ItemGroup>
 </Project>

@@ -40,19 +40,19 @@ extern uint16_t kJosKernelCS;
 
 #define _JOS_PACKED_ __attribute((packed))
 
-void _k_trace(const char* channel, const char* msg,...);
-#define _JOS_KTRACE_CHANNEL(channel, msg,...) _k_trace(channel, msg,##__VA_ARGS__)
-#define _JOS_KTRACE(msg,...)  _k_trace(0, msg,##__VA_ARGS__)
+void trace(const char* channel, const char* msg,...);
+#define _JOS_KTRACE_CHANNEL(channel, msg,...) trace(channel, msg,##__VA_ARGS__)
+#define _JOS_KTRACE(msg,...)  trace(0, msg,##__VA_ARGS__)
 
-void _k_trace_buf(const char* channel, const void* data, size_t length);
-#define _JOS_KTRACE_CHANNEL_BUF(channel, data,length) _k_trace_buf(channel, data, length)
-#define _JOS_KTRACE_BUF(data,length) _k_trace_buf(0, data, length)
+void trace_buf(const char* channel, const void* data, size_t length);
+#define _JOS_KTRACE_CHANNEL_BUF(channel, data,length) trace_buf(channel, data, length)
+#define _JOS_KTRACE_BUF(data,length) trace_buf(0, data, length)
 
 #define _JOS_BOCHS_DBGBREAK() asm volatile ("xchg %bx,%bx")
 #define _JOS_GDB_DBGBREAK() asm volatile ("int $03")
 
 #define _JOS_BOCHS_DBGBREAK_TRACE()\
-_k_trace(0, "break at %s:%d\n", __FILE__,__LINE__);\
+trace(0, "break at %s:%d\n", __FILE__,__LINE__);\
 asm volatile ("xchg %bx,%bx")
 
 #ifdef _DEBUG
@@ -60,7 +60,7 @@ asm volatile ("xchg %bx,%bx")
 #define _JOS_ASSERT(cond)\
 if(!(cond))\
 {\
-    _k_trace(0, "assert %s, %s:%d \n", _JOS_ASSERT_COND(cond), __FILE__,__LINE__);\
+    trace(0, "assert %s, %s:%d \n", _JOS_ASSERT_COND(cond), __FILE__,__LINE__);\
     asm volatile ("xchg %bx,%bx");\
 }
 #else
@@ -73,7 +73,7 @@ if(!(cond))\
 #define _JOS_NORETURN __attribute__((__noreturn__))
 
 #define _JOS_KERNEL_PANIC()\
-    _k_trace(0, "PANIC @ %s:%d \n", __FILE__,__LINE__);\
+    trace(0, "PANIC @ %s:%d \n", __FILE__,__LINE__);\
     k_panic()
 
 #else

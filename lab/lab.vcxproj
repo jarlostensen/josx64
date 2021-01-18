@@ -142,10 +142,6 @@
     <ClCompile Include="..\libc\internal\_wchar.c" />
     <ClCompile Include="lab.c" />
   </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\libc\internal\include\_stdio.h" />
-    <ClInclude Include="..\libc\libc_internal.h" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
