@@ -128,7 +128,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         jos_status_t status = processors_get_processor_information(&info, p-1);
         if ( _JOS_K_SUCCEEDED(status) ) {
 
-            swprintf(buf, 256, L"\tid %d, status 0x%x, package %d, core %d, thread %d, TSC is %s\n", 
+            swprintf(buf, 256, L"\tid %d, status 0x%x, package %d, core %d, thread %d, TSC is %S\n", 
                     info._uefi_info.processor_id,
                     info._uefi_info.status_flag,
                     info._uefi_info.extended_information.location.package,
@@ -139,7 +139,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
             output_console_output_string(buf);
 
             if ( (p-1) == bsp_id ) {
-                swprintf(buf, 256, L"\tBSP vendor is \"%s\",%S hypervisor detected ", 
+                swprintf(buf, 256, L"\tBSP vendor is \"%S\",%S hypervisor detected ", 
                     info._vendor_string,
                     info._has_hypervisor?L" ":L" no");
                 output_console_output_string(buf);
@@ -153,7 +153,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
             }
             
             if ( info._has_local_apic ) {
-                swprintf(buf, 256, L"\t\tlocal APIC id %d (0x%x) is %s, %s, x2APIC %s supported\n", 
+                swprintf(buf, 256, L"\t\tlocal APIC id %d (0x%x) is %S, %S, x2APIC %S supported\n", 
                     info._local_apic_info._id, info._local_apic_info._id >> 24, 
                     info._local_apic_info._enabled ? "enabled":"disabled",
                     info._local_apic_info._version? "integrated":"discrete 8248DX",
