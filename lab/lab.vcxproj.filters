@@ -33,5 +33,8 @@
     <ClCompile Include="..\libc\internal\_wchar.c">
       <Filter>libc</Filter>
     </ClCompile>
+    <ClCompile Include="..\kernel\hex_dump.c">
+      <Filter>kernel</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

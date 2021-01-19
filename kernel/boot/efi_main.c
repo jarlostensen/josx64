@@ -15,6 +15,7 @@
 #include <serial.h>
 #include <trace.h>
 #include <processors.h>
+#include <hex_dump.h>
 #include <interrupts.h>
 #include <clock.h>
 #include <debugger.h>
@@ -62,21 +63,18 @@ void exit_boot_services(CEfiHandle h) {
 uint16_t kJosKernelCS;
 
 CEfiLoadedImageProtocol * _lip = 0;
-void image_protocol_info(CEfiHandle h) {
+void image_protocol_info(CEfiHandle h, CEfiStatus (*_efi_main)(CEfiHandle, CEfiSystemTable *)) {
 
-    CEfiHandle handle_buffer[3];
-    CEfiUSize handle_buffer_size = sizeof(handle_buffer);
-    memset(handle_buffer,0,sizeof(handle_buffer));
-
-    _JOS_KTRACE_CHANNEL("image_protocol","locating image protocol...");
-
+    _JOS_KTRACE_CHANNEL("image_protocol","opening image protocol...");
     CEfiStatus efi_status = g_boot_services->handle_protocol(h, &C_EFI_LOADED_IMAGE_PROTOCOL_GUID, (void**)&_lip);
     if ( efi_status==C_EFI_SUCCESS ) {
 
         wchar_t buf[256];
         const size_t bufcount = sizeof(buf)/sizeof(wchar_t);        
-        swprintf(buf, bufcount, L"image is %llu bytes, loaded at 0x%016llx\n", _lip->image_size, _lip->image_base);
+        swprintf(buf, bufcount, L"\nimage is %llu bytes, loaded at 0x%llx, efi_main @ 0x%llx\n", _lip->image_size, _lip->image_base, _efi_main);
         output_console_output_string(buf);
+        hex_dump_mem((void*)_lip->image_base, 64, k8bitInt);
+        output_console_line_break();
     }    
 
     if (!_lip) {
@@ -138,7 +136,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 
     pre_exit_boot_services();
     
-    image_protocol_info(h);
+    image_protocol_info(h, efi_main);
 
     wchar_t buf[256];
     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
