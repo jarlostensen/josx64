@@ -36,5 +36,13 @@
     <ClCompile Include="..\kernel\hex_dump.c">
       <Filter>kernel</Filter>
     </ClCompile>
+    <ClCompile Include="..\kernel\pe.c">
+      <Filter>kernel</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\kernel\include\winnt_lt.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

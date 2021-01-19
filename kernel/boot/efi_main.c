@@ -20,6 +20,7 @@
 #include <clock.h>
 #include <debugger.h>
 #include <keyboard.h>
+#include <pe.h>
 #include <x86_64.h>
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
@@ -69,9 +70,13 @@ void image_protocol_info(CEfiHandle h, CEfiStatus (*_efi_main)(CEfiHandle, CEfiS
     CEfiStatus efi_status = g_boot_services->handle_protocol(h, &C_EFI_LOADED_IMAGE_PROTOCOL_GUID, (void**)&_lip);
     if ( efi_status==C_EFI_SUCCESS ) {
 
+        peutil_pe_context_t pe_ctx;
+        peutil_bind(&pe_ctx, (const void*)_lip->image_base, kPe_Relocated);
+        
         wchar_t buf[256];
         const size_t bufcount = sizeof(buf)/sizeof(wchar_t);        
-        swprintf(buf, bufcount, L"\nimage is %llu bytes, loaded at 0x%llx, efi_main @ 0x%llx\n", _lip->image_size, _lip->image_base, _efi_main);
+        swprintf(buf, bufcount, L"\nimage is %llu bytes, loaded at 0x%llx, efi_main @ 0x%llx, PE entry point @ 0x%llx\n", 
+            _lip->image_size, _lip->image_base, _efi_main, peutil_entry_point(&pe_ctx));
         output_console_output_string(buf);
         hex_dump_mem((void*)_lip->image_base, 64, k8bitInt);
         output_console_line_break();

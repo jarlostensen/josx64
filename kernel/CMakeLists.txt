@@ -24,6 +24,7 @@ target_sources(kernel PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/hex_dump.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/keyboard.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/trace.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/pe.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/x86_64.asm"
 )
 
