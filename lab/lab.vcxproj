@@ -138,9 +138,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\kernel\hex_dump.c" />
+    <ClCompile Include="..\kernel\pe.c" />
     <ClCompile Include="..\libc\internal\_vprint.c" />
     <ClCompile Include="..\libc\internal\_wchar.c" />
     <ClCompile Include="lab.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\kernel\include\winnt_lt.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

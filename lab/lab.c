@@ -9,6 +9,9 @@
 #include <stdarg.h>
 
 #include "../libc/internal/include/libc_internal.h"
+#include "../kernel/include/hex_dump.h"
+
+#include "../kernel/include/pe.h"
 
 extern int _JOS_LIBC_FUNC_NAME(swprintf)(wchar_t* __restrict buffer, size_t sizeOfBuffer, const wchar_t* __restrict format, ...);
 extern int _JOS_LIBC_FUNC_NAME(vswprintf)(wchar_t*__restrict buffer, size_t bufsz, const wchar_t* __restrict format, va_list vlist);
@@ -87,6 +90,12 @@ int main(void)
                     0,
                     "enabled"
                     );
+
+    HMODULE this_module = GetModuleHandle(0);
+    hex_dump_mem((void*)this_module, 64, k8bitInt);
+    peutil_pe_context_t pe_ctx;
+    peutil_bind(&pe_ctx, (const void*)this_module, kPe_Relocated);
+    uintptr_t entry = peutil_entry_point(&pe_ctx);
 
 
 	return 0;

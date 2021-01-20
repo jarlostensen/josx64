@@ -15,10 +15,12 @@
 #include <serial.h>
 #include <trace.h>
 #include <processors.h>
+#include <hex_dump.h>
 #include <interrupts.h>
 #include <clock.h>
 #include <debugger.h>
 #include <keyboard.h>
+#include <pe.h>
 #include <x86_64.h>
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
@@ -60,6 +62,30 @@ void exit_boot_services(CEfiHandle h) {
 
 //TODO: kernel variables that could be dynamic like this should live somewhere else, a basic key-value store somewhere perhaps?
 uint16_t kJosKernelCS;
+
+CEfiLoadedImageProtocol * _lip = 0;
+void image_protocol_info(CEfiHandle h, CEfiStatus (*_efi_main)(CEfiHandle, CEfiSystemTable *)) {
+
+    _JOS_KTRACE_CHANNEL("image_protocol","opening image protocol...");
+    CEfiStatus efi_status = g_boot_services->handle_protocol(h, &C_EFI_LOADED_IMAGE_PROTOCOL_GUID, (void**)&_lip);
+    if ( efi_status==C_EFI_SUCCESS ) {
+
+        peutil_pe_context_t pe_ctx;
+        peutil_bind(&pe_ctx, (const void*)_lip->image_base, kPe_Relocated);
+        
+        wchar_t buf[256];
+        const size_t bufcount = sizeof(buf)/sizeof(wchar_t);        
+        swprintf(buf, bufcount, L"\nimage is %llu bytes, loaded at 0x%llx, efi_main @ 0x%llx, PE entry point @ 0x%llx\n", 
+            _lip->image_size, _lip->image_base, _efi_main, peutil_entry_point(&pe_ctx));
+        output_console_output_string(buf);
+        hex_dump_mem((void*)_lip->image_base, 64, k8bitInt);
+        output_console_line_break();
+    }    
+
+    if (!_lip) {
+        _JOS_KTRACE_CHANNEL("image protocol", "not found");
+    }    
+}
 
 extern uint16_t x86_64_get_cs(void);
 extern uint64_t x86_64_get_rflags(void);
@@ -115,6 +141,8 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 
     pre_exit_boot_services();
     
+    image_protocol_info(h, efi_main);
+
     wchar_t buf[256];
     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
     size_t bsp_id = processors_get_bsp_id();

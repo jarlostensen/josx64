@@ -4,10 +4,16 @@
 #include <string.h>
 #include <wchar.h>
 
+#ifdef _JOS_KERNEL_BUILD
 #include <jos.h>
 #include <output_console.h>
+#endif
 
 #include "hex_dump.h"
+
+#define CHARS_IN_BUFFER(buff) sizeof(buff)/sizeof(wchar_t)
+//NOTE: explicitly for 64 bit
+#define PRINT_WIDTH 66u
 
 typedef struct _line_ctx
 {
@@ -22,9 +28,9 @@ static void _hex_dump_line_init(line_ctx_t* ctx, void* mem)
 {
 	ctx->_wp = ctx->_line;
 	ctx->_mem = mem;
-	ctx->_chars_left = sizeof(ctx->_line);	
+	ctx->_chars_left = CHARS_IN_BUFFER(ctx->_line);
 	// address prefix
-	size_t n = swprintf(ctx->_wp, ctx->_chars_left,L"%08x ", (uintptr_t)mem);
+	size_t n = swprintf(ctx->_wp, ctx->_chars_left,L"%016x ", (uintptr_t)mem);
 	ctx->_wp += n;
 	ctx->_chars_left -= n;
 }
@@ -65,12 +71,12 @@ static void _hex_dump_line_write_raw(line_ctx_t* ctx, size_t byte_run)
 		ctx->_wp[i] = L' ';
 	}
 	
-	wchar_t* wp = ctx->_line + 58u;
-	ctx->_chars_left = (sizeof(ctx->_line)/sizeof(wchar_t)) - 58u;
-	const wchar_t* rp = (wchar_t*)ctx->_mem;
+	wchar_t* wp = ctx->_line + PRINT_WIDTH;
+	ctx->_chars_left = CHARS_IN_BUFFER(ctx->_line) - PRINT_WIDTH;
+	const char* rp = (char*)ctx->_mem;
 	for (unsigned i = 0u; i < byte_run; ++i)
 	{
-		const unsigned short c = (wchar_t)*rp++;
+		const unsigned short c = (unsigned short)(*rp++ & 0xff);
 		size_t n;
 		if(c >= 32 && c < 127)
 		{
@@ -174,9 +180,13 @@ static size_t _hex_dump_hex_line(void* mem, size_t bytes, enum hex_dump_unit_siz
 	}
 	
 	if(read)
-	{		
+	{
+#ifdef _JOS_KERNEL_BUILD
 		output_console_output_string(ctx._line);
 		output_console_line_break();
+#else
+		wprintf(L"%s\n", ctx._line);
+#endif
 	}
 	return read;
 }

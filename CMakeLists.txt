@@ -6,16 +6,20 @@ cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 cmake_policy(SET CMP0077 NEW)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
-message("CMAKE system name is \"${CMAKE_SYSTEM_NAME}\"")
+
+set(DEBUG_LINKER_FLAGS "-g -debug")
+set(DEBUG_BUILD_FLAGS "-Og -g -D_DEBUG")
+set(BUILD_TARGET "x86_64-unknown-windows")
+message("CMAKE system name is \"${CMAKE_SYSTEM_NAME}\", target is \"${BUILD_TARGET}\"")
 
 # https://wiki.osdev.org/UEFI_Bare_Bones#What_to_do_next.3F
 set(CMAKE_C_FLAGS 
-"${CMAKE_C_FLAGS} -D_JOS_KERNEL_BUILD -target x86_64-unknown-windows -isystem="${CMAKE_SOURCE_DIR}/libc/include" -DGNU_EFI_USE_MS_ABI -g -m64 -nostdinc -ffreestanding -mcmodel=small -fshort-wchar -S  -mam-verbose -masm-intel -mno-red-zone -fno-builtin-setjmp -fno-builtin-longjmp -fomit-frame-pointer -fno-delete-null-pointer-checks -fno-common -fno-zero-initialized-in-bss -fno-exceptions -fno-stack-protector -fno-stack-check -fno-strict-aliasing -fno-merge-all-constants --std=c11 -Wall -Wextra -Wdouble-promotion -Wpedantic ")
+"${CMAKE_C_FLAGS} -D_JOS_KERNEL_BUILD -target ${BUILD_TARGET} -isystem="${CMAKE_SOURCE_DIR}/libc/include" -DGNU_EFI_USE_MS_ABI {$DEBUG_BUILD_FLAGS} -m64 -nostdinc -ffreestanding -mcmodel=small -fshort-wchar -S  -mam-verbose -masm-intel -mno-red-zone -fno-builtin-setjmp -fno-builtin-longjmp -fomit-frame-pointer -fno-delete-null-pointer-checks -fno-common -fno-zero-initialized-in-bss -fno-exceptions -fno-stack-protector -fno-stack-check -fno-strict-aliasing -fno-merge-all-constants --std=c11 -Wall -Wextra -Wdouble-promotion -Wpedantic ")
 
 # NOTE: it appears we need both nostdlib and nodefaultlibs to completly purge the spirit of Windows libriaries from the build
 # NOTE: DEBUG 
 set(CMAKE_C_LINK_FLAGS 
-"-g -target x86_64-unknown-windows -nostdlib -nodefaultlibs -Wl,-machine:x64 -Wl,-entry:efi_main -Wl,-subsystem:efi_application -fuse-ld=lld-link")
+"${DEBUG_LINKER_FLAGS} -target ${BUILD_TARGET} -nostdlib -nodefaultlibs -Wl,-machine:x64 -Wl,-entry:efi_main -Wl,-subsystem:efi_application -fuse-ld=lld-link")
 
 set(CMAKE_ASM_FLAGS
 "${CMAKE_ASM_FLAGS} -D_JOS_KERNEL_BUILD -DGNU_EFI_USE_MS_ABI -mno-avx -mcmodel=small -mno-stack-arg-probe -m64 -mno-red-zone -maccumulate-outgoing-args -Og -ffreestanding -fshort-wchar -fomit-frame-pointer -fno-delete-null-pointer-checks -fno-common -fno-zero-initialized-in-bss -fno-exceptions -fno-stack-protector -fno-stack-check -fno-strict-aliasing -fno-merge-all-constants -fno-merge-constants --std=c11 -g3 -Wall -Wextra -Wdouble-promotion -Wpedantic -fmessage-length=0 -c -MMD -MP"
