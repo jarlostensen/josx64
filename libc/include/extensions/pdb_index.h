@@ -51,11 +51,12 @@ typedef struct _pdb_index_insert_args {
 
 } pdb_index_insert_args_t;
 
-extern pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice_t prefix, char_array_slice_t body, 
+pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice_t prefix, char_array_slice_t body, 
        const pdb_index_symbol_t* __restrict data, pdb_index_node_t** leaf);
 
 // _this | _isA | Mixed | _String | Identifier
 // another | Mixed | Case | Identifier
 // Camels | Are | Ok | Too
 char_array_slice_t pdb_index_next_token(char_array_slice_t* body);
-extern const pdb_index_node_t* load_index_from_pdb_yml(void);
+const pdb_index_node_t* pdb_index_load_from_pdb_yml(void);
+char_array_slice_t pdb_index_symbol_name_for_address(uint32_t rva);

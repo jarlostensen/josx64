@@ -210,6 +210,89 @@ static size_t       _string_store_wp = 0;
 static size_t       _string_store_total_size = 0;
 static const size_t kStringStore_PageSize = 0x800;
 
+// packed array of RVAs used for symbol lookups by memory address range
+// this array is paralelled by _pdb_symbol_name_ptr_array 
+static uint32_t             * _pdb_symbol_rva_array = 0;
+// array of pointers to names kept in string store pages
+static const char*          * _pdb_symbol_name_ptr_array = 0;
+
+typedef struct _build_rva_index_state {
+
+    size_t      _index;
+
+} build_rva_index_state_t;
+
+static void build_rva_index(pdb_index_node_t* node, build_rva_index_state_t* state) {
+
+    if ( !symbol_is_empty(&node->_symbol) ) {
+        
+        // find the symbol name for this node by scanning backwards to a 0, see INIT_STRING_STORE
+        const char* rp = node->_prefix._ptr;
+        while(*rp--!=0) ;
+        rp+=2;
+        
+        size_t i = state->_index++;
+        // now insertion sort both arrays keyed on the rva value
+        _pdb_symbol_rva_array[i] = node->_symbol._rva;
+        _pdb_symbol_name_ptr_array[i] = rp;
+        while (i && _pdb_symbol_rva_array[i] < _pdb_symbol_rva_array[i - 1]) {
+
+#define SWAP(a,b)\
+        (a) ^= (b);\
+        (b) ^= (a);\
+        (a) ^= (b)
+#define SWAP_PTR(a,b)\
+        (uintptr_t)(a) ^= (uintptr_t)(b);\
+        (uintptr_t)(b) ^= (uintptr_t)(a);\
+        (uintptr_t)(a) ^= (uintptr_t)(b)
+
+            SWAP(_pdb_symbol_rva_array[i], _pdb_symbol_rva_array[i-1]);
+            SWAP_PTR(_pdb_symbol_name_ptr_array[i], _pdb_symbol_name_ptr_array[i-1]);
+            --i;
+        }
+    }
+    
+    if (!vector_is_empty(&node->_children)) {
+        const unsigned child_count = vector_size(&node->_children);
+        for (unsigned c = 0; c < child_count; ++c) {
+            pdb_index_node_t* child = (pdb_index_node_t*)vector_at(&node->_children, c);
+            build_rva_index(child, state);
+        }
+    }    
+}
+
+char_array_slice_t pdb_index_symbol_name_for_address(uint32_t rva) {
+    if(!_pdb_index_num_symbols)
+        return kEmptySlice;
+
+    // the rva index is sorted so we can do a binary search
+    size_t lo = 0;
+    size_t hi = _pdb_index_num_symbols-1;
+    size_t mid = (hi+lo)>>1;
+    while (lo < hi) {        
+        if (_pdb_symbol_rva_array[mid] >= rva) {            
+            if (_pdb_symbol_rva_array[mid] == rva) {
+                // exact match to the address of a symbol
+                break;
+            }
+            hi = mid-1;
+        }
+        else {
+            if (_pdb_symbol_rva_array[mid + 1] > rva) {
+                // we're between two symbols, pick the lower one
+                break;
+            }
+            lo = mid+1;
+        }
+        mid = (hi+lo)>>1;
+    }
+    // at this point we're in a range, or we've found an exact match, that's the best we can do
+    char_array_slice_t slice;
+    slice._ptr = _pdb_symbol_name_ptr_array[mid];
+    slice._length = strlen(slice._ptr);
+    return slice;
+}
+
 typedef enum _parse_state {
 
     kSkipWhitespace,
@@ -227,17 +310,23 @@ typedef enum _parse_state {
 
 } parse_state_t;
 
-const pdb_index_node_t* load_index_from_pdb_yml(void) {
+const pdb_index_node_t* pdb_index_load_from_pdb_yml(void) {
     
     pdb_index_node_initialise(&_pdb_index_root);
 
     FILE * yml_file = fopen(yml_file_path_name, "r");
     if (yml_file) {
 
-        // initialise string store
-        _string_store_wp = 0;
+        // initialise string store.
         vector_create(&_string_store_pages, 16, sizeof(char*));
         vector_push_back_ptr(&_string_store_pages, _string_store = (char*)malloc(kStringStore_PageSize));
+        // NOTE: we use 0 terminators to scan backwards to find the start of a symbol name (in other functions) 
+        // so we have to lead with a 0 as a front terminator as well                
+#define INIT_STRING_STORE()\
+            _string_store[0] = 0;\
+            _string_store_wp = 1
+
+        INIT_STRING_STORE();
 
         // we don't load the whole file into memory, instead we process it in chunks
         char buffer[4096];
@@ -354,7 +443,7 @@ const pdb_index_node_t* load_index_from_pdb_yml(void) {
                             if ( space_left < name_wp) {
                                 // allocate a new page
                                 vector_push_back_ptr(&_string_store_pages, _string_store = (char*)malloc(kStringStore_PageSize));
-                                _string_store_wp = 0;
+                                INIT_STRING_STORE();
                             }
                             memcpy(_string_store+_string_store_wp, name_buffer, name_wp+1);
                             name_store_ptr = _string_store_wp;
@@ -418,10 +507,13 @@ const pdb_index_node_t* load_index_from_pdb_yml(void) {
                 char_array_slice_t prefix = pdb_index_next_token(&body);
                 if(!slice_is_empty(&prefix)) {
                     pdb_index_node_t * leaf;
-                    if (pdb_index_insert(&_pdb_index_root, prefix, body, &symbol, &leaf) == kPdbIndex_Inserted) {
+                    if (pdb_index_insert(&_pdb_index_root, prefix, body, &symbol, &leaf) != kPdbIndex_NoMatch) {
                         ++_pdb_index_num_symbols;
                     }
                     //TODO: error checking
+                    else {
+                        __debugbreak();
+                    }
                 }
 
                 if(!STATE_STACK_IS_EMPTY())
@@ -439,6 +531,13 @@ const pdb_index_node_t* load_index_from_pdb_yml(void) {
                 rp = 0;
             }
         }        
+    }
+
+    if (_pdb_index_num_symbols) {
+        // allocate linear arrays to hold the rva and symbol name index. 
+        _pdb_symbol_rva_array = (uint32_t*)malloc(_pdb_index_num_symbols*sizeof(uint32_t));
+        _pdb_symbol_name_ptr_array = (const char**)malloc(_pdb_index_num_symbols*sizeof(const char*));
+        build_rva_index(&_pdb_index_root, &(build_rva_index_state_t){ ._index = 0 });
     }
 
     return &_pdb_index_root;

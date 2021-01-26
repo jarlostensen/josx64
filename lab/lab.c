@@ -150,7 +150,10 @@ int main(void)
     peutil_bind(&pe_ctx, (const void*)this_module, kPe_Relocated);
     uintptr_t entry = peutil_entry_point(&pe_ctx);
 
-    dump_index(load_index_from_pdb_yml(),0);
+    dump_index(pdb_index_load_from_pdb_yml(),0);
+
+    char_array_slice_t slice = pdb_index_symbol_name_for_address(71904);
+    slice = pdb_index_symbol_name_for_address(137950);
     
 	return 0;
 }
