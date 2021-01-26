@@ -22,6 +22,9 @@
     <Filter Include="libc\internal">
       <UniqueIdentifier>{8385f9c3-af96-4323-8151-4b8eaebd9916}</UniqueIdentifier>
     </Filter>
+    <Filter Include="libc\extensions">
+      <UniqueIdentifier>{3b721336-29ab-49f3-a4df-a6751d1144f6}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="lab.c">
@@ -39,9 +42,21 @@
     <ClCompile Include="..\kernel\pe.c">
       <Filter>kernel</Filter>
     </ClCompile>
+    <ClCompile Include="..\libc\extensions\slices.c">
+      <Filter>libc\extensions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libc\extensions\pdb_index.c">
+      <Filter>libc\extensions</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\kernel\include\winnt_lt.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libc\include\extensions\slices.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libc\include\extensions\pdb_index.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

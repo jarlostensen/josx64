@@ -1,6 +1,8 @@
 
 // =========================================================================================
 
+#define _CRT_SECURE_NO_WARNINGS 1
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -10,8 +12,59 @@
 
 #include "../libc/internal/include/libc_internal.h"
 #include "../kernel/include/hex_dump.h"
-
 #include "../kernel/include/pe.h"
+#include "../kernel/include/collections.h"
+#include "../libc/include/extensions/slices.h"
+#include "../libc/include/extensions/pdb_index.h"
+
+void slice_printf(char_array_slice_t* slice) {
+    for (unsigned n = 0; n < slice->_length; ++n) {
+        printf("%c", slice->_ptr[n]);
+    }
+}
+
+
+void dump_index(pdb_index_node_t* root, int level) {
+
+    // this is a beauty!
+    printf("%*s", level<<1, "");
+    
+    if ( !slice_is_empty(&root->_prefix) ) {
+        slice_printf(&root->_prefix);
+    }
+    else {
+        printf("root");
+    }
+    if (!symbol_is_empty(&root->_symbol)) {
+        printf("\trva = 0x%x, section = %d", root->_symbol._rva, root->_symbol._section);
+    }
+    if (!vector_is_empty(&root->_children)) {
+        printf("\n");
+        const unsigned child_count = vector_size(&root->_children);
+        for (unsigned c = 0; c < child_count; ++c) {
+            pdb_index_node_t* child = (pdb_index_node_t*)vector_at(&root->_children, c);
+            dump_index(child, level+1);
+        }
+    }    
+    else {
+        printf("\n");
+    }
+}
+
+void test_search(const char* str) {
+
+    pdb_index_node_t root, *leaf;
+    memset(&root, 0, sizeof(root));
+
+    char_array_slice_t body;
+    char_array_slice_create(&body, str, 0,0);
+    char_array_slice_t prefix = pdb_index_next_token(&body);
+    pdb_index_match_result m = pdb_index_match_search(&root, prefix, body, &leaf);
+
+}
+
+
+// ======================================================================================
 
 extern int _JOS_LIBC_FUNC_NAME(swprintf)(wchar_t* __restrict buffer, size_t sizeOfBuffer, const wchar_t* __restrict format, ...);
 extern int _JOS_LIBC_FUNC_NAME(vswprintf)(wchar_t*__restrict buffer, size_t bufsz, const wchar_t* __restrict format, va_list vlist);
@@ -97,6 +150,10 @@ int main(void)
     peutil_bind(&pe_ctx, (const void*)this_module, kPe_Relocated);
     uintptr_t entry = peutil_entry_point(&pe_ctx);
 
+    dump_index(pdb_index_load_from_pdb_yml(),0);
 
+    char_array_slice_t slice = pdb_index_symbol_name_for_address(71904);
+    slice = pdb_index_symbol_name_for_address(137950);
+    
 	return 0;
 }

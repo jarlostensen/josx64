@@ -16,6 +16,8 @@ typedef struct _vector
 	size_t		_element_size;
 } vector_t;
 
+static const vector_t kEmptyVector = { ._data=0, ._capacity=0, ._size=0, ._element_size = 0};
+
 _JOS_INLINE_FUNC void _vector_decrease_size(vector_t *vector)
 {
 	_JOS_ASSERT(vector->_size);

@@ -88,6 +88,7 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <PreprocessorDefinitions>_JOS_LAB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard_C>stdc11</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -100,6 +101,7 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <PreprocessorDefinitions>_JOS_LAB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard_C>stdc11</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -114,6 +116,7 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <PreprocessorDefinitions>_JOS_LAB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard_C>stdc11</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -130,6 +133,7 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <PreprocessorDefinitions>_JOS_LAB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard_C>stdc11</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -140,12 +144,16 @@
   <ItemGroup>
     <ClCompile Include="..\kernel\hex_dump.c" />
     <ClCompile Include="..\kernel\pe.c" />
+    <ClCompile Include="..\libc\extensions\pdb_index.c" />
+    <ClCompile Include="..\libc\extensions\slices.c" />
     <ClCompile Include="..\libc\internal\_vprint.c" />
     <ClCompile Include="..\libc\internal\_wchar.c" />
     <ClCompile Include="lab.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\kernel\include\winnt_lt.h" />
+    <ClInclude Include="..\libc\include\extensions\pdb_index.h" />
+    <ClInclude Include="..\libc\include\extensions\slices.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
