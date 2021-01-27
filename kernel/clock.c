@@ -2,6 +2,7 @@
 #include <jos.h>
 #include <kernel.h>
 #include <x86_64.h>
+#include <interrupts.h>
 
 #include <stdio.h>
 #include <output_console.h>
@@ -52,6 +53,49 @@ static void _wait_one_55ms_interval(void)
     // } while(msb);
 }
 
+static uint64_t _pit_ticks_elapsed = 0;
+
+static void _irq0_handler(int irq_num) {
+    (void)irq_num;
+    ++_pit_ticks_elapsed;
+    //TODO: timer code from jOS
+}
+
+static void _init_pit(void) {
+    interrupts_set_irq_handler(0, _irq0_handler);
+    interrupts_PIC_enable_irq(0);
+}
+
+// ==================================================================================
+// RTC
+// https://wiki.osdev.org/RTC
+
+static uint64_t _1kHz_ticks = 0;
+static void _irq8_handler(int irq_num) {
+    (void)irq_num;
+    ++_1kHz_ticks;
+}
+
+static uint64_t _init_rtc(void) {
+    interrupts_set_irq_handler(8, _irq8_handler);
+    interrupts_PIC_enable_irq(8);
+    x86_64_cli();
+    x86_64_outb(0x70, 0x8b);
+    uint8_t prev = x86_64_inb(0x71);
+    x86_64_outb(0x70, 0x8b);
+    x86_64_outb(0x71, prev | 0x40);
+    x86_64_sti();
+
+    // ticks should now be happening
+    uint64_t start = __rdtsc();
+    while(_1kHz_ticks < 100) {
+        x86_64_pause_cpu();
+    }
+    return __rdtsc() - start;
+}
+
+// ==================================================================================
+
 //TODO: this needs to be moved into cpu.h/c and made per-core
 static uint64_t _est_cpu_freq(void)
 {
@@ -96,10 +140,12 @@ void clock_initialise(void) {
     */
    // HOWEVER: Qemu reports APIC disabled, so why should the PIT also be disabled..?
 
-    uint64_t bsp_freq = _est_cpu_freq();
+    _init_pit();
+
+    uint64_t ticks = _init_rtc();
     wchar_t buf[128];
     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
 
-    swprintf(buf,bufcount,L"clock: bsp freq estimated ~ %llu MHz\n", bsp_freq/1000000);
+    swprintf(buf,bufcount,L"clock: ticks in 1/10 s = %llu\n", ticks);
     output_console_output_string(buf);
 }

@@ -38,11 +38,27 @@ enum {
     kTaskGate       = 0x5,
 };
 
-static isr_handler_func_t _isr_handlers[256];
-static irq_handler_func_t _irq_handlers[32];
+typedef struct _isr_handler {
+
+    isr_handler_func_t              _handler;
+    interrupt_handler_priority_t    _priority;
+
+} isr_handler_t;
+
+typedef struct _irq_handler {
+
+    irq_handler_func_t              _handler;
+    interrupt_handler_priority_t    _priority;
+
+} irq_handler_t;
+
+static isr_handler_t  _isr_handlers[256];
+static irq_handler_t  _irq_handlers[32];
 // we use this to control interrupts at a "soft" level; if this flag is true we forward interrupts to ISR handlers
 // if false we don't, and we may filter some IRQs as well
 static bool _interrupts_enabled = true;
+//TODO: this all needs to be per CPU
+static interrupt_handler_priority_t _current_priority = kInterrupt_NonCritical_Deferrable;
 
 // IRQ enabled bitmask, 0 when no IRQs enabled
 static unsigned int _irq_mask = 0;
@@ -155,43 +171,34 @@ static void idt_init(idt_entry_t* entry, void* handler) {
     idt_set_rip(entry, (uint64_t)handler);
 }
 
-void interrupts_isr_set_handler(int i, isr_handler_func_t handler) {
-    //TODO: assert on handler already being set
-    x86_64_cli();
-    _isr_handlers[i] = handler;
-    x86_64_sti();
-}
-
 void interrupts_isr_handler(isr_stack_t *stack) {
 
-    if ( _interrupts_enabled )
-    {        
-        if( _isr_handlers[stack->handler_id] ) {
+    //TODO: hard re-enable interrupts based on priority: critical, non-critical, and non-critical deferrable
 
-            // provide a read only context for the handler
-            isr_context_t ctx;
-            memcpy(&ctx.rdi, &stack->rdi, 15*sizeof(uint64_t));
-            ctx.handler_code = stack->error_code;
-            ctx.rip = stack->rip;
-            ctx.cs = stack->cs;
-            ctx.rflags = stack->rflags;
+    if( _isr_handlers[stack->handler_id]._handler ) {
 
-            _isr_handlers[stack->handler_id](&ctx);
-            return;
-        }
-
-        // =============================================================
-        //ZZZ:
-        wchar_t buf[128];
-        const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
-
-        swprintf(buf,bufcount,L"UNHANDLED: int 0x%x, error code 0x%x: rip : 0x%llx\n", 
-            stack->handler_id, 
-            stack->error_code,
-            stack->rip);
-        output_console_output_string(buf);
-
+        // provide a read only context for the handler
+        isr_context_t ctx;
+        memcpy(&ctx.rdi, &stack->rdi, 15*sizeof(uint64_t));
+        ctx.handler_code = stack->error_code;
+        ctx.rip = stack->rip;
+        ctx.cs = stack->cs;
+        ctx.rflags = stack->rflags;
+        _isr_handlers[stack->handler_id]._handler(&ctx);
+        return;
     }
+
+    // =============================================================
+    //ZZZ:
+    wchar_t buf[128];
+    const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
+
+    swprintf(buf,bufcount,L"UNHANDLED: int 0x%x, error code 0x%x: rip : 0x%llx\n", 
+        stack->handler_id, 
+        stack->error_code,
+        stack->rip);
+    output_console_output_string(buf);
+
     //TODO: else ... soft handling of masked interrupts?
 
     // and hard handling, like this one
@@ -201,10 +208,11 @@ void interrupts_isr_handler(isr_stack_t *stack) {
     }
 }
 
-void interrupts_set_isr_handler(int i, isr_handler_func_t handler) {
+void interrupts_set_isr_handler(isr_handler_def_t* def) {
     //TODO: assert on handler already being set
     x86_64_cli();
-    _isr_handlers[i] = handler;
+    _isr_handlers[def->_isr_number]._handler = def->_handler;
+    _isr_handlers[def->_isr_number]._priority = def->_priority;
     x86_64_sti();
 }
 
@@ -226,9 +234,9 @@ void interrupts_irq_handler(int irq) {
     //TODO: no handler registered, or this IRQ is masked
 }
 
-void interrupts_set_irq_handler(int irqId, irq_handler_func_t handler) {
+void interrupts_set_irq_handler(irq_handler_def_t* def) {
     //TODO: check if this IRQ is enabled or not, it shouldn't be (for now we only allow one handler ever)
-    _irq_handlers[irqId] = handler;
+    _irq_handlers[def->_irq_number] = def->_handler;
 
 }
 
