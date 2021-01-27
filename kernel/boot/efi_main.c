@@ -233,6 +233,8 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     clock_initialise();
     keyboard_initialise();
 
+    output_console_output_string(L"initialised kernel systems\n");
+
     uint64_t elapsed = __rdtsc();
     x86_64_io_wait();
     elapsed = __rdtsc() - elapsed;
@@ -243,6 +245,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     keyboard_get_state(&kbd_state);
     _JOS_KTRACE_CHANNEL("efi_main", "keyboard controller id is 0x%x, scan code set 0x%x\n", keyboard_get_id(), kbd_state.set);
     
+    output_console_output_string(L"\nenter a key or ESC....\n");
     bool done = false;
     while(!done) {
         if ( keyboard_has_key() ) {

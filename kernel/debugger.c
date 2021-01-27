@@ -71,5 +71,6 @@ static void _int_3_handler(const isr_context_t * context) {
 }
 
 void debugger_initialise(void) {
-    interrupts_set_isr_handler(3, _int_3_handler);
+    interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=0x3, ._handler=_int_3_handler });
+    output_console_output_string(L"debug handler initialised\n");
 }

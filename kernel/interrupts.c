@@ -224,10 +224,8 @@ void interrupts_irq_handler(int irq) {
         // no IRQ handlers enabled
         return;
 
-    if ( _irq_handlers[irq] 
-        &&
-        (_irq_mask & (1<<irq)) == (1<<irq) ) {
-        _irq_handlers[irq](irq);
+    if ( (_irq_mask & (1<<irq)) == (1<<irq) ) {
+        _irq_handlers[irq]._handler(irq);
         return;
     }
     
@@ -236,8 +234,8 @@ void interrupts_irq_handler(int irq) {
 
 void interrupts_set_irq_handler(irq_handler_def_t* def) {
     //TODO: check if this IRQ is enabled or not, it shouldn't be (for now we only allow one handler ever)
-    _irq_handlers[def->_irq_number] = def->_handler;
-
+    _irq_handlers[def->_irq_number]._handler = def->_handler;
+    _irq_handlers[def->_irq_number]._priority = def->_priority;
 }
 
 static void init_PIC(void) {    

@@ -62,7 +62,7 @@ static void _irq0_handler(int irq_num) {
 }
 
 static void _init_pit(void) {
-    interrupts_set_irq_handler(0, _irq0_handler);
+    interrupts_set_irq_handler(&(irq_handler_def_t){ ._irq_number=0, ._handler=_irq0_handler });
     interrupts_PIC_enable_irq(0);
 }
 
@@ -77,7 +77,7 @@ static void _irq8_handler(int irq_num) {
 }
 
 static uint64_t _init_rtc(void) {
-    interrupts_set_irq_handler(8, _irq8_handler);
+    interrupts_set_irq_handler(&(irq_handler_def_t){ ._irq_number=0x8, ._handler=_irq8_handler });
     interrupts_PIC_enable_irq(8);
     x86_64_cli();
     x86_64_outb(0x70, 0x8b);
@@ -142,10 +142,10 @@ void clock_initialise(void) {
 
     _init_pit();
 
-    uint64_t ticks = _init_rtc();
-    wchar_t buf[128];
-    const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
+    // uint64_t ticks = _init_rtc();
+    // wchar_t buf[128];
+    // const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
 
-    swprintf(buf,bufcount,L"clock: ticks in 1/10 s = %llu\n", ticks);
-    output_console_output_string(buf);
+    // swprintf(buf,bufcount,L"clock: ticks in 1/10 s = %llu\n", ticks);
+    // output_console_output_string(buf);
 }

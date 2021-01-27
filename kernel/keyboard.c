@@ -255,7 +255,7 @@ void keyboard_initialise(void) {
         _keyboard_id_code |= ((short)KBD_ENCODER_READ() << 16);
     }
 
-    interrupts_set_irq_handler(0x01, _irq_1_handler);
+    interrupts_set_irq_handler(&(irq_handler_def_t){ ._irq_number=0x1, ._handler=_irq_1_handler });
     interrupts_PIC_enable_irq(0x01);    
 }
 
