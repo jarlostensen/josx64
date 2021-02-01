@@ -155,13 +155,14 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         jos_status_t status = processors_get_processor_information(&info, p-1);
         if ( _JOS_K_SUCCEEDED(status) ) {
 
-            swprintf(buf, 256, L"\tid %d, status 0x%x, package %d, core %d, thread %d, TSC is %S\n", 
+            swprintf(buf, 256, L"\tid %d, status 0x%x, package %d, core %d, thread %d, TSC is %S, Intel 64 arch %S\n", 
                     info._uefi_info.processor_id,
                     info._uefi_info.status_flag,
                     info._uefi_info.extended_information.location.package,
                     info._uefi_info.extended_information.location.core,
                     info._uefi_info.extended_information.location.thread,
-                    info._has_tsc ? "enabled":"disabled"
+                    info._has_tsc ? "enabled":"disabled",
+                    info._intel_64_arch ? "supported" : "not supported"
                     );
             output_console_output_string(buf);
 

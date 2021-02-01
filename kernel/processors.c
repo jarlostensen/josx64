@@ -147,7 +147,11 @@ static void collect_this_cpu_information(processor_information_t* info) {
         apic_collect_this_cpu_information(info);
         info->_local_apic_info._has_x2apic = (ecx & (1<<21)) == (1<<21);
     }
-
+    
+    __get_cpuid(0x80000001, &eax, &ebx, &ecx, &edx);
+    info->_intel_64_arch = (edx & (1<<29));
+    info->_has_1GB_pages = (edx & (1<<26));
+    
     //NOTE: if x2APIC is supported we can use 1b or b CPUID functions for topology information as well
     
     info->_is_good = true;

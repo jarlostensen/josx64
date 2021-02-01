@@ -24,11 +24,13 @@ typedef struct _processor_information {
     char                            _hypervisor_id[13];
     local_apic_information_t        _local_apic_info;
     
-    bool                            _has_hypervisor;
-    bool                            _has_tsc;
-    bool                            _has_msr;
-    bool                            _has_local_apic;
-    bool                            _is_good;
+    bool                            _has_hypervisor : 1;
+    bool                            _has_tsc : 1;
+    bool                            _has_msr : 1;
+    bool                            _has_local_apic : 1;
+    bool                            _is_good : 1;
+    bool                            _intel_64_arch : 1;
+    bool                            _has_1GB_pages : 1;
     
 } processor_information_t;
 
@@ -37,6 +39,9 @@ size_t              processors_get_processor_count();
 size_t              processors_get_bsp_id();
 jos_status_t        processors_get_processor_information(processor_information_t* out_info, size_t processor_index);
 bool                processors_has_acpi_20();
+
+void                processors_set_this_fs(uintptr_t base);
+void                processors_set_this_gs(uintptr_t base);
 
 typedef void (*ap_worker_function_t)(void*);
 jos_status_t        processors_startup_aps(ap_worker_function_t ap_worker_function, void* per_ap_data, size_t per_ap_data_stride);
