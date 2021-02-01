@@ -87,8 +87,7 @@ void image_protocol_info(CEfiHandle h, CEfiStatus (*_efi_main)(CEfiHandle, CEfiS
     }    
 }
 
-extern uint16_t x86_64_get_cs(void);
-extern uint64_t x86_64_get_rflags(void);
+
 
 void pre_exit_boot_services() {
     wchar_t buf[256];

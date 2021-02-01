@@ -61,9 +61,59 @@ section .text
     pop     r8
 %endmacro
 
+%macro ISR_CLEAN_STACK 0
+    POPAQ
+    ; drop error code and handler id
+    add rsp, 16
+%endmacro 
+
 %define STACK_REL(idx) [rsp+8*idx]
 
 ; --------------------------------------------------------------------------
+; task handlers
+
+;NOTE: this is also invoked from tasks.c
+global x86_64_task_switch_trampoline
+x86_64_task_switch_trampoline:
+    POPAQ
+    add rsp, 16
+    iret
+
+global x86_64_task_switch
+; task_context_t* int x86_64_task_yield(task_context_t* curr, task_context_t* new)
+x86_64_task_switch:
+
+    ; save current context on this stack
+    ; cs:_task_switch_resume for our return to this task
+
+    pushfq     
+    xor     rax, rax
+    mov     ax, cs
+    push    ax
+    lea     rax,[._task_switch_resume]
+    push    rax
+    push    0
+    push    0
+    PUSHAQ
+    ; save current task's stack
+    mov     [ecx+168], rsp
+    mov     ax, ss
+    mov     [ecx+176], rax
+
+    ; switch to new task's stack
+    mov     rsp, [edx+168]
+    mov     rax, [edx+176]
+    mov     ss, ax          ;< this isn't really needed, since we never change ss but kept for good measure
+    jmp x86_64_task_switch_trampoline
+
+._task_switch_resume:
+    ; when we next switch back to "curr"'s context we'll appear here
+    ; return "curr", i.e. the currently running task
+    mov rax, rcx
+    ret
+
+; --------------------------------------------------------------------------
+; interrupt handlers
 
 ; nop-handler stub used for testing
 isr_null_handler:
@@ -81,9 +131,7 @@ isr_handler_stub:
     mov rcx, rsp
     call interrupts_isr_handler
     
-    POPAQ
-    ; drop error code and handler id
-    add rsp, 16
+    ISR_CLEAN_STACK
 
     iretq
 
@@ -251,6 +299,12 @@ x86_64_get_cs:
     mov     ax, cs
     ret
 
+global x86_64_get_ss
+x86_64_get_ss:
+    xor     rax, rax
+    mov     ax, ss
+    ret
+    
 ; apparently one does not simply disable chkstk insertion on Clang, so this is the second best thing
 ; https://metricpanda.com/rival-fortress-update-45-dealing-with-__chkstk-__chkstk_ms-when-cross-compiling-for-windows/
 global __chkstk

@@ -19,6 +19,25 @@ typedef struct _isr_context {
     
 } isr_context_t;
 
+typedef struct _interrupt_stack
+{    
+    // bottom of stack (rsp)
+
+    uint64_t        rdi, rsi, rbp, rdx, rcx, rbx, rax;
+    uint64_t        r15, r14, r13, r12, r11, r10, r9, r8;
+
+    uint64_t        handler_id;
+    uint64_t        error_code; //< will be pushed as 0 by our stub if not done by the CPU    
+
+    uint64_t        rip;    
+    uint64_t        cs;
+    uint64_t        rflags;
+    //NOTE: CPU always pushes these 64-bit mode (not just for CPL changes) 
+    uint64_t        rsp;    // rsp + 168
+    uint64_t        ss;     // rsp + 176
+
+} _JOS_PACKED_ interrupt_stack_t;
+
 void interrupts_initialise_early();
 
 typedef enum _interrupt_handler_priority {

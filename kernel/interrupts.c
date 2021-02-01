@@ -12,25 +12,6 @@
 // in efi_main.c for now, loaded with the kernel's CS selector on boot
 extern uint16_t kJosKernelCS;
 
-typedef struct _isr_stack
-{    
-    // bottom of stack (rsp)
-
-    uint64_t        rdi, rsi, rbp, rdx, rcx, rbx, rax;
-    uint64_t        r15, r14, r13, r12, r11, r10, r9, r8;
-
-    uint64_t        handler_id;
-    uint64_t        error_code; //< will be pushed as 0 by our stub if not done by the CPU    
-
-    uint64_t        rip;    
-    uint64_t        cs;
-    uint64_t        rflags;
-    //NOTE: CPU always pushes these 64-bit mode (not just for CPL changes) 
-    uint64_t        rsp;
-    uint64_t        ss;     // <- top of stack (rsp + 184)
-
-} _JOS_PACKED_ isr_stack_t;
-
 enum {
     kInterruptGate  = 0xe,
     kTrapGate       = 0xf,
@@ -171,7 +152,7 @@ static void idt_init(idt_entry_t* entry, void* handler) {
     idt_set_rip(entry, (uint64_t)handler);
 }
 
-void interrupts_isr_handler(isr_stack_t *stack) {
+void interrupts_isr_handler(interrupt_stack_t *stack) {
 
     //TODO: hard re-enable interrupts based on priority: critical, non-critical, and non-critical deferrable
 
