@@ -60,7 +60,7 @@ static void _int_3_handler(const isr_context_t * context) {
         ZydisFormatterFormatInstruction(&formatter, &instruction, buffer, sizeof(buffer),
             runtime_address);
         
-        swprintf(buf,bufcount, L"%016llx  %s\n", runtime_address, buffer);
+        swprintf(buf,bufcount, L"%016llx  %S\n", runtime_address, buffer);
         output_console_output_string(buf);
 
         offset += instruction.length;
