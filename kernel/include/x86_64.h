@@ -29,6 +29,10 @@ static _JOS_ALWAYS_INLINE  uint8_t x86_64_inb(unsigned short port) {
     return val;
 }
 
+static _JOS_ALWAYS_INLINE void x86_64_read_gs(void* offset, uint64_t * val) {
+    asm volatile("movq %%gs:(%1), %0" : "=r" (*val) : "r" (offset));
+}
+
 //TODO: this is the "hard" way, we need a softer way to do it as well (as what Linux does)
 static _JOS_ALWAYS_INLINE void x86_64_cli(void) {
     asm volatile("cli" ::: "memory");

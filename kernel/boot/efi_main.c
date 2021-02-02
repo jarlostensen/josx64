@@ -145,14 +145,26 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     wchar_t buf[256];
     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
     size_t bsp_id = processors_get_bsp_id();
-    swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", processors_get_processor_count(), bsp_id);
+    swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", processors_get_processor_count(), bsp_id);    
     output_console_output_string(buf);
+    
     if ( processors_has_acpi_20() ) {
         output_console_output_string(L"ACPI 2.0 configuration enabled\n");
     }
     for ( size_t p = processors_get_processor_count(); p>0; --p ) {
         processor_information_t info;
         jos_status_t status = processors_get_processor_information(&info, p-1);
+        const processor_information_t* per_cpu_info = (const processor_information_t*)processors_get_per_cpu_ptr(_JOS_K_PER_CPU_IDX_PROCESSOR_INFO);
+
+        // if ( memcmp(per_cpu_info, &info, sizeof(info))!=0 ) {
+        //     swprintf(buf, 256, L"\n\tTEST is 0x%x\n", info._test);
+        //     output_console_output_string(buf);
+        //     hex_dump_mem((void*)per_cpu_info, sizeof(info), k8bitInt);
+        //     output_console_line_break();
+        //     hex_dump_mem((void*)&info, sizeof(info), k8bitInt);
+        //     output_console_line_break();
+        // }
+
         if ( _JOS_K_SUCCEEDED(status) ) {
 
             swprintf(buf, 256, L"\tid %d, status 0x%x, package %d, core %d, thread %d, TSC is %S, Intel 64 arch %S\n", 
