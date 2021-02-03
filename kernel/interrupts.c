@@ -166,7 +166,8 @@ void interrupts_isr_handler(isr_stack_t *stack) {
 
     if ( _interrupts_enabled )
     {        
-        if( _isr_handlers[stack->handler_id] ) {
+        isr_handler_func_t handler = _isr_handlers[stack->handler_id];
+        if( handler ) {
 
             // provide a read only context for the handler
             isr_context_t ctx;
@@ -174,9 +175,12 @@ void interrupts_isr_handler(isr_stack_t *stack) {
             ctx.handler_code = stack->error_code;
             ctx.rip = stack->rip;
             ctx.cs = stack->cs;
-            ctx.rflags = stack->rflags;
+            ctx.rflags = stack->rflags; 
 
-            _isr_handlers[stack->handler_id](&ctx);
+            x86_64_sti();       
+            handler(&ctx);
+            x86_64_cli();
+
             return;
         }
 
@@ -216,10 +220,13 @@ void interrupts_irq_handler(int irq) {
         // no IRQ handlers enabled
         return;
 
-    if ( _irq_handlers[irq] 
+    irq_handler_func_t handler = _irq_handlers[irq];
+    if ( handler
         &&
         (_irq_mask & (1<<irq)) == (1<<irq) ) {
-        _irq_handlers[irq](irq);
+        x86_64_sti();
+        handler(irq);
+        x86_64_cli();
         return;
     }
     
@@ -228,7 +235,9 @@ void interrupts_irq_handler(int irq) {
 
 void interrupts_set_irq_handler(int irqId, irq_handler_func_t handler) {
     //TODO: check if this IRQ is enabled or not, it shouldn't be (for now we only allow one handler ever)
+    x86_64_cli();
     _irq_handlers[irqId] = handler;
+    x86_64_sti();
 
 }
 
