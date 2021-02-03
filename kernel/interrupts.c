@@ -74,6 +74,14 @@ typedef struct _idt_desc {
 static idt_entry_t  _idt[256];
 static idt_desc_t   _idt_desc = { .size = sizeof(_idt), .address = (uint64_t)&_idt};
 
+// interrupt handler nesting level
+static atomic_int _nesting_level = -1;
+#define INC_NESTING_LEVEL()\
+    atomic_fetch_add(&_nesting_level,1)
+
+#define DEC_NESTING_LEVEL()\
+    atomic_fetch_sub(&_nesting_level,1)
+
 // handler stubs (from x84_64.asm)
 #define EXTERN_ISR_HANDLER(N)\
     extern void interrupts_isr_handler_##N(void)
@@ -180,23 +188,20 @@ void interrupts_isr_handler(isr_stack_t *stack) {
             x86_64_sti();       
             handler(&ctx);
             x86_64_cli();
-
-            return;
         }
+        else {
+            // =============================================================
+            //ZZZ:
+            wchar_t buf[128];
+            const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
 
-        // =============================================================
-        //ZZZ:
-        wchar_t buf[128];
-        const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
-
-        swprintf(buf,bufcount,L"UNHANDLED: int 0x%x, error code 0x%x: rip : 0x%llx\n", 
-            stack->handler_id, 
-            stack->error_code,
-            stack->rip);
-        output_console_output_string(buf);
-
+            swprintf(buf,bufcount,L"UNHANDLED: int 0x%x, error code 0x%x: rip : 0x%llx\n", 
+                stack->handler_id, 
+                stack->error_code,
+                stack->rip);
+            output_console_output_string(buf);
+        }
     }
-    //TODO: else ... soft handling of masked interrupts?
 
     // and hard handling, like this one
     if ( stack->handler_id == 0xd ) {
@@ -214,23 +219,29 @@ void interrupts_set_isr_handler(int i, isr_handler_func_t handler) {
 
 void interrupts_irq_handler(int irq) {
     
-    //TODO: IRQ stats
+    
 
     if ( !_irq_mask )
-        // no IRQ handlers enabled
+        // no IRQ handlers enabled    
         return;
+
 
     irq_handler_func_t handler = _irq_handlers[irq];
     if ( handler
         &&
         (_irq_mask & (1<<irq)) == (1<<irq) ) {
-        x86_64_sti();
-        handler(irq);
-        x86_64_cli();
-        return;
-    }
-    
-    //TODO: no handler registered, or this IRQ is masked
+
+// wchar_t buf[128];
+//     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
+//     swprintf(buf,bufcount,L"IRQ: 0x%x\n", irq);
+//     output_console_output_string(buf);
+
+            interrupts_PIC_disable_irq(irq);
+            x86_64_sti();
+            handler(irq);
+            x86_64_cli();
+            interrupts_PIC_enable_irq(irq);
+    }    
 }
 
 void interrupts_set_irq_handler(int irqId, irq_handler_func_t handler) {
@@ -238,7 +249,6 @@ void interrupts_set_irq_handler(int irqId, irq_handler_func_t handler) {
     x86_64_cli();
     _irq_handlers[irqId] = handler;
     x86_64_sti();
-
 }
 
 static void init_PIC(void) {    

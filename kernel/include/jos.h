@@ -82,6 +82,11 @@ if(!(cond))\
 #define _JOS_INLINE_FUNC static
 #define _JOS_BOCHS_DBGBREAK() __debugbreak()
 
+#define _JOS_KTRACE_CHANNEL(channel, msg,...)
+#define _JOS_KTRACE(msg,...)
+#define _JOS_KTRACE_CHANNEL_BUF(channel, data,length)
+#define _JOS_KTRACE_BUF(data,length)
+
 #define _JOS_ALWAYS_INLINE
 
 #define _JOS_BOCHS_DBGBREAK_TRACE() __debugbreak()

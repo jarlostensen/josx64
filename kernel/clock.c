@@ -2,6 +2,7 @@
 #include <jos.h>
 #include <kernel.h>
 #include <x86_64.h>
+#include <interrupts.h>
 
 #include <stdio.h>
 #include <output_console.h>
@@ -21,6 +22,26 @@
 #define PIT_MODE_SQUAREWAVE     0x06     // binary, square wave
 #define PIT_RL_DATA             0x30     // LSB, then MSB
 #define PIT_MODE_ONESHOT        0x01     // strictly one-shot in BCD counting mode
+
+//NOTE: setting this to the same as what the Linux kernel (currently) uses...
+#define HZ              200
+#define CLOCK_FREQ      1193182
+#define ONE_FP32        0x100000000
+#define HALF_FP32       0x010000000
+
+typedef struct {
+    
+    uint32_t    _hz;
+    uint16_t    _divisor;
+    uint64_t    _ms_per_tick_fp32;
+
+} clock_pit_interval_t;
+
+static uint64_t _clock_ms_elapsed = 0;
+static uint64_t _clock_ticks_elapsed = 0;
+static clock_pit_interval_t _pit_interval;
+
+const char* kClockChannel = "clock";
 
 // wait for one 18 Hz period (~55ms)
 static void _wait_one_55ms_interval(void)
@@ -50,6 +71,16 @@ static void _wait_one_55ms_interval(void)
     //     x86_64_inb(PIT_DATA_2);
     //     msb = x86_64_inb(PIT_DATA_2);
     // } while(msb);
+}
+
+static void _enable_rtc_timer(void) {
+    x86_64_cli();
+    x86_64_outb(0x70, 0x8b);
+    x86_64_io_wait();
+    uint8_t prev = x86_64_inb(0x71);
+    x86_64_outb(0x70, 0x8b);
+    x86_64_outb(0x71, prev | 0x40);
+    x86_64_sti();
 }
 
 //TODO: this needs to be moved into cpu.h/c and made per-core
@@ -82,6 +113,46 @@ static uint64_t _est_cpu_freq(void)
     return _est_freq = (max_cpu_hz + min_cpu_hz)/2;
 }
 
+static uint64_t _1khz_counter = 0;
+static void _irq_8_handler(int irq_id) {
+    (void)irq_id;
+    ++_1khz_counter;    
+}
+
+static  clock_pit_interval_t _make_pit_interval(uint32_t hz)
+{
+    clock_pit_interval_t    info;
+    info._hz = hz;
+    
+    double ddiv = (double)CLOCK_FREQ/(double)hz;
+    // round up 
+    ddiv = (ddiv+0.5);
+    // divisor for PIT
+    info._divisor = (uint16_t)(ddiv);    
+    // scale to 32.32 fixed point
+    ddiv *= (double)ONE_FP32;
+    info._ms_per_tick_fp32 = (uint64_t)(((ddiv * 1000.0)/(double)CLOCK_FREQ));
+
+    return info;
+}
+
+static void _set_divisor(clock_pit_interval_t* info, uint16_t port)
+{
+    x86_64_outb(port, info->_divisor & 0xff);
+    x86_64_outb(port, (info->_divisor>>8) & 0xff);
+}
+
+uint64_t clock_ms_since_boot(void) {
+    return _clock_ms_elapsed>>32;
+}
+
+static void _irq_0_handler(int i)
+{
+    (void)i;
+    ++_clock_ticks_elapsed;    
+    _clock_ms_elapsed += _pit_interval._ms_per_tick_fp32;
+}
+
 void clock_initialise(void) {
 
     //ZZZ: this hangs and the note in i8253.c (Linux arch\x86) suggests it may be disabled:
@@ -96,10 +167,35 @@ void clock_initialise(void) {
     */
    // HOWEVER: Qemu reports APIC disabled, so why should the PIT also be disabled..?
 
-    uint64_t bsp_freq = _est_cpu_freq();
+    uint64_t bsp_freq = 1; //_est_cpu_freq();
     wchar_t buf[128];
-    const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
+    
+    _pit_interval = _make_pit_interval(HZ);
+    
+    swprintf(buf,128,L"PIT initialised to %dHz\n", HZ);
+    output_console_output_string(buf);
 
-    swprintf(buf,bufcount,L"clock: bsp freq estimated ~ %llu MHz\n", bsp_freq/1000000);
+    x86_64_outb(PIT_COMMAND, PIT_COUNTER_0 | PIT_MODE_SQUAREWAVE | PIT_RL_DATA);
+    // set frequency         
+    _set_divisor(&_pit_interval, PIT_DATA_0);
+
+    interrupts_set_irq_handler(0, _irq_0_handler);
+    interrupts_PIC_enable_irq(0);
+
+    interrupts_set_irq_handler(0x8, _irq_8_handler);
+    interrupts_PIC_enable_irq(0x8);
+    _enable_rtc_timer();
+
+    output_console_output_string(L"waiting for about 10 MS...\n");
+
+    uint64_t ms_start = clock_ms_since_boot();
+    uint64_t ms_now = clock_ms_since_boot();
+    uint64_t tsc_start = __rdtsc();
+    while(ms_now-ms_start<10) {
+        ms_now = clock_ms_since_boot();
+    }
+    uint64_t cpu_hz = 100*(__rdtsc() - tsc_start);
+
+    swprintf(buf,128,L"clock: bsp freq estimated ~ %llu MHz\n", cpu_hz/1000000);
     output_console_output_string(buf);
 }

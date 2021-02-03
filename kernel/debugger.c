@@ -10,6 +10,13 @@
 #include <stdio.h>
 #include <output_console.h>
 
+#define FLAGS_TRAP_FLAG 0x100
+static bool _trapping = false;
+
+static void re_set_trap_flag(void) {
+    
+}
+
 static void _int_3_handler(const isr_context_t * context) {
 
     _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx\n", context->rip);
