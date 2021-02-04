@@ -3,25 +3,11 @@
 #include <kernel.h>
 #include <x86_64.h>
 #include <interrupts.h>
+#include <i8253.h>
 
 #include <stdio.h>
 #include <output_console.h>
 
-// http://www.brokenthorn.com/Resources/OSDev16.html
-
-#define PIT_COMMAND 0x43
-#define PIT_DATA_0  0x40    // channel/counter 0; IRQ0 generator
-#define PIT_DATA_1  0x41    // channel/counter 1; (deprectated) memory refresh signal [not used]
-#define PIT_DATA_2  0x42    // channel/counter 2; PC speaker
-
-// PIT command word flags
-#define PIT_COUNTER_0           0
-#define PIT_COUNTER_1           (1u<<5)
-#define PIT_COUNTER_2           (2u<<5)
-
-#define PIT_MODE_SQUAREWAVE     0x06     // binary, square wave
-#define PIT_RL_DATA             0x30     // LSB, then MSB
-#define PIT_MODE_ONESHOT        0x01     // strictly one-shot in BCD counting mode
 
 //NOTE: setting this to the same as what the Linux kernel (currently) uses...
 #define HZ              200
@@ -44,36 +30,6 @@ static clock_pit_interval_t _pit_interval;
 static uint64_t _micro_epsilon = 0;
 
 const char* kClockChannel = "clock";
-
-// wait for one 18 Hz period (~55ms)
-static void _wait_one_55ms_interval(void)
-{
-    // channel 2 enable (see for example a nice overview of the 8253 here https://www.cs.usfca.edu/~cruse/cs630f08/lesson15.ppt)
-    // this enables GATE2 on the PIT (bit 0 = 1) which means that channel 2 will generate a signal, 
-    // but also disables the speaker output (bit 1 = 0)
-    x86_64_outb(0x61,(x86_64_inb(0x61) & ~0x02) | 0x01);
-
-    x86_64_outb(PIT_COMMAND, PIT_COUNTER_2 | PIT_MODE_ONESHOT);
-    // set the timer to be the max interval, i.e. 18.2 Hz
-    x86_64_outb(PIT_DATA_2, 0xff);
-    x86_64_outb(PIT_DATA_2, 0xff);
-    
-    uint8_t p61status = x86_64_inb(0x61);
-    while((p61status & 0x20)==0) {
-        p61status = x86_64_inb(0x61);
-    }
-
-    // disable GATE2 channel 2 timer
-    x86_64_outb(0x61,(x86_64_inb(0x61) & ~0x02));
-
-    // // dummy read, give time for the next edge rise
-    // x86_64_inb(PIT_DATA_2);
-    // char msb = x86_64_inb(PIT_DATA_2);
-    // do {
-    //     x86_64_inb(PIT_DATA_2);
-    //     msb = x86_64_inb(PIT_DATA_2);
-    // } while(msb);
-}
 
 static void _enable_rtc_timer(void) {
     x86_64_cli();
@@ -103,7 +59,7 @@ static uint64_t _est_cpu_freq(void)
     do
     {
         uint64_t rdtsc_start = __rdtsc();
-        _wait_one_55ms_interval();
+        i8253_wait_55ms();
         uint64_t rdtsc_end = __rdtsc();
         const uint64_t cpu_hz = 1000*(rdtsc_end - rdtsc_start)/elapsed_ms;
         if(cpu_hz < min_cpu_hz)
@@ -141,12 +97,6 @@ static  clock_pit_interval_t _make_pit_interval(uint32_t hz)
     return info;
 }
 
-static void _set_divisor(clock_pit_interval_t* info, uint16_t port)
-{
-    x86_64_outb(port, info->_divisor & 0xff);
-    x86_64_outb(port, (info->_divisor>>8) & 0xff);
-}
-
 uint64_t clock_ms_since_boot(void) {
     return _clock_ms_elapsed>>32;
 }
@@ -180,14 +130,11 @@ void clock_initialise(void) {
     swprintf(buf,128,L"PIT initialised to %dHz\n", HZ);
     output_console_output_string(buf);
 
-    x86_64_outb(PIT_COMMAND, PIT_COUNTER_0 | PIT_MODE_SQUAREWAVE | PIT_RL_DATA);
-    // set frequency         
-    _set_divisor(&_pit_interval, PIT_DATA_0);
-
+    i8253_start_clock(_pit_interval._divisor);
     interrupts_set_irq_handler(0, _irq_0_handler);
     
-    interrupts_set_irq_handler(0x8, _irq_8_handler);
-    _enable_rtc_timer();
+    // interrupts_set_irq_handler(0x8, _irq_8_handler);
+    // _enable_rtc_timer();
 
     output_console_output_string(L"waiting for about 10 MS...\n");
 
