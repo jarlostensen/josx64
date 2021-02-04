@@ -4,7 +4,7 @@
 #include <kernel.h>
 #include <string.h>
 #include <x86_64.h>
-#include <pic.h>
+#include <i8259a.h>
 
 #include <stdio.h>
 #include <output_console.h>
@@ -44,8 +44,6 @@ static irq_handler_func_t _irq_handlers[32];
 // if false we don't, and we may filter some IRQs as well
 static bool _interrupts_enabled = true;
 
-// IRQ enabled bitmask, 0 when no IRQs enabled
-static unsigned int _irq_mask = 0;
 
 // Intel IA dev guide Vol 3 6.14.1 64-Bit Mode IDT
 typedef struct _idt_64_entry {
@@ -219,29 +217,18 @@ void interrupts_set_isr_handler(int i, isr_handler_func_t handler) {
 
 void interrupts_irq_handler(int irq) {
     
-    
-
-    if ( !_irq_mask )
+    if ( i8259a_irqs_muted() )
         // no IRQ handlers enabled    
         return;
-
 
     irq_handler_func_t handler = _irq_handlers[irq];
     if ( handler
         &&
-        (_irq_mask & (1<<irq)) == (1<<irq) ) {
-
-// wchar_t buf[128];
-//     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
-//     swprintf(buf,bufcount,L"IRQ: 0x%x\n", irq);
-//     output_console_output_string(buf);
-
-            interrupts_PIC_disable_irq(irq);
+        i8259a_irq_enabled(irq)) {
             x86_64_sti();
             handler(irq);
             x86_64_cli();
-            interrupts_PIC_enable_irq(irq);
-    }    
+    }
 }
 
 void interrupts_set_irq_handler(int irqId, irq_handler_func_t handler) {
@@ -249,70 +236,14 @@ void interrupts_set_irq_handler(int irqId, irq_handler_func_t handler) {
     x86_64_cli();
     _irq_handlers[irqId] = handler;
     x86_64_sti();
-}
-
-static void init_PIC(void) {    
-    // http://www.brokenthorn.com/Resources/OSDevPic.html
-    // start initialising PIC1 and PIC2 
-    x86_64_outb(PIC1_COMMAND , ICW1_INIT | ICW1_ICW4);
-	x86_64_outb(PIC2_COMMAND , ICW1_INIT | ICW1_ICW4);
-    // remap IRQs offsets to 0x20 and 0x28
-	x86_64_outb(PIC1_DATA , IRQ_BASE_OFFSET);
-	x86_64_outb(PIC2_DATA , IRQ_BASE_OFFSET+8);
-    x86_64_io_wait();
-	// cascade PIC1 & PIC2
-	x86_64_outb(PIC1_DATA , 0x00);  
-	x86_64_outb(PIC2_DATA , 0x00);  
-    x86_64_io_wait();
-	// enable x86 mode
-	x86_64_outb(PIC1_DATA , 0x01);
-	x86_64_outb(PIC2_DATA , 0x01);	
-    x86_64_io_wait();    
-
-	//NOTE: disable all IRQs for now, only enable when someone registers an IRQ handler.
-	x86_64_outb(PIC1_DATA, 0xff);
-	x86_64_outb(PIC2_DATA, 0xff);
-    x86_64_io_wait();   
-}
-
-void interrupts_PIC_enable_irq(int i)
-{
-    if(i < 8)
-    {
-        // unmask IRQ in PIC1
-	    x86_64_outb(PIC1_DATA, x86_64_inb(PIC1_DATA) & ~(1<<i));
-    }
-    else
-    {
-        // unmask IRQ in PIC2
-	    x86_64_outb(PIC2_DATA, x86_64_inb(PIC2_DATA) & ~(1<<(i-8)));
-    } 
-
-    // enable in irq mask
-    _irq_mask |= (1<<i);
-}
-
-void interrupts_PIC_disable_irq(int i)
-{
-    if(i < 8)
-    {
-        // mask IRQ in PIC1
-	    x86_64_outb(PIC1_DATA, x86_64_inb(PIC1_DATA) | (1<<i));
-    }
-    else
-    {
-        // nmask IRQ in PIC2
-	    x86_64_outb(PIC2_DATA, x86_64_inb(PIC2_DATA) | (1<<(i-8)));
-    } 
-
-    // disable in irq mask
-    _irq_mask &= ~(1<<i);
+    // enable it right away
+    i8259a_enable_irq(irqId);
 }
 
 void interrupts_initialise_early(void) {
 
-    //NOTE: this isn't needed to make isr's work, but it is needed for IRQs
-    init_PIC();
+    // initialise PICs
+    i8259a_initialise();
 
     // load IDT with reserved ISRs
 
@@ -353,7 +284,7 @@ void interrupts_initialise_early(void) {
     SET_ISR_HANDLER(31);
 
 #define SET_IRQ_HANDLER(N)\
-    idt_init(_idt+IRQ_BASE_OFFSET+N, interrupts_irq_handler_##N)
+    idt_init(_idt+_JOS_i8259a_IRQ_BASE_OFFSET+N, interrupts_irq_handler_##N)
 
     SET_IRQ_HANDLER(0);
     SET_IRQ_HANDLER(1);

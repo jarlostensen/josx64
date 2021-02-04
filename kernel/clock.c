@@ -40,6 +40,8 @@ typedef struct {
 static uint64_t _clock_ms_elapsed = 0;
 static uint64_t _clock_ticks_elapsed = 0;
 static clock_pit_interval_t _pit_interval;
+// will be ~1us, for less-than-accurate timekeeping
+static uint64_t _micro_epsilon = 0;
 
 const char* kClockChannel = "clock";
 
@@ -116,7 +118,10 @@ static uint64_t _est_cpu_freq(void)
 static uint64_t _1khz_counter = 0;
 static void _irq_8_handler(int irq_id) {
     (void)irq_id;
-    ++_1khz_counter;    
+    ++_1khz_counter; 
+    // read register C to ack the interrupt   
+    x86_64_outb(0x70, 0x0c);
+    x86_64_inb(0x71);
 }
 
 static  clock_pit_interval_t _make_pit_interval(uint32_t hz)
@@ -180,10 +185,8 @@ void clock_initialise(void) {
     _set_divisor(&_pit_interval, PIT_DATA_0);
 
     interrupts_set_irq_handler(0, _irq_0_handler);
-    interrupts_PIC_enable_irq(0);
-
+    
     interrupts_set_irq_handler(0x8, _irq_8_handler);
-    interrupts_PIC_enable_irq(0x8);
     _enable_rtc_timer();
 
     output_console_output_string(L"waiting for about 10 MS...\n");
@@ -194,8 +197,10 @@ void clock_initialise(void) {
     while(ms_now-ms_start<10) {
         ms_now = clock_ms_since_boot();
     }
-    uint64_t cpu_hz = 100*(__rdtsc() - tsc_start);
+    uint64_t delta = __rdtsc() - tsc_start;
+    uint64_t cpu_hz = 100*delta;
+    _micro_epsilon = delta/10000;
 
-    swprintf(buf,128,L"clock: bsp freq estimated ~ %llu MHz\n", cpu_hz/1000000);
+    swprintf(buf,128,L"clock: bsp freq estimated ~ %llu MHz, 1ue = %llu, %llu 1KHz ticks measured\n", cpu_hz/1000000, _micro_epsilon, _1khz_counter);
     output_console_output_string(buf);
 }
