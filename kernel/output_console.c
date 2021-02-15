@@ -19,7 +19,9 @@ jos_status_t output_console_initialise() {
 
     jos_status_t status = _JOS_K_STATUS_SUCCESS;
 
+#ifdef _JOS_KERNEL_BUILD
     _video_mode_info = video_get_video_mode_info();
+#endif
 
     return status;
 }

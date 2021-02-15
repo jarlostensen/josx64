@@ -48,6 +48,12 @@
     <ClCompile Include="..\libc\extensions\pdb_index.c">
       <Filter>libc\extensions</Filter>
     </ClCompile>
+    <ClCompile Include="..\kernel\output_console.c">
+      <Filter>kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\kernel\video.c">
+      <Filter>kernel</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\kernel\include\winnt_lt.h">
@@ -57,6 +63,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\libc\include\extensions\pdb_index.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\kernel\include\output_console.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\kernel\include\video.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

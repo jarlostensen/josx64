@@ -1,6 +1,9 @@
 
+#ifdef _JOS_KERNEL_BUILD
 #include <c-efi.h>
 #include <c-efi-protocol-graphics-output.h>
+#endif 
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -8,26 +11,33 @@
 #include "include/jos.h"
 #include "include/video.h"
 
+#ifdef _JOS_KERNEL_BUILD
 // in efi_main.c
 extern CEfiBootServices * g_boot_services;
 extern CEfiSystemTable  * g_st;
-
 static CEfiGraphicsOutputProtocol * _gop = 0;
+CEfiGraphicsOutputModeInformation _info;
+#endif
 
 #define VIDEO_MAX_HORIZ_RES 1024
 
 // copy of active mode info
-CEfiGraphicsOutputModeInformation _info;
 static size_t _framebuffer_base = 0;
 static size_t _red_shift;
 static size_t _green_shift;
 static size_t _blue_shift;
 
-
+#ifdef _JOS_KERNEL_BUILD
 static uint32_t*    framebuffer_wptr(size_t top, size_t left) {
     return (uint32_t*)(_framebuffer_base) + top*_info.pixels_per_scan_line + left;
 }
+#else 
+// implemented in the LAB code base
+extern uint32_t*    framebuffer_wptr(size_t top, size_t left);
+extern video_info_t _info;
+#endif
 
+#ifdef _JOS_KERNEL_BUILD
 CEfiStatus video_initialise() 
 {
     memset(&_info, 0, sizeof(_info));
@@ -119,6 +129,7 @@ CEfiStatus video_initialise()
 
     return status;
 }
+#endif // #ifdef _JOS_KERNEL_BUILD
 
 uint32_t video_make_color(uint8_t r, uint8_t g, uint8_t b) {
     return ((uint32_t)r << _red_shift) | ((uint32_t)g << _green_shift) | ((uint32_t)b << _blue_shift);
@@ -126,7 +137,7 @@ uint32_t video_make_color(uint8_t r, uint8_t g, uint8_t b) {
 
 void video_clear_screen(uint32_t colour) {
     //TODO: assert(_framebuffer_base!=0)
-    uint32_t *wptr = (uint32_t*)_framebuffer_base;
+    uint32_t *wptr = framebuffer_wptr(0,0);
     size_t pixels_to_fill = _info.pixels_per_scan_line * _info.vertical_resolution;
     while(pixels_to_fill) {
         *wptr++ = colour;
@@ -141,6 +152,7 @@ void video_clear_screen(uint32_t colour) {
     }
 }
 
+#ifdef _JOS_KERNEL_BUILD
 video_mode_info_t video_get_video_mode_info() {
     video_mode_info_t info = {
         .horisontal_resolution = _info.horizontal_resolution,
@@ -149,6 +161,7 @@ video_mode_info_t video_get_video_mode_info() {
     };
     return info;
 }
+#endif
 
 void video_draw_text_segment(draw_text_segment_args_t* args, const wchar_t* text) {
 
