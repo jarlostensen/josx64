@@ -34,7 +34,7 @@ static uint32_t*    framebuffer_wptr(size_t top, size_t left) {
 #else 
 // implemented in the LAB code base
 extern uint32_t*    framebuffer_wptr(size_t top, size_t left);
-extern video_info_t _info;
+extern video_mode_info_t _info;
 #endif
 
 #ifdef _JOS_KERNEL_BUILD
@@ -152,16 +152,18 @@ void video_clear_screen(uint32_t colour) {
     }
 }
 
-#ifdef _JOS_KERNEL_BUILD
 video_mode_info_t video_get_video_mode_info() {
+#ifdef _JOS_KERNEL_BUILD
     video_mode_info_t info = {
         .horisontal_resolution = _info.horizontal_resolution,
         .vertical_resolution = _info.vertical_resolution,
         .pixel_format = (_info.pixel_format == PixelBlueGreenRedReserved8BitPerColor ) ? kVideo_Pixel_Format_BGRx : kVideo_Pixel_Format_RBGx,
     };
     return info;
-}
+#else
+    return _info;
 #endif
+}
 
 void video_draw_text_segment(draw_text_segment_args_t* args, const wchar_t* text) {
 
@@ -236,17 +238,18 @@ void video_draw_text(draw_text_segment_args_t* args, const wchar_t* text) {
 }
 
 void video_scroll_up_region_full_width(size_t top, size_t bottom, size_t linesToScroll) {
-    size_t strip_stride = linesToScroll * _info.pixels_per_scan_line;
-    uint32_t* wptr = framebuffer_wptr(top,0);
-    uint32_t* rptr = wptr + strip_stride;
 
-    const size_t strips = ((bottom - top)/linesToScroll) -1;
-    const size_t rem_lines = (bottom - top) % linesToScroll;
+    size_t strip_pixel_stride = linesToScroll * _info.pixels_per_scan_line;
+    uint32_t* wptr = framebuffer_wptr(top,0);
+    uint32_t* rptr = wptr + strip_pixel_stride;
+
+    const size_t region_height = bottom - top;
+    const size_t strips = (region_height/linesToScroll);
+    const size_t rem_lines = region_height % linesToScroll;
     for(size_t strip = 0; strip < strips; ++strip) {
-        memcpy(wptr, rptr, strip_stride<<2);
-        wptr += strip_stride;
-        rptr += strip_stride;
-        ++strip;
+        memcpy(wptr, rptr, strip_pixel_stride<<2);
+        wptr += strip_pixel_stride;
+        rptr += strip_pixel_stride;
     }
 
     if (rem_lines) {

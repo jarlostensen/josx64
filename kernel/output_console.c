@@ -18,11 +18,7 @@ static const uint8_t        *   _font = 0;
 jos_status_t output_console_initialise() {
 
     jos_status_t status = _JOS_K_STATUS_SUCCESS;
-
-#ifdef _JOS_KERNEL_BUILD
     _video_mode_info = video_get_video_mode_info();
-#endif
-
     return status;
 }
 
@@ -45,9 +41,13 @@ jos_status_t output_console_set_font(const uint8_t* font, size_t width, size_t h
 }
 
 void output_console_line_break(void) {
-    //TODO: scroll
     _cursor_pos.y += LINE_HEIGHT_PIXELS;
     _cursor_pos.x = 0;
+    if (_cursor_pos.y > _video_mode_info.vertical_resolution - LINE_HEIGHT_PIXELS) {
+        // scroll
+        _cursor_pos.y -= LINE_HEIGHT_PIXELS;
+        video_scroll_up_region_full_width(0, _cursor_pos.y, LINE_HEIGHT_PIXELS);
+    }
 }
 
 void output_console_output_string(const wchar_t* text) {
@@ -72,9 +72,7 @@ void output_console_output_string(const wchar_t* text) {
             }
             ++pos;
             start = pos;
-            //TODO: scroll
-            _cursor_pos.y += LINE_HEIGHT_PIXELS;
-            _cursor_pos.x = 0;
+            output_console_line_break();
         }
         else {
             ++pos;

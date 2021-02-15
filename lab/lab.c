@@ -122,7 +122,7 @@ void trace(const char* __restrict channel, const char* __restrict format, ...) {
 
 // =================================================================================================
 
-video_info_t _info = { .vertical_resolution = 768 };
+video_mode_info_t _info = { .vertical_resolution = 768, .pixel_format = kVideo_Pixel_Format_RBGx };
 static size_t _window_width = 1024;
 
 HDC hdc_mem;
@@ -150,19 +150,30 @@ static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         DWORD bm_size = 4*_info.pixels_per_scan_line * _info.vertical_resolution;
         bits = (BYTE*)malloc(bm_size);
         GetDIBits(hdc_mem, bm, 0, _info.vertical_resolution, bits, (BITMAPINFO*)(&bm_info_header), DIB_RGB_COLORS);        
+        video_clear_screen(0x6495ed);
+        output_console_output_string(L"Press CR...\n");
     }
     break;
     case WM_PAINT:
     {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hWnd, &ps);
-        if (bits) {
-            video_clear_screen(video_make_color(0,0xaa,0x22));
-            output_console_output_string(L"--------------------------\n josX64\n");
+        if (bits) {            
             SetDIBits(hdc_mem, bm, 0, _info.vertical_resolution, bits, (BITMAPINFO*)(&bm_info_header), DIB_RGB_COLORS);
             BitBlt(hdc, 0, 0, _window_width, _info.vertical_resolution, hdc_mem, 0, 0, SRCCOPY);
         }
         EndPaint(hWnd, &ps);
+    }
+    break;
+    case WM_KEYDOWN:
+    {
+        static size_t returns = 1;
+        if (wParam == VK_RETURN) {
+            wchar_t buffer[128];
+            swprintf_s(buffer,sizeof(buffer)/sizeof(wchar_t), L"line %d...\n", returns++);
+            output_console_output_string(buffer);
+            InvalidateRect(hWnd, 0, TRUE);
+        }
     }
     break;
     case WM_DESTROY:
@@ -186,12 +197,19 @@ static void initialise_window(void) {
     wc.lpszClassName = _class_name;
     ATOM wnd = RegisterClass(&wc);
     if (wnd) {
+        RECT cw;
+        cw.left = 0;
+        cw.right = _window_width;
+        cw.top = 0;
+        cw.bottom = _info.vertical_resolution;
+        AdjustWindowRect(&cw, WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME, FALSE);
+
         HWND hwnd = CreateWindowEx(
             0,
             _class_name,
             TEXT("josx64_lab"),
             WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME,
-            CW_USEDEFAULT, CW_USEDEFAULT, _window_width, _info.vertical_resolution,
+            CW_USEDEFAULT, CW_USEDEFAULT, cw.right-cw.left, cw.bottom-cw.top,
             NULL,
             NULL,
             wc.hInstance,
@@ -208,12 +226,12 @@ uint32_t* framebuffer_wptr(size_t top, size_t left) {
 
 static void ui_test_loop(void) {
 
-    initialise_window();
-
     output_console_initialise();
     output_console_set_colour(0xffffffff);
     output_console_set_bg_colour(0x6495ed);
     output_console_set_font((const uint8_t*)font8x8_basic, 8,8);
+
+    initialise_window();
 
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0) > 0)

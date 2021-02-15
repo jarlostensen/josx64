@@ -8,11 +8,6 @@
 
 #ifdef _JOS_KERNEL_BUILD
 CEfiStatus video_initialise();
-#else
-typedef struct _video_info {
-    long    vertical_resolution;
-    long    pixels_per_scan_line;
-} video_info_t;
 #endif
 
 uint32_t video_make_color(uint8_t r, uint8_t g, uint8_t b);
@@ -29,8 +24,11 @@ typedef enum _video_mode_pixel_format {
 typedef struct _video_mode_info {
 
     size_t                      horisontal_resolution;
-    size_t                      vertical_resolution;
+    size_t                      vertical_resolution;    
     video_mode_pixel_format_t   pixel_format;
+#ifndef _JOS_KERNEL_BUILD
+    size_t                      pixels_per_scan_line;
+#endif
 
 } video_mode_info_t;
 
