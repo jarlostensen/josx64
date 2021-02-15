@@ -110,6 +110,8 @@ static void _irq_0_handler(int i)
 
 void clock_initialise(void) {
 
+    _JOS_KTRACE(kClockChannel, "initialising");
+
     //ZZZ: this hangs and the note in i8253.c (Linux arch\x86) suggests it may be disabled:
     /*
         * Modern chipsets can disable the PIT clock which makes it unusable. It
@@ -133,15 +135,15 @@ void clock_initialise(void) {
     i8253_start_clock(_pit_interval._divisor);
     interrupts_set_irq_handler(0, _irq_0_handler);
     
-    // interrupts_set_irq_handler(0x8, _irq_8_handler);
-    // _enable_rtc_timer();
+    interrupts_set_irq_handler(0x8, _irq_8_handler);
+    _enable_rtc_timer();
 
     output_console_output_string(L"waiting for about 10 MS...\n");
 
     uint64_t ms_start = clock_ms_since_boot();
     uint64_t ms_now = clock_ms_since_boot();
     uint64_t tsc_start = __rdtsc();
-    while(ms_now-ms_start<10) {
+    while(ms_now-ms_start<=10) {
         ms_now = clock_ms_since_boot();
     }
     uint64_t delta = __rdtsc() - tsc_start;
@@ -150,4 +152,6 @@ void clock_initialise(void) {
 
     swprintf(buf,128,L"clock: bsp freq estimated ~ %llu MHz, 1ue = %llu, %llu 1KHz ticks measured\n", cpu_hz/1000000, _micro_epsilon, _1khz_counter);
     output_console_output_string(buf);
+
+    _JOS_KTRACE(kClockChannel, "initialised");
 }

@@ -51,14 +51,9 @@ void i8253_wait_55ms(void)
     // } while(msb);
 }
 
-static void i8253_set_divisor(uint16_t divisor)
-{
-    x86_64_outb(PIT_DATA_0, divisor & 0xff);
-    x86_64_outb(PIT_DATA_0, (divisor>>8) & 0xff);
-}
-
 void i8253_start_clock(uint16_t divisor) {
     x86_64_outb(PIT_COMMAND, PIT_COUNTER_0 | PIT_MODE_SQUAREWAVE | PIT_RL_DATA);
     // set frequency         
-    i8253_set_divisor(divisor);
+    x86_64_outb(PIT_DATA_0, divisor & 0xff);
+    x86_64_outb(PIT_DATA_0, (divisor>>8) & 0xff);
 }

@@ -330,7 +330,10 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         );
 
     output_console_set_colour(video_make_color(0xff,0,0));
-    output_console_output_string(L"\nThe kernel has exited!");    
+
+    swprintf(buf,128,L"\nThe kernel has exited @ %dms\n", clock_ms_since_boot());
+    output_console_output_string(buf);
+    _JOS_KTRACE_CHANNEL("efi_main", "exiting %llu ms after boot", clock_ms_since_boot());
 
     halt_cpu();
 }
