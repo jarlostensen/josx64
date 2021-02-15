@@ -61,6 +61,10 @@ add_subdirectory(libc)
 add_library(kernel STATIC "")
 add_subdirectory(kernel)
 
+# joForth library
+set(JOFORTH_BUILD_AS_LIB ON CACHE BOOL "")
+add_subdirectory("deps/joforth")
+
 # Zydis disassembler
 # switch off the things we don't want from Zydis/Zycore
 set(ZYDIS_BUILD_TOOLS OFF CACHE BOOL "")

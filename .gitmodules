@@ -1,3 +1,7 @@
 [submodule "deps/zydis"]
 	path = deps/zydis
 	url = https://github.com/zyantific/zydis.git
+	
+[submodule "deps/joforth"]
+	path = deps/joforth
+	url = https://github.com/jarlostensen/joforth.git
