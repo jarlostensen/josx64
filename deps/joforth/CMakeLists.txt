@@ -5,11 +5,14 @@ set(CMAKE_C_STANDARD 11)
 option(JOFORTH_BUILD_AS_LIB "build as library" OFF)
 
 if(JOFORTH_BUILD_AS_LIB)
-add_library(joForth joforth.c jo.h joforth_ir.h)
+message("${PROJECT_NAME}: building as library")
+add_library(${PROJECT_NAME} STATIC "${CMAKE_CURRENT_SOURCE_DIR}/joforth.c")
 else()
-add_executable(joForth joforth.c main.c "jo.h" "joforth_ir.h")
+message("${PROJECT_NAME}: building executable")
+add_executable(${PROJECT_NAME} joforth.c main.c "jo.h" "joforth_ir.h")
 endif()
 
-target_include_directories(joForth PRIVATE 
-    "${CMAKE_SOURCE_DIR}"    
+target_include_directories(${PROJECT_NAME} PRIVATE 
+    "${CMAKE_CURRENT_SOURCE_DIR}"    
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps"
 )
