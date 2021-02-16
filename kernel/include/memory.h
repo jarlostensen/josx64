@@ -5,10 +5,10 @@
 #include <jos.h>
 #include <stdint.h>
 
-jos_status_t memory_pre_exit_bootservices_initialise();
+jo_status_t memory_pre_exit_bootservices_initialise();
 CEfiUSize memory_boot_service_get_mapkey();
-jos_status_t memory_refresh_boot_service_memory_map();
-jos_status_t memory_post_exit_bootservices_initialise();
+jo_status_t memory_refresh_boot_service_memory_map();
+jo_status_t memory_post_exit_bootservices_initialise();
 
 const uint8_t* memory_get_memory_bitmap(size_t *dim);
 

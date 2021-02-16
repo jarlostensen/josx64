@@ -25,7 +25,7 @@ void trace_buf(const char* __restrict channel, const void* __restrict data, size
     buffer[written+1] = '\n';
     buffer[written+2] = 0;
 
-    serial_write(kCom1, buffer, written+length+1);
+    serial_write(kCom1, buffer, written+length+3);
 }
 
 void trace(const char* __restrict channel, const char* __restrict format,...) {
@@ -44,8 +44,9 @@ void trace(const char* __restrict channel, const char* __restrict format,...) {
     written += vsnprintf(buffer+written, sizeof(buffer)-written, format, parameters);
     va_end(parameters);
 
-    buffer[written] ='\n';
-    buffer[written+1] =0;
+    buffer[written+0] = '\r';
+    buffer[written+1] = '\n';
+    buffer[written+2] = 0;
 
-    serial_write(kCom1, buffer, written);
+    serial_write(kCom1, buffer, written+3);
 }

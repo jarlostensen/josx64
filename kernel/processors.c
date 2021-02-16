@@ -84,7 +84,7 @@ bool do_checksum(const uint8_t*ptr, size_t length) {
 #define C_EFI_ACPI_1_0_GUID         C_EFI_GUID(0xeb9d2d30, 0x2d88, 0x11d3, 0x9a, 0x16, 0x00, 0x90, 0x27, 0x3f, 0xc1, 0x4d)
 #define C_EFI_ACPI_2_0_GUID         C_EFI_GUID(0x8868e871, 0xe4f1, 0x11d3, 0xbc, 0x22, 0x00, 0x80, 0xc7, 0x3c, 0x88, 0x81)
 
-jos_status_t    intitialise_acpi() {
+jo_status_t    intitialise_acpi() {
     
     // we require ACPI 2.0 
     CEfiConfigurationTable* config_tables = (CEfiConfigurationTable*)g_st->configuration_table;
@@ -103,12 +103,12 @@ jos_status_t    intitialise_acpi() {
     if ( _rsdp_desc_20 ) {
         _xsdt = (const _xsdt_header_t*)_rsdp_desc_20->_xsdt_address;
         if ( do_checksum((const uint8_t*)&_xsdt->_std, _xsdt->_std._length) ) {
-            return _JOS_K_STATUS_SUCCESS;
+            return _JO_STATUS_SUCCESS;
         }
         _xsdt = 0;
     }
 
-    return _JOS_K_STATUS_NOT_FOUND;
+    return _JO_STATUS_NOT_FOUND;
 }
 
 // ==================================================================================================
@@ -159,7 +159,7 @@ static void collect_ap_information(void* arg) {
     collect_this_cpu_information((processor_information_t*)arg);
 }
 
-jos_status_t    processors_initialise() {
+jo_status_t    processors_initialise() {
 
     CEfiHandle handle_buffer[3];
     CEfiUSize handle_buffer_size = sizeof(handle_buffer);
@@ -183,12 +183,12 @@ jos_status_t    processors_initialise() {
         if ( efi_status == C_EFI_SUCCESS ) {                
             efi_status = _mpp->who_am_i(_mpp, &_bsp_id);
             if ( efi_status != C_EFI_SUCCESS ) {
-                return _JOS_K_STATUS_INTERNAL;
+                return _JO_STATUS_INTERNAL;
             }
 
             efi_status = _mpp->get_number_of_processors(_mpp, &_num_processors, &_num_enabled_processors);
             if ( efi_status != C_EFI_SUCCESS ) {
-                return _JOS_K_STATUS_INTERNAL;
+                return _JO_STATUS_INTERNAL;
             }
 
             _processors = (processor_information_t*)malloc(sizeof(processor_information_t) * _num_processors);
@@ -221,12 +221,12 @@ jos_status_t    processors_initialise() {
     }
 
     // ACPI 
-    jos_status_t status = intitialise_acpi();
-    if ( !_JOS_K_SUCCEEDED(status) ) {
+    jo_status_t status = intitialise_acpi();
+    if ( !_JO_SUCCEEDED(status) ) {
         return status;
     }
 
-    return _JOS_K_STATUS_SUCCESS;        
+    return _JO_STATUS_SUCCESS;        
 }
 
 size_t processors_get_processor_count() {
@@ -237,49 +237,49 @@ size_t processors_get_bsp_id() {
     return _bsp_id;
 }
 
-jos_status_t        processors_get_processor_information(processor_information_t* out_info, size_t processor_index)
+jo_status_t        processors_get_processor_information(processor_information_t* out_info, size_t processor_index)
 {
     if ( processor_index >= _num_processors ) {
-        return _JOS_K_STATUS_OUT_OF_RANGE;
+        return _JO_STATUS_OUT_OF_RANGE;
     }
 
     memcpy(out_info, _processors+processor_index, sizeof(processor_information_t));
-    return _JOS_K_STATUS_SUCCESS;
+    return _JO_STATUS_SUCCESS;
 }
 
 bool processors_has_acpi_20() {
     return _xsdt != 0;
 }
 
-jos_status_t        processors_startup_aps(ap_worker_function_t ap_worker_function, void* per_ap_data_, size_t per_ap_data_stride) {
+jo_status_t        processors_startup_aps(ap_worker_function_t ap_worker_function, void* per_ap_data_, size_t per_ap_data_stride) {
 
     if(!g_boot_services) {
-        return _JOS_K_STATUS_PERMISSION_DENIED;
+        return _JO_STATUS_PERMISSION_DENIED;
     }
 
     if (!ap_worker_function || (per_ap_data_ && !per_ap_data_stride) || (!per_ap_data_ && per_ap_data_stride)) {
-        return _JOS_K_STATUS_FAILED_PRECONDITION;
+        return _JO_STATUS_FAILED_PRECONDITION;
     }
 
     if ( _num_enabled_processors==1 ) {
-        return _JOS_K_STATUS_RESOURCE_EXHAUSTED;
+        return _JO_STATUS_RESOURCE_EXHAUSTED;
     }
 
     if ( _ap_event ) {
         // can't do this twice, there's only one try
-        return _JOS_K_STATUS_PERMISSION_DENIED;
+        return _JO_STATUS_PERMISSION_DENIED;
     }
 
     CEfiStatus efi_status;
     // efi_status = g_boot_services->create_event(C_EFI_EVT_RUNTIME,  C_EFI_TPL_APPLICATION, NULL, NULL, &_ap_event);
     // if ( efi_status != C_EFI_SUCCESS ) {
-    //     return _JOS_K_STATUS_INTERNAL;
+    //     return _JO_STATUS_INTERNAL;
     // }
 
     CEfiUSize this_id;
     _mpp->who_am_i(_mpp, &this_id);
     if ( this_id!=_bsp_id ) {
-        return _JOS_K_STATUS_PERMISSION_DENIED;
+        return _JO_STATUS_PERMISSION_DENIED;
     }
 
     uint8_t* per_ap_data = (uint8_t*)per_ap_data_;
@@ -289,12 +289,12 @@ jos_status_t        processors_startup_aps(ap_worker_function_t ap_worker_functi
             // execute the information collect function on this processor
             efi_status = _mpp->startup_this_ap(_mpp, ap_worker_function, p, NULL, 100, (void*)(per_ap_data), NULL);
             if ( efi_status != C_EFI_SUCCESS ) {
-                return _JOS_K_STATUS_CANCELLED;
+                return _JO_STATUS_CANCELLED;
             }
         }
 
         per_ap_data += per_ap_data_stride;
     }
 
-    return _JOS_K_STATUS_SUCCESS;
+    return _JO_STATUS_SUCCESS;
 }

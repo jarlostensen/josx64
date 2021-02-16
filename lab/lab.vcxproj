@@ -70,16 +70,16 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>$(ProjectDir)..\kernel\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\kernel\include;$(ProjectDir)..\deps;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <IncludePath>$(ProjectDir)..\kernel\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\kernel\include;$(ProjectDir)..\deps;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(ProjectDir)..\kernel\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\kernel\include;$(ProjectDir)..\deps;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(ProjectDir)..\kernel\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\kernel\include;$(ProjectDir)..\deps;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -143,7 +143,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\kernel\hex_dump.c" />
+    <ClCompile Include="..\kernel\output_console.c" />
     <ClCompile Include="..\kernel\pe.c" />
+    <ClCompile Include="..\kernel\video.c" />
     <ClCompile Include="..\libc\extensions\pdb_index.c" />
     <ClCompile Include="..\libc\extensions\slices.c" />
     <ClCompile Include="..\libc\internal\_vprint.c" />
@@ -151,7 +153,8 @@
     <ClCompile Include="lab.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\kernel\include\winnt_lt.h" />
+    <ClInclude Include="..\kernel\include\output_console.h" />
+    <ClInclude Include="..\kernel\include\video.h" />
     <ClInclude Include="..\libc\include\extensions\pdb_index.h" />
     <ClInclude Include="..\libc\include\extensions\slices.h" />
   </ItemGroup>

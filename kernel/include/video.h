@@ -1,10 +1,13 @@
 #ifndef _JOS_KERNEL_VIDEO_H
 #define _JOS_KERNEL_VIDEO_H
 
+#ifdef _JOS_KERNEL_BUILD
 #include <c-efi.h>
+#endif
 #include <wchar.h>
 
-CEfiStatus video_initialise();
+jo_status_t video_initialise(jos_allocator_t * allocator);
+
 uint32_t video_make_color(uint8_t r, uint8_t g, uint8_t b);
 void video_clear_screen(uint32_t colour);
 
@@ -19,8 +22,11 @@ typedef enum _video_mode_pixel_format {
 typedef struct _video_mode_info {
 
     size_t                      horisontal_resolution;
-    size_t                      vertical_resolution;
+    size_t                      vertical_resolution;    
     video_mode_pixel_format_t   pixel_format;
+#ifndef _JOS_KERNEL_BUILD
+    size_t                      pixels_per_scan_line;
+#endif
 
 } video_mode_info_t;
 
@@ -45,5 +51,7 @@ void video_scale_draw_indexed_bitmap(const uint8_t* bitmap, const uint32_t* colo
                                         size_t src_width, size_t src_height, 
                                         size_t dest_top, size_t dest_left, size_t dest_width, size_t dest_height);
 void video_scroll_up_region_full_width(size_t top, size_t bottom, size_t linesToScroll);
+
+void video_present(void);
 
 #endif // _JOS_KERNEL_VIDEO_H

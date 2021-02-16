@@ -15,11 +15,16 @@ int snprintf(char* __restrict buffer, size_t sizeOfBuffer, const char* __restric
 int vswprintf(wchar_t *__restrict buffer, size_t bufsz, const wchar_t * __restrict format, va_list vlist);
 int vsnprintf(char *__restrict buffer, size_t bufsz, const char * __restrict format, va_list parameters);
 
-//TODO:
-int printf(const char* __restrict format, ...);
-int puts(const char*);
+typedef struct _FILE {
 
-typedef void* FILE;
+    // a string, for example
+    struct {
+        const uint8_t*     _begin;
+        const uint8_t*     _end;
+        
+    } _buffer;
+
+} FILE;
 
 #ifdef __cplusplus
 }

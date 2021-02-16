@@ -29,7 +29,7 @@ static uint8_t*      _memory_bitmap = 0;
 // 4Meg minimum
 #define MINIMUM_MEMORY_AVAILABLE_PAGES  1024
 
-jos_status_t memory_pre_exit_bootservices_initialise() 
+jo_status_t memory_pre_exit_bootservices_initialise() 
 {
     CEfiStatus status = C_EFI_SUCCESS;
     
@@ -37,7 +37,7 @@ jos_status_t memory_pre_exit_bootservices_initialise()
     CEfiU32 descriptor_version;
 
     if ( !g_boot_services ) {
-        return _JOS_K_STATUS_PERMISSION_DENIED;
+        return _JO_STATUS_PERMISSION_DENIED;
     }    
 
     g_boot_services->get_memory_map(&_boot_service_memory_map_size, _boot_service_memory_map, 0, &descriptor_size, 0);
@@ -93,7 +93,7 @@ jos_status_t memory_pre_exit_bootservices_initialise()
     //g_st->con_out->output_string(g_st->con_out, wbuffer);
 
     if ( available < MINIMUM_MEMORY_AVAILABLE_PAGES ) {
-        return _JOS_K_STATUS_RESOURCE_EXHAUSTED;
+        return _JO_STATUS_RESOURCE_EXHAUSTED;
     }
 
     available *= 0x1000;
@@ -101,7 +101,7 @@ jos_status_t memory_pre_exit_bootservices_initialise()
     // set up our main allocation arena to bootstrap everything else
     _bootstrap_arena = vmem_arena_create((void*)max_desc->physical_start, max_desc->number_of_pages * 0x1000);
     if ( !_bootstrap_arena ) {
-        return _JOS_K_STATUS_RESOURCE_EXHAUSTED;
+        return _JO_STATUS_RESOURCE_EXHAUSTED;
     }
 
     // allocate a vector for our memory map
@@ -113,7 +113,7 @@ jos_status_t memory_pre_exit_bootservices_initialise()
     //     //TODO:
     // }
 
-    return _JOS_K_STATUS_SUCCESS;
+    return _JO_STATUS_SUCCESS;
 }
 
 CEfiUSize memory_boot_service_get_mapkey() {
@@ -123,10 +123,10 @@ CEfiUSize memory_boot_service_get_mapkey() {
     return _map_key;
 }
 
-jos_status_t memory_refresh_boot_service_memory_map() {
+jo_status_t memory_refresh_boot_service_memory_map() {
 
     if ( !g_boot_services ) {
-        return _JOS_K_STATUS_PERMISSION_DENIED;
+        return _JO_STATUS_PERMISSION_DENIED;
     }
 
     if ( _boot_service_memory_map_size ) {
@@ -142,20 +142,20 @@ jos_status_t memory_refresh_boot_service_memory_map() {
     
     _boot_service_memory_map_size += 2*descriptor_size;    
     if ( C_EFI_ERROR(g_boot_services->allocate_pool(C_EFI_LOADER_DATA, _boot_service_memory_map_size, (void**)&_boot_service_memory_map))) {
-        return _JOS_K_STATUS_RESOURCE_EXHAUSTED;
+        return _JO_STATUS_RESOURCE_EXHAUSTED;
     }
 
     g_boot_services->get_memory_map(&_boot_service_memory_map_size, _boot_service_memory_map, &_map_key, &descriptor_size, &descriptor_version);
 
-    return _JOS_K_STATUS_SUCCESS;
+    return _JO_STATUS_SUCCESS;
 }
 
-jos_status_t memory_post_exit_bootservices_initialise() {
+jo_status_t memory_post_exit_bootservices_initialise() {
     
     _memory_bitmap = vmem_arena_alloc(_bootstrap_arena, _boot_service_memory_map_entries);
     if ( !_memory_bitmap )
     {
-        return _JOS_K_STATUS_RESOURCE_EXHAUSTED;
+        return _JO_STATUS_RESOURCE_EXHAUSTED;
     }
     memset(_memory_bitmap, 0, _boot_service_memory_map_entries);
 
@@ -168,7 +168,7 @@ jos_status_t memory_post_exit_bootservices_initialise() {
         _memory_bitmap[i] = desc[i].type;
     }
     
-    return _JOS_K_STATUS_SUCCESS;
+    return _JO_STATUS_SUCCESS;
 }
 
 const uint8_t* memory_get_memory_bitmap(size_t *out_dim) {
