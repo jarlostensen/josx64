@@ -4,6 +4,18 @@
 
 #include <joBase/joBase.h>
 
+#ifdef _JO_BARE_METAL_BUILD
+// for backwards compatibility
+#define _JOS_KERNEL_BUILD
+#endif
+
+// all sub-systems are provided an implementation instance of this interface
+typedef struct _jos_allocator {
+    void*   (*_alloc)(size_t);
+    void    (*_free)(size_t);
+
+} jos_allocator_t;
+
 extern uint16_t kJosKernelCS;
 
 #ifdef _JOS_KERNEL_BUILD

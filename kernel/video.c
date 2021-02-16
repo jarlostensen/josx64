@@ -26,20 +26,26 @@ static size_t _framebuffer_base = 0;
 static size_t _red_shift;
 static size_t _green_shift;
 static size_t _blue_shift;
+// all rendering goes to the backbuffer until video_present is called when its contents 
+// are copied to the framebuffer
+static uint8_t* _backbuffer = 0;
 
-#ifdef _JOS_KERNEL_BUILD
-static uint32_t*    framebuffer_wptr(size_t top, size_t left) {
-    return (uint32_t*)(_framebuffer_base) + top*_info.pixels_per_scan_line + left;
-}
-#else 
+#ifndef _JOS_KERNEL_BUILD
 // implemented in the LAB code base
-extern uint32_t*    framebuffer_wptr(size_t top, size_t left);
+extern uint32_t*    framebuffer_base(void);
 extern video_mode_info_t _info;
 #endif
 
-#ifdef _JOS_KERNEL_BUILD
-CEfiStatus video_initialise() 
+static uint32_t*    backbuffer_wptr(size_t top, size_t left) {
+    return (uint32_t*)(_backbuffer) + top*_info.pixels_per_scan_line + left;
+}
+
+jo_status_t video_initialise(jos_allocator_t * allocator)
 {
+    jo_status_t status = _JO_STATUS_SUCCESS;
+    
+#ifdef _JOS_KERNEL_BUILD
+
     memset(&_info, 0, sizeof(_info));
 
     //ZZZ: may need to be bigger or code needs to handle "buffer too-small" error
@@ -49,22 +55,22 @@ CEfiStatus video_initialise()
 
     wchar_t wbuffer[128];
 
-    CEfiStatus status = g_boot_services->locate_handle(C_EFI_BY_PROTOCOL, &C_EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID, 0, &handle_buffer_size, handle_buffer);
-    if ( status==C_EFI_SUCCESS ) {
+    CEfiStatus efi_status = g_boot_services->locate_handle(C_EFI_BY_PROTOCOL, &C_EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID, 0, &handle_buffer_size, handle_buffer);
+    if ( efi_status==C_EFI_SUCCESS ) {
 
         //TODO: this works but it's not science; what makes one handle a better choice than another? 
         //      we should combine these two tests (handler and resolution) and pick the base from that larger set
         size_t num_handles = handle_buffer_size/sizeof(CEfiHandle);
         for(size_t n = 0; n < num_handles; ++n)
         {
-            status = g_boot_services->handle_protocol(handle_buffer[n], &C_EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID, (void**)&_gop);
-            if ( status == C_EFI_SUCCESS )
+            efi_status = g_boot_services->handle_protocol(handle_buffer[n], &C_EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID, (void**)&_gop);
+            if ( efi_status == C_EFI_SUCCESS )
             {
                 break;
             }            
         }
         
-        if ( status == C_EFI_SUCCESS ) {
+        if ( efi_status == C_EFI_SUCCESS ) {
 
             CEfiU32 max_horiz_res = 0;
             CEfiU32 mode = 0;
@@ -73,8 +79,8 @@ CEfiStatus video_initialise()
             CEfiUSize size_of_info = 0;
             CEfiGraphicsOutputModeInformation* info;
             
-            CEfiStatus status =_gop->query_mode(_gop, mode, &size_of_info, &info);
-            while(status==C_EFI_SUCCESS) {
+            efi_status =_gop->query_mode(_gop, mode, &size_of_info, &info);
+            while(efi_status==C_EFI_SUCCESS) {
                 switch(info->pixel_format)
                 {
                     case PixelRedGreenBlueReserved8BitPerColor:
@@ -94,13 +100,13 @@ CEfiStatus video_initialise()
                 }
 
                 ++mode;
-                status = _gop->query_mode(_gop, mode, &size_of_info, &info);
+                efi_status = _gop->query_mode(_gop, mode, &size_of_info, &info);
             }
 
             if ( found_mode >= 0 ) {
                 // switch to the mode we've found 
-                status = _gop->set_mode(_gop, found_mode);
-                if ( status == C_EFI_SUCCESS ) {
+                efi_status = _gop->set_mode(_gop, found_mode);
+                if ( efi_status == C_EFI_SUCCESS ) {
                                  
                     _framebuffer_base = _gop->mode->frame_buffer_base;
                     
@@ -127,9 +133,29 @@ CEfiStatus video_initialise()
         }
     }
 
+    if ( efi_status!=C_EFI_SUCCESS ) {
+        status = _JO_STATUS_INTERNAL;
+    }
+#else
+
+
+#endif
+
+    if (_JO_SUCCEEDED(status)) {        
+        _backbuffer = (uint8_t*)allocator->_alloc(_info.pixels_per_scan_line * _info.vertical_resolution * 4);
+    }
+
     return status;
 }
-#endif // #ifdef _JOS_KERNEL_BUILD
+
+void video_present(void) {
+#ifdef _JOS_KERNEL_BUILD
+    uint32_t* framebuffer = (uint32_t*)_framebuffer_base;
+#else
+    uint32_t* framebuffer = framebuffer_base();
+#endif
+    memcpy(framebuffer, _backbuffer, _info.pixels_per_scan_line * _info.vertical_resolution * 4);
+}
 
 uint32_t video_make_color(uint8_t r, uint8_t g, uint8_t b) {
     return ((uint32_t)r << _red_shift) | ((uint32_t)g << _green_shift) | ((uint32_t)b << _blue_shift);
@@ -137,7 +163,7 @@ uint32_t video_make_color(uint8_t r, uint8_t g, uint8_t b) {
 
 void video_clear_screen(uint32_t colour) {
     //TODO: assert(_framebuffer_base!=0)
-    uint32_t *wptr = framebuffer_wptr(0,0);
+    uint32_t *wptr = backbuffer_wptr(0,0);
     size_t pixels_to_fill = _info.pixels_per_scan_line * _info.vertical_resolution;
     while(pixels_to_fill) {
         *wptr++ = colour;
@@ -174,7 +200,7 @@ void video_draw_text_segment(draw_text_segment_args_t* args, const wchar_t* text
     if(args->seg_len==0)
         return;
 
-    uint32_t* wptr = framebuffer_wptr(args->top, args->left);
+    uint32_t* wptr = backbuffer_wptr(args->top, args->left);
 
      // pixel set, or not set
     uint32_t colour_lut[2] = {args->bg_colour, args->colour};
@@ -240,7 +266,7 @@ void video_draw_text(draw_text_segment_args_t* args, const wchar_t* text) {
 void video_scroll_up_region_full_width(size_t top, size_t bottom, size_t linesToScroll) {
 
     size_t strip_pixel_stride = linesToScroll * _info.pixels_per_scan_line;
-    uint32_t* wptr = framebuffer_wptr(top,0);
+    uint32_t* wptr = backbuffer_wptr(top,0);
     uint32_t* rptr = wptr + strip_pixel_stride;
 
     const size_t region_height = bottom - top;
@@ -267,7 +293,7 @@ void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t sr
     if ( src_width == dest_width && src_height == dest_height ) {
 
         // plain copy
-        uint32_t* wptr = framebuffer_wptr(dest_top, dest_left);
+        uint32_t* wptr = backbuffer_wptr(dest_top, dest_left);
         while(dest_height) {
             memcpy(wptr, bitmap, dest_width<<2);
             wptr += _info.pixels_per_scan_line;
@@ -289,7 +315,7 @@ void video_scale_draw_indexed_bitmap(const uint8_t* bitmap, const uint32_t* colo
     //     return;
     // }
 
-    uint32_t* wptr = framebuffer_wptr(dest_top, dest_left);
+    uint32_t* wptr = backbuffer_wptr(dest_top, dest_left);
     
     if ( src_width == dest_width && src_height == dest_height ) {
 

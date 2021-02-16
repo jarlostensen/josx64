@@ -147,9 +147,18 @@ static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         bm_info_header.biPlanes = 1;
         bm_info_header.biBitCount = 32;
         _info.pixels_per_scan_line = ((_window_width * bm_info_header.biBitCount + 31) / 32);
-        DWORD bm_size = 4*_info.pixels_per_scan_line * _info.vertical_resolution;
+        DWORD bm_size = 4 * _info.pixels_per_scan_line * _info.vertical_resolution;
         bits = (BYTE*)malloc(bm_size);
-        GetDIBits(hdc_mem, bm, 0, _info.vertical_resolution, bits, (BITMAPINFO*)(&bm_info_header), DIB_RGB_COLORS);        
+        GetDIBits(hdc_mem, bm, 0, _info.vertical_resolution, bits, (BITMAPINFO*)(&bm_info_header), DIB_RGB_COLORS);
+
+        video_initialise(&(jos_allocator_t) {
+            ._alloc = malloc,
+                ._free = free
+        });
+        output_console_initialise();
+        output_console_set_colour(0xffffffff);
+        output_console_set_bg_colour(0x6495ed);
+        output_console_set_font((const uint8_t*)font8x8_basic, 8, 8);
         video_clear_screen(0x6495ed);
         output_console_output_string(L"Press CR...\n");
     }
@@ -158,7 +167,8 @@ static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
     {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hWnd, &ps);
-        if (bits) {            
+        if (bits) {
+            video_present();
             SetDIBits(hdc_mem, bm, 0, _info.vertical_resolution, bits, (BITMAPINFO*)(&bm_info_header), DIB_RGB_COLORS);
             BitBlt(hdc, 0, 0, _window_width, _info.vertical_resolution, hdc_mem, 0, 0, SRCCOPY);
         }
@@ -173,7 +183,7 @@ static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         {
             static size_t returns = 1;
             wchar_t buffer[128];
-            swprintf_s(buffer,(int)(sizeof(buffer)/sizeof(wchar_t)), L"line %lld...\n", returns++);
+            swprintf_s(buffer, (int)(sizeof(buffer) / sizeof(wchar_t)), L"line %lld...\n", returns++);
             output_console_output_string(buffer);
             InvalidateRect(hWnd, 0, TRUE);
         }
@@ -185,7 +195,7 @@ static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         }
         break;
         default:;
-        }        
+        }
     }
     break;
     case WM_DESTROY:
@@ -221,7 +231,7 @@ static void initialise_window(void) {
             _class_name,
             TEXT("josx64_lab"),
             WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME,
-            CW_USEDEFAULT, CW_USEDEFAULT, cw.right-cw.left, cw.bottom-cw.top,
+            CW_USEDEFAULT, CW_USEDEFAULT, cw.right - cw.left, cw.bottom - cw.top,
             NULL,
             NULL,
             wc.hInstance,
@@ -232,29 +242,27 @@ static void initialise_window(void) {
     }
 }
 
-uint32_t* framebuffer_wptr(size_t top, size_t left) {
-    return (uint32_t*)(bits + top*(_info.pixels_per_scan_line<<2) + (left<<2));
+uint32_t* framebuffer_base(void) {
+    return (uint32_t*)bits;
 }
 
 static void ui_test_loop(void) {
 
-    output_console_initialise();
-    output_console_set_colour(0xffffffff);
-    output_console_set_bg_colour(0x6495ed);
-    output_console_set_font((const uint8_t*)font8x8_basic, 8,8);
-    
+
+
     initialise_window();
 
     region_handle_t handle;
-    jo_status_t status = output_console_create_region(&(rect_t){ 
-        .right = _info.horisontal_resolution, 
-        .top = 100, 
-        .bottom = _info.vertical_resolution-100 }, 
-    &handle);
+    jo_status_t status = output_console_create_region(&(rect_t) {
+        .right = _info.horisontal_resolution,
+            .top = 100,
+            .bottom = _info.vertical_resolution - 100
+    },
+        & handle);
     output_console_activate_region(handle);
     output_console_set_colour(0xffffffff);
     output_console_set_bg_colour(0x6495ed);
-    output_console_set_font((const uint8_t*)font8x8_basic, 8,8);
+    output_console_set_font((const uint8_t*)font8x8_basic, 8, 8);
 
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0) > 0)
