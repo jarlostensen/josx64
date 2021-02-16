@@ -114,8 +114,11 @@ void pre_exit_boot_services() {
         halt_cpu();
     }
 
-    status = video_initialise();
-    if ( status!=C_EFI_SUCCESS ) {
+    status = video_initialise(&(jos_allocator_t){
+        ._alloc = malloc,
+        ._free = free,
+    });
+    if ( _JO_FAILED(status)  ) {
 
         swprintf(buf, bufcount, L"***FATAL ERROR: video initialise returned 0x%x\n\r", status);
         _EFI_PRINT(buf);
@@ -244,14 +247,20 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     _JOS_KTRACE_CHANNEL("efi_main", "keyboard controller id is 0x%x, scan code set 0x%x\n", keyboard_get_id(), kbd_state.set);
     
     output_console_output_string(L"any key or ESC...\n");
+
+    video_present();
+
     bool done = false;
     while(!done) {
         if ( keyboard_has_key() ) {
             uint32_t key = keyboard_get_last_key();
             if ( KEYBOARD_VK_PRESSED(key) ) {
                 short c = (short)KEYBOARD_VK_CHAR(key);
-                swprintf(buf, bufcount, L"%c (%x) ", c, KEYBOARD_VK_SCANCODE(key));
+                swprintf(buf, bufcount, L"%c", c);
                 output_console_output_string(buf);
+
+                video_present();
+
                 switch(c) {
                     case KEYBOARD_VK_ESC:
                         output_console_output_string(L"\ngot ESC\n");
@@ -335,5 +344,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     output_console_output_string(buf);
     _JOS_KTRACE_CHANNEL("efi_main", "exiting %llu ms after boot", clock_ms_since_boot());
 
+    video_present();
+    
     halt_cpu();
 }

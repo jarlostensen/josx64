@@ -4,7 +4,7 @@
 
 #include <joBase/joBase.h>
 
-#ifdef _JO_BARE_METAL_BUILD
+#if defined(_JO_BARE_METAL_BUILD) && !defined(_JOS_KERNEL_BUILD)
 // for backwards compatibility
 #define _JOS_KERNEL_BUILD
 #endif
@@ -12,7 +12,7 @@
 // all sub-systems are provided an implementation instance of this interface
 typedef struct _jos_allocator {
     void*   (*_alloc)(size_t);
-    void    (*_free)(size_t);
+    void    (*_free)(void*);
 
 } jos_allocator_t;
 

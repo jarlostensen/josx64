@@ -50,6 +50,8 @@ jo_status_t output_console_create_region(rect_t* rect, region_handle_t* outHandl
     _contexts[_context_count]._cursor_pos.x = rect->left;
     _contexts[_context_count]._cursor_pos.y = rect->top;
     *outHandle = (void*)_context_count++;
+    
+    return _JO_STATUS_SUCCESS;
 }
 
 void output_console_activate_region(region_handle_t handle) {

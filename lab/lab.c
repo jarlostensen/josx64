@@ -122,6 +122,27 @@ void trace(const char* __restrict channel, const char* __restrict format, ...) {
 
 // =================================================================================================
 
+typedef struct _IO_FILE {
+
+    // a string, for example
+    struct {
+        uint8_t*      _begin;
+        const uint8_t*      _end;
+        uint8_t*      _rp;
+    } _buffer;
+
+} IO_FILE;
+
+#define _jo_fromstring(f, s)\
+((f)->_buffer._begin = (f)->_buffer._rp = (uint8_t*)(s), (f)->_buffer._end = (const uint8_t*)-1)
+
+#define _jo_getch(f) ((f)->_buffer._rp!=(f)->_buffer._end ? *(f)->_buffer._rp++ : 0)
+#define _jo_ungetch(f) ((f)->_buffer._rp!=(f)->_buffer._begin ? (f)->_buffer._rp-- ; (void)0)
+
+
+
+// =================================================================================================
+
 video_mode_info_t _info = { .vertical_resolution = 768, .pixel_format = kVideo_Pixel_Format_RBGx };
 static size_t _window_width = 1024;
 

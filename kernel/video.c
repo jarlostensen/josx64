@@ -136,9 +136,6 @@ jo_status_t video_initialise(jos_allocator_t * allocator)
     if ( efi_status!=C_EFI_SUCCESS ) {
         status = _JO_STATUS_INTERNAL;
     }
-#else
-
-
 #endif
 
     if (_JO_SUCCEEDED(status)) {        
