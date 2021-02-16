@@ -20,7 +20,7 @@
 #include "../kernel/include/collections.h"
 #include "../libc/include/extensions/slices.h"
 #include "../libc/include/extensions/pdb_index.h"
-#include "../kernel/font8x8/font8x8.h"
+#include "../deps/font8x8/font8x8.h"
 
 void slice_printf(char_array_slice_t* slice) {
     for (unsigned n = 0; n < slice->_length; ++n) {
@@ -167,13 +167,25 @@ static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
     break;
     case WM_KEYDOWN:
     {
-        static size_t returns = 1;
-        if (wParam == VK_RETURN) {
+        switch (wParam)
+        {
+        case VK_RETURN:
+        {
+            static size_t returns = 1;
             wchar_t buffer[128];
-            swprintf_s(buffer,sizeof(buffer)/sizeof(wchar_t), L"line %d...\n", returns++);
+            swprintf_s(buffer,(int)(sizeof(buffer)/sizeof(wchar_t)), L"line %lld...\n", returns++);
             output_console_output_string(buffer);
             InvalidateRect(hWnd, 0, TRUE);
         }
+        break;
+        case VK_ESCAPE:
+        {
+            output_console_clear_screen();
+            InvalidateRect(hWnd, 0, TRUE);
+        }
+        break;
+        default:;
+        }        
     }
     break;
     case WM_DESTROY:
@@ -230,8 +242,19 @@ static void ui_test_loop(void) {
     output_console_set_colour(0xffffffff);
     output_console_set_bg_colour(0x6495ed);
     output_console_set_font((const uint8_t*)font8x8_basic, 8,8);
-
+    
     initialise_window();
+
+    region_handle_t handle;
+    jo_status_t status = output_console_create_region(&(rect_t){ 
+        .right = _info.horisontal_resolution, 
+        .top = 100, 
+        .bottom = _info.vertical_resolution-100 }, 
+    &handle);
+    output_console_activate_region(handle);
+    output_console_set_colour(0xffffffff);
+    output_console_set_bg_colour(0x6495ed);
+    output_console_set_font((const uint8_t*)font8x8_basic, 8,8);
 
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0) > 0)

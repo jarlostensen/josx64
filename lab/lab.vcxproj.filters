@@ -56,9 +56,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\kernel\include\winnt_lt.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\libc\include\extensions\slices.h">
       <Filter>Header Files</Filter>
     </ClInclude>
