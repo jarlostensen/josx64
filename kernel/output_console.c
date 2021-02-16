@@ -1,5 +1,6 @@
 
 #include <stdint.h>
+#include <string.h>
 #include <stdbool.h>
 
 #include "jos.h"
@@ -48,7 +49,7 @@ jo_status_t output_console_create_region(rect_t* rect, region_handle_t* outHandl
     _contexts[_context_count]._rect = *rect;
     _contexts[_context_count]._cursor_pos.x = rect->left;
     _contexts[_context_count]._cursor_pos.y = rect->top;
-    *outHandle = _context_count++;
+    *outHandle = (void*)_context_count++;
 }
 
 void output_console_activate_region(region_handle_t handle) {

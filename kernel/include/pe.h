@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #ifdef _JOS_KERNEL_BUILD
-#include "winnt_lt.h"
+#include <joBase/joWinNtLt.h>
 #else
 #include <windows.h>
 #endif

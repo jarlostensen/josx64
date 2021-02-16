@@ -14,7 +14,7 @@ message("CMAKE system name is \"${CMAKE_SYSTEM_NAME}\", target is \"${BUILD_TARG
 
 # https://wiki.osdev.org/UEFI_Bare_Bones#What_to_do_next.3F
 set(CMAKE_C_FLAGS 
-"${CMAKE_C_FLAGS} -D_JOS_KERNEL_BUILD -target ${BUILD_TARGET} -isystem="${CMAKE_SOURCE_DIR}/libc/include" -DGNU_EFI_USE_MS_ABI {$DEBUG_BUILD_FLAGS} -m64 -nostdinc -ffreestanding -mcmodel=small -fshort-wchar -S  -mam-verbose -masm-intel -mno-red-zone -fno-builtin-setjmp -fno-builtin-longjmp -fomit-frame-pointer -fno-delete-null-pointer-checks -fno-common -fno-zero-initialized-in-bss -fno-exceptions -fno-stack-protector -fno-stack-check -fno-strict-aliasing -fno-merge-all-constants --std=c11 -Wall -Wextra -Wdouble-promotion -Wpedantic ")
+"${CMAKE_C_FLAGS} -D_JOS_KERNEL_BUILD -D_JO_BARE_METAL_BUILD -target ${BUILD_TARGET} -isystem="${CMAKE_SOURCE_DIR}/libc/include" -DGNU_EFI_USE_MS_ABI {$DEBUG_BUILD_FLAGS} -m64 -nostdinc -ffreestanding -mcmodel=small -fshort-wchar -S  -mam-verbose -masm-intel -mno-red-zone -fno-builtin-setjmp -fno-builtin-longjmp -fomit-frame-pointer -fno-delete-null-pointer-checks -fno-common -fno-zero-initialized-in-bss -fno-exceptions -fno-stack-protector -fno-stack-check -fno-strict-aliasing -fno-merge-all-constants --std=c11 -Wall -Wextra -Wdouble-promotion -Wpedantic ")
 
 # NOTE: it appears we need both nostdlib and nodefaultlibs to completly purge the spirit of Windows libriaries from the build
 # NOTE: DEBUG 
@@ -37,7 +37,7 @@ if(CMAKE_ASM_NASM_COMPILER_LOADED)
 
 #NOTE: all of the below is needed to force CMake+NASM to output win64 COFF object files.
   set(CMAKE_ASM_NASM_OBJECT_FORMAT win64)  
-  set(CMAKE_ASM_NASM_FLAGS "-D_JOS_KERNEL_BUILD")
+  set(CMAKE_ASM_NASM_FLAGS "-D_JOS_KERNEL_BUILD -D_JO_BARE_METAL_BUILD")
   set(CMAKE_ASM_NASM_COMPILE_OBJECT "<CMAKE_ASM_NASM_COMPILER> <INCLUDES> <FLAGS> -f ${CMAKE_ASM_NASM_OBJECT_FORMAT} -o <OBJECT> <SOURCE>")
 endif(CMAKE_ASM_NASM_COMPILER_LOADED)
 
@@ -61,6 +61,15 @@ add_subdirectory(libc)
 add_library(kernel STATIC "")
 add_subdirectory(kernel)
 
+# joForth library
+set(JOFORTH_BUILD_AS_LIB ON CACHE BOOL "")
+add_subdirectory("deps/joforth")
+target_include_directories(joForth PRIVATE 
+"${CMAKE_SOURCE_DIR}/libc/include"
+"${CMAKE_SOURCE_DIR}/deps"
+"${CMAKE_SOURCE_DIR}/deps/joforth"
+)
+
 # Zydis disassembler
 # switch off the things we don't want from Zydis/Zycore
 set(ZYDIS_BUILD_TOOLS OFF CACHE BOOL "")
@@ -81,6 +90,7 @@ target_include_directories(boot PUBLIC
 
 target_link_libraries(boot PRIVATE libc)
 target_link_libraries(boot PRIVATE kernel)
+target_link_libraries(boot PRIVATE joForth)
 target_link_libraries(boot PRIVATE "Zydis")
 target_link_libraries(boot PRIVATE "Zycore")
 set_target_properties(boot PROPERTIES OUTPUT_NAME "BOOTX64.EFI")

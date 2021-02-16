@@ -52,8 +52,8 @@ void exit_boot_services(CEfiHandle h) {
     }    
     g_boot_services = 0;    
 
-    jos_status_t k_stat = memory_post_exit_bootservices_initialise();
-    if ( _JOS_K_FAILED(k_stat) ) {
+    jo_status_t k_stat = memory_post_exit_bootservices_initialise();
+    if ( _JO_FAILED(k_stat) ) {
         output_console_set_colour(video_make_color(0xff,0,0));        
         output_console_output_string(L"***FATAL ERROR: post memory exit failed. Halting.\n");
         halt_cpu();
@@ -100,15 +100,15 @@ void pre_exit_boot_services() {
     serial_initialise();
     _JOS_KTRACE_CHANNEL("efi_main","pre exit boot services");
 
-    jos_status_t status = memory_pre_exit_bootservices_initialise();
-    if ( _JOS_K_FAILED(status) ) {
+    jo_status_t status = memory_pre_exit_bootservices_initialise();
+    if ( _JO_FAILED(status) ) {
         swprintf(buf, bufcount, L"***FATAL ERROR: memory initialise returned 0x%x\n\r", status);
         _EFI_PRINT(buf);
         halt_cpu();
     }
 
     status = processors_initialise();
-    if ( !_JOS_K_SUCCEEDED(status) ) {
+    if ( !_JO_SUCCEEDED(status) ) {
         swprintf(buf, bufcount, L"***FATAL ERROR: MP initialise returned 0x%x\n\r", status);
         _EFI_PRINT(buf);
         halt_cpu();
@@ -153,8 +153,8 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     }
     for ( size_t p = processors_get_processor_count(); p>0; --p ) {
         processor_information_t info;
-        jos_status_t status = processors_get_processor_information(&info, p-1);
-        if ( _JOS_K_SUCCEEDED(status) ) {
+        jo_status_t status = processors_get_processor_information(&info, p-1);
+        if ( _JO_SUCCEEDED(status) ) {
 
             swprintf(buf, 256, L"\tid %d, status 0x%x, package %d, core %d, thread %d, TSC is %S\n", 
                     info._uefi_info.processor_id,
@@ -212,8 +212,8 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         }
         
         //ZZZ:
-        // jos_status_t status = processors_startup_aps(ap_idle_func, (void*)ids, sizeof(size_t));
-        // if ( _JOS_K_FAILED(status )) {
+        // jo_status_t status = processors_startup_aps(ap_idle_func, (void*)ids, sizeof(size_t));
+        // if ( _JO_FAILED(status )) {
         //     output_console_set_colour(video_make_color(0xff,0,0));
         //     swprintf(buf, bufcount, L"\tstartup aps failed with 0x%x\n", status);
         //     output_console_output_string(buf);
