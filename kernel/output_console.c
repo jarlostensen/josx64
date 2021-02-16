@@ -83,8 +83,8 @@ jo_status_t output_console_set_font(const uint8_t* font, size_t width, size_t he
 
 void output_console_clear_screen(void) {
     video_clear_screen(_active_context->_bg_colour);
-    _active_context->_cursor_pos.x = 0;
-    _active_context->_cursor_pos.y = 0;
+    _active_context->_cursor_pos.x = _active_context->_rect.left;
+    _active_context->_cursor_pos.y = _active_context->_rect.top;
 }
 
 void output_console_line_break(void) {
