@@ -1,5 +1,3 @@
-; A collection of x86_64 assembly
-
 [bits 64]
 
 section .text
@@ -172,13 +170,13 @@ ISR_HANDLER 31
 ; =====================================================================================
 ; IRQs
 
-PIC1_COMMAND equ 0x20
-PIC2_COMMAND equ 0x0a
+PIC1_COMMAND            equ 0x20
+PIC2_COMMAND            equ 0xa0
+PIC_NON_SPECIFIC_EOI    equ 0x20
 
 ; handler; forwards call to the registered handler via argument 0
 extern interrupts_irq_handler
 
-;ZZZ: this is not correct for 64 bit
 irq_handler_stub:
 
     PUSHAQ
@@ -195,16 +193,15 @@ irq_handler_stub:
     jl .irq_handler_stub_1
 
     ; EOI to PIC2
-    mov al, 0x20
+    mov al, PIC_NON_SPECIFIC_EOI
     out PIC2_COMMAND, al
-    ; always send EOI to master (PIC1)
 
+    ; +always send EOI to master (PIC1)
 .irq_handler_stub_1:
     ; EOI to PIC1
-    mov al, 0x20
+    mov al, PIC_NON_SPECIFIC_EOI
     out PIC1_COMMAND, al
 
-.irq_handler_stub_2:
     iretq
 
 %macro IRQ_HANDLER 1

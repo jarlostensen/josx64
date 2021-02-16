@@ -4,7 +4,7 @@
 #include <kernel.h>
 #include <string.h>
 #include <x86_64.h>
-#include <pic.h>
+#include <i8259a.h>
 
 #include <stdio.h>
 #include <output_console.h>
@@ -44,8 +44,6 @@ static irq_handler_func_t _irq_handlers[32];
 // if false we don't, and we may filter some IRQs as well
 static bool _interrupts_enabled = true;
 
-// IRQ enabled bitmask, 0 when no IRQs enabled
-static unsigned int _irq_mask = 0;
 
 // Intel IA dev guide Vol 3 6.14.1 64-Bit Mode IDT
 typedef struct _idt_64_entry {
@@ -73,6 +71,14 @@ typedef struct _idt_desc {
 // our IDT and IDT Descriptors
 static idt_entry_t  _idt[256];
 static idt_desc_t   _idt_desc = { .size = sizeof(_idt), .address = (uint64_t)&_idt};
+
+// interrupt handler nesting level
+static atomic_int _nesting_level = -1;
+#define INC_NESTING_LEVEL()\
+    atomic_fetch_add(&_nesting_level,1)
+
+#define DEC_NESTING_LEVEL()\
+    atomic_fetch_sub(&_nesting_level,1)
 
 // handler stubs (from x84_64.asm)
 #define EXTERN_ISR_HANDLER(N)\
@@ -166,7 +172,8 @@ void interrupts_isr_handler(isr_stack_t *stack) {
 
     if ( _interrupts_enabled )
     {        
-        if( _isr_handlers[stack->handler_id] ) {
+        isr_handler_func_t handler = _isr_handlers[stack->handler_id];
+        if( handler ) {
 
             // provide a read only context for the handler
             isr_context_t ctx;
@@ -174,25 +181,25 @@ void interrupts_isr_handler(isr_stack_t *stack) {
             ctx.handler_code = stack->error_code;
             ctx.rip = stack->rip;
             ctx.cs = stack->cs;
-            ctx.rflags = stack->rflags;
+            ctx.rflags = stack->rflags; 
 
-            _isr_handlers[stack->handler_id](&ctx);
-            return;
+            x86_64_sti();       
+            handler(&ctx);
+            x86_64_cli();
         }
+        else {
+            // =============================================================
+            //ZZZ:
+            wchar_t buf[128];
+            const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
 
-        // =============================================================
-        //ZZZ:
-        wchar_t buf[128];
-        const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
-
-        swprintf(buf,bufcount,L"UNHANDLED: int 0x%x, error code 0x%x: rip : 0x%llx\n", 
-            stack->handler_id, 
-            stack->error_code,
-            stack->rip);
-        output_console_output_string(buf);
-
+            swprintf(buf,bufcount,L"UNHANDLED: int 0x%x, error code 0x%x: rip : 0x%llx\n", 
+                stack->handler_id, 
+                stack->error_code,
+                stack->rip);
+            output_console_output_string(buf);
+        }
     }
-    //TODO: else ... soft handling of masked interrupts?
 
     // and hard handling, like this one
     if ( stack->handler_id == 0xd ) {
@@ -210,90 +217,33 @@ void interrupts_set_isr_handler(int i, isr_handler_func_t handler) {
 
 void interrupts_irq_handler(int irq) {
     
-    //TODO: IRQ stats
-
-    if ( !_irq_mask )
-        // no IRQ handlers enabled
+    if ( i8259a_irqs_muted() )
+        // no IRQ handlers enabled    
         return;
 
-    if ( _irq_handlers[irq] 
+    irq_handler_func_t handler = _irq_handlers[irq];
+    if ( handler
         &&
-        (_irq_mask & (1<<irq)) == (1<<irq) ) {
-        _irq_handlers[irq](irq);
-        return;
+        i8259a_irq_enabled(irq)) {
+            x86_64_sti();
+            handler(irq);
+            x86_64_cli();
     }
-    
-    //TODO: no handler registered, or this IRQ is masked
 }
 
 void interrupts_set_irq_handler(int irqId, irq_handler_func_t handler) {
     //TODO: check if this IRQ is enabled or not, it shouldn't be (for now we only allow one handler ever)
+    x86_64_cli();
     _irq_handlers[irqId] = handler;
-
-}
-
-static void init_PIC(void) {    
-    // http://www.brokenthorn.com/Resources/OSDevPic.html
-    // start initialising PIC1 and PIC2 
-    x86_64_outb(PIC1_COMMAND , ICW1_INIT | ICW1_ICW4);
-	x86_64_outb(PIC2_COMMAND , ICW1_INIT | ICW1_ICW4);
-    // remap IRQs offsets to 0x20 and 0x28
-	x86_64_outb(PIC1_DATA , IRQ_BASE_OFFSET);
-	x86_64_outb(PIC2_DATA , IRQ_BASE_OFFSET+8);
-    x86_64_io_wait();
-	// cascade PIC1 & PIC2
-	x86_64_outb(PIC1_DATA , 0x00);  
-	x86_64_outb(PIC2_DATA , 0x00);  
-    x86_64_io_wait();
-	// enable x86 mode
-	x86_64_outb(PIC1_DATA , 0x01);
-	x86_64_outb(PIC2_DATA , 0x01);	
-    x86_64_io_wait();    
-
-	//NOTE: disable all IRQs for now, only enable when someone registers an IRQ handler.
-	x86_64_outb(PIC1_DATA, 0xff);
-	x86_64_outb(PIC2_DATA, 0xff);
-    x86_64_io_wait();   
-}
-
-void interrupts_PIC_enable_irq(int i)
-{
-    if(i < 8)
-    {
-        // unmask IRQ in PIC1
-	    x86_64_outb(PIC1_DATA, x86_64_inb(PIC1_DATA) & ~(1<<i));
-    }
-    else
-    {
-        // unmask IRQ in PIC2
-	    x86_64_outb(PIC2_DATA, x86_64_inb(PIC2_DATA) & ~(1<<(i-8)));
-    } 
-
-    // enable in irq mask
-    _irq_mask |= (1<<i);
-}
-
-void interrupts_PIC_disable_irq(int i)
-{
-    if(i < 8)
-    {
-        // mask IRQ in PIC1
-	    x86_64_outb(PIC1_DATA, x86_64_inb(PIC1_DATA) | (1<<i));
-    }
-    else
-    {
-        // nmask IRQ in PIC2
-	    x86_64_outb(PIC2_DATA, x86_64_inb(PIC2_DATA) | (1<<(i-8)));
-    } 
-
-    // disable in irq mask
-    _irq_mask &= ~(1<<i);
+    x86_64_sti();
+    // enable it right away
+    i8259a_enable_irq(irqId);
 }
 
 void interrupts_initialise_early(void) {
 
-    //NOTE: this isn't needed to make isr's work, but it is needed for IRQs
-    init_PIC();
+    // initialise PICs
+    i8259a_initialise();
 
     // load IDT with reserved ISRs
 
@@ -334,7 +284,7 @@ void interrupts_initialise_early(void) {
     SET_ISR_HANDLER(31);
 
 #define SET_IRQ_HANDLER(N)\
-    idt_init(_idt+IRQ_BASE_OFFSET+N, interrupts_irq_handler_##N)
+    idt_init(_idt+_JOS_i8259a_IRQ_BASE_OFFSET+N, interrupts_irq_handler_##N)
 
     SET_IRQ_HANDLER(0);
     SET_IRQ_HANDLER(1);
