@@ -50,12 +50,14 @@ void i8259a_disable_irq(int i)
     if(i < 8)
     {
         // mask IRQ in PIC1
-	    x86_64_outb(PIC1_DATA, x86_64_inb(PIC1_DATA) | (1<<i));
+        uint8_t masked = x86_64_inb(PIC1_DATA) | (1<<i);
+	    x86_64_outb(PIC1_DATA, masked);
     }
     else
     {
         // nmask IRQ in PIC2
-	    x86_64_outb(PIC2_DATA, x86_64_inb(PIC2_DATA) | (1<<(i-8)));
+        uint8_t masked = x86_64_inb(PIC2_DATA) | (1<<(i-8));
+	    x86_64_outb(PIC2_DATA, masked);
     } 
 
     // disable in irq mask
@@ -83,7 +85,7 @@ void i8259a_initialise(void) {
 
 	//NOTE: disable all IRQs except for 2 for now, only enable when someone registers an IRQ handler.
     //NOTE: 2 MUST be enabled on PIC1 since PIC2 communicates with PIC1 through it
-	x86_64_outb(PIC1_DATA, 0xfb);
+	x86_64_outb(PIC1_DATA, ~((uint8_t)_JOS_i8259a_IRQ_CLEAR_MASK));
 	x86_64_outb(PIC2_DATA, 0xff);
     x86_64_io_wait();   
 

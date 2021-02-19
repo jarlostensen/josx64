@@ -217,18 +217,16 @@ void interrupts_set_isr_handler(int i, isr_handler_func_t handler) {
 
 void interrupts_irq_handler(int irq) {
     
-    if ( i8259a_irqs_muted() )
-        // no IRQ handlers enabled    
-        return;
-
+    i8259a_disable_irq(irq);    
+    
     irq_handler_func_t handler = _irq_handlers[irq];
-    if ( handler
-        &&
-        i8259a_irq_enabled(irq)) {
-            x86_64_sti();
-            handler(irq);
-            x86_64_cli();
-    }
+    if ( handler ) {
+        x86_64_sti();
+        handler(irq);
+        x86_64_cli();
+    }     
+    i8259a_send_eoi(irq);
+    i8259a_enable_irq(irq);
 }
 
 void interrupts_set_irq_handler(int irqId, irq_handler_func_t handler) {

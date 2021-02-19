@@ -9,6 +9,7 @@ extern unsigned int _i8259a_irq_mask;
 void i8259a_initialise(void);
 void i8259a_enable_irq(int i);
 void i8259a_disable_irq(int i);
+void i8259a_send_eoi(int irq);
 
 static _JOS_ALWAYS_INLINE bool i8259a_irq_enabled(int i) {
        return (_i8259a_irq_mask & (1<<i))!=0;

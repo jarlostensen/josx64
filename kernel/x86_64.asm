@@ -174,34 +174,38 @@ PIC1_COMMAND            equ 0x20
 PIC2_COMMAND            equ 0xa0
 PIC_NON_SPECIFIC_EOI    equ 0x20
 
+global i8259a_send_eoi
+; void i8259a_send_eoi(int irq)
+i8259a_send_eoi:
+    push rax
+    cmp cl, 8
+    jl .i8259a_send_eoi_1
+    ; EOI to PIC2
+    mov al, PIC_NON_SPECIFIC_EOI
+    out PIC2_COMMAND, al
+    ; just a delay
+    out 80h, al
+    ; +always send EOI to master (PIC1)
+.i8259a_send_eoi_1:
+    ; EOI to PIC1
+    mov al, PIC_NON_SPECIFIC_EOI
+    out PIC1_COMMAND, al
+    pop rax
+    ret
+
 ; handler; forwards call to the registered handler via argument 0
 extern interrupts_irq_handler
-
 irq_handler_stub:
 
     PUSHAQ
 
-    ; handler(irq number)
+    ; interrupts_irq_handler(irq number)
     mov rcx, STACK_REL(15)
     call interrupts_irq_handler
 
     POPAQ
     
-    ; send EOI to the right PIC based on the IRQ number
-    pop rax
-    cmp al, 8
-    jl .irq_handler_stub_1
-
-    ; EOI to PIC2
-    mov al, PIC_NON_SPECIFIC_EOI
-    out PIC2_COMMAND, al
-
-    ; +always send EOI to master (PIC1)
-.irq_handler_stub_1:
-    ; EOI to PIC1
-    mov al, PIC_NON_SPECIFIC_EOI
-    out PIC1_COMMAND, al
-
+    add rsp,8
     iretq
 
 %macro IRQ_HANDLER 1
