@@ -302,6 +302,7 @@ void interrupts_initialise_early(void) {
     SET_IRQ_HANDLER(13);
     SET_IRQ_HANDLER(14);
     SET_IRQ_HANDLER(15);
+    SET_IRQ_HANDLER(16);
     
     x86_64_load_idt(&_idt_desc);
 

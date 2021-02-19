@@ -25,7 +25,8 @@
 #define ICW4_SFNM	0x10		/* Special fully nested (not) */
 
 // IRQ enabled bitmask, 0 when no IRQs enabled
-unsigned int _i8259a_irq_mask = 0;
+// IRQ 2 must always be enabled 
+unsigned int _i8259a_irq_mask = _JOS_i8259a_IRQ_CLEAR_MASK;
 
 void i8259a_enable_irq(int i)
 {
@@ -80,8 +81,9 @@ void i8259a_initialise(void) {
 	x86_64_outb(PIC2_DATA , 0x01);
     x86_64_io_wait();    
 
-	//NOTE: disable all IRQs for now, only enable when someone registers an IRQ handler.
-	x86_64_outb(PIC1_DATA, 0xff);
+	//NOTE: disable all IRQs except for 2 for now, only enable when someone registers an IRQ handler.
+    //NOTE: 2 MUST be enabled on PIC1 since PIC2 communicates with PIC1 through it
+	x86_64_outb(PIC1_DATA, 0xfb);
 	x86_64_outb(PIC2_DATA, 0xff);
     x86_64_io_wait();   
 
