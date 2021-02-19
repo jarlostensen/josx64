@@ -217,15 +217,17 @@ void interrupts_set_isr_handler(int i, isr_handler_func_t handler) {
 
 void interrupts_irq_handler(int irq) {
     
+    // switch off the IRQ before we send EOI so we don't get doubled
     i8259a_disable_irq(irq);    
-    
+    // let the PIC get on with other IRQs
+    i8259a_send_eoi(irq);    
     irq_handler_func_t handler = _irq_handlers[irq];
     if ( handler ) {
         x86_64_sti();
         handler(irq);
         x86_64_cli();
-    }     
-    i8259a_send_eoi(irq);
+    }         
+    // ok to re-enable now
     i8259a_enable_irq(irq);
 }
 
