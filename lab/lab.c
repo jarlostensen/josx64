@@ -333,52 +333,81 @@ static uint8_t _scroller_sprites[kScTile_NumberOfTiles][kScTile_Height][kScTile_
 static rect_t _scroller_window;
 // the tile field which we'll be rendering
 static scroller_tile_t _scroller_layers[kScLayer_Height][kScLayer_LayerFieldWidth];
-static uint32_t _scroller_bm[kScLayer_Height * kScTile_Height][kScLayer_VisibleFieldWidth * kScTile_Width];
+static uint32_t _scroller_bm[kScLayer_Height * kScTile_Height][kScLayer_LayerFieldWidth * kScTile_Width];
 
 //TEST:
-void scroller_generate_field(void) {
+void scroller_generate_field(bool refresh) {
 
-    for (size_t row = 0; row < kScLayer_Height; ++row) {
-        for (size_t col = 0; col < kScLayer_LayerFieldWidth; ++col) {
-            _scroller_layers[row][col] = kScTile_Sky;
-        }
-    }
-    // ground
-    for (size_t col = 0; col < kScLayer_LayerFieldWidth; ++col) {
-        _scroller_layers[kScLayer_Height - 1][col] = kScTile_Ground1;
-    }
-
-    // a few clouds 
-    for (size_t col = 0; col < kScLayer_LayerFieldWidth; ++col) {
-        if (!(rand() % 4)) {
-            _scroller_layers[rand() % 3][col] = kScTile_Cloud;
-        }
-    }
-
-    // a few intermittent tiles to step on 
-    for (size_t col = 0; col < kScLayer_LayerFieldWidth; ++col) {
-        if (!(rand() % 6)) {
-            _scroller_layers[kScLayer_Height - 2][col] = kScTile_PipeBody1;
-        }
-    }
-
-    size_t x = 0;
-    size_t y = 0;
-    for (size_t row = 0; row < kScLayer_Height; ++row) {
-        for (size_t col = 0; col < kScLayer_VisibleFieldWidth; ++col) {
-
-            const uint8_t* sprite = &_scroller_sprites[_scroller_layers[row][col]];
-
-            for (size_t i = 0; i < kScTile_Height; ++i) {
-                for (size_t j = 0; j < kScTile_Width; ++j) {
-
-                    _scroller_bm[y + i][x + j] = _scroller_palette[*sprite++];
-                }
+    if (refresh)
+    {
+        for (size_t row = 0; row < kScLayer_Height; ++row) {
+            for (size_t col = kScLayer_VisibleFieldWidth - 1; col < kScLayer_LayerFieldWidth; ++col) {
+                _scroller_layers[row][col] = kScTile_Sky;
             }
-            x += kScTile_Width;
         }
-        x = 0;
-        y += kScTile_Height;
+
+        // ground
+        for (size_t col = kScLayer_VisibleFieldWidth-1; col < kScLayer_LayerFieldWidth; ++col) {
+            _scroller_layers[kScLayer_Height - 1][col] = kScTile_Ground1;
+        }
+
+        // a few clouds 
+        for (size_t col = kScLayer_VisibleFieldWidth-1; col < kScLayer_LayerFieldWidth; ++col) {
+            if (!(rand() % 4)) {
+                _scroller_layers[rand() % 3][col] = kScTile_Cloud;
+            }
+        }
+
+        // a few intermittent tiles to step on 
+        for (size_t col = kScLayer_VisibleFieldWidth-1; col < kScLayer_LayerFieldWidth; ++col) {
+            if (!(rand() % 6)) {
+                _scroller_layers[kScLayer_Height - 2][col] = kScTile_PipeBody1;
+            }
+        }
+    }
+    else {
+        for (size_t row = 0; row < kScLayer_Height; ++row) {
+            for (size_t col = 0; col < kScLayer_LayerFieldWidth; ++col) {
+                _scroller_layers[row][col] = kScTile_Sky;
+            }
+        }
+        // ground
+        for (size_t col = 0; col < kScLayer_LayerFieldWidth; ++col) {
+            _scroller_layers[kScLayer_Height - 1][col] = kScTile_Ground1;
+        }
+
+        // a few clouds 
+        for (size_t col = 0; col < kScLayer_LayerFieldWidth; ++col) {
+            if (!(rand() % 4)) {
+                _scroller_layers[rand() % 3][col] = kScTile_Cloud;
+            }
+        }
+
+        // a few intermittent tiles to step on 
+        for (size_t col = 0; col < kScLayer_LayerFieldWidth; ++col) {
+            if (!(rand() % 6)) {
+                _scroller_layers[kScLayer_Height - 2][col] = kScTile_PipeBody1;
+            }
+        }
+
+        size_t x = 0;
+        size_t y = 0;
+        for (size_t row = 0; row < kScLayer_Height; ++row) {
+            for (size_t col = 0; col < kScLayer_LayerFieldWidth; ++col) {
+
+                const uint8_t* sprite = &_scroller_sprites[_scroller_layers[row][col]];
+
+                for (size_t i = 0; i < kScTile_Height; ++i) {
+                    for (size_t j = 0; j < kScTile_Width; ++j) {
+
+                        _scroller_bm[y + i][x + j] = _scroller_palette[*sprite++];
+                    }
+                }
+                x += kScTile_Width;
+            }
+            x = 0;
+            y += kScTile_Height;
+        }
     }
 }
 
@@ -386,53 +415,44 @@ static size_t _scroll_pos = 0;
 
 void scroller_render_field(void) {
 
-    size_t x = 0;
-    size_t y = 0;
+    static const size_t bm_height = (kScLayer_Height * kScTile_Height);
+    static const size_t bm_width = (kScLayer_LayerFieldWidth * kScTile_Width);
+    static const size_t bm_vis_width = (kScLayer_VisibleFieldWidth * kScTile_Width);
 
-    size_t row = 0;
-    size_t col = 0;
-
-    if (_scroll_pos) {               
-        // draw first and last column
-        x = 0;
-        y = 0;
-        
-        for (size_t row = 0; row < kScLayer_Height; ++row) {
-            const uint8_t* sprite = &_scroller_sprites[_scroller_layers[row][0]] + _scroll_pos;
-            for (size_t i = 0; i < kScTile_Height; ++i) {
-                for (size_t j = 0; j < (kScTile_Width-_scroll_pos); ++j) {
-
-                    _scroller_bm[y + i][x + j] = _scroller_palette[*sprite++];
-                }
-                sprite += _scroll_pos;
+    if (_scroll_pos) {
+        // scroll bitmap horisontally, feed in from rightmost column
+        uint32_t* bm_row = _scroller_bm;
+        for (size_t row = 0; row < bm_height; ++row) {
+            for (size_t j = 0; j < (bm_width - 1); ++j) {
+                bm_row[j] = bm_row[j + 1];
             }
-            y += kScTile_Height;
+            bm_row += bm_width;
         }
-
-        col = 1;            
-        x = _scroll_pos;
     }
 
-    for (; row < kScLayer_Height; ++row) {
-        for (; col < kScLayer_VisibleFieldWidth; ++col) {
-            const uint8_t* sprite = &_scroller_sprites[_scroller_layers[row][col]];
-            for (size_t i = 0; i < kScTile_Height; ++i) {
-                for (size_t j = 0; j < kScTile_Width; ++j) {
-
-                    _scroller_bm[y + i][x + j] = _scroller_palette[*sprite++];
-                }
-            }
-            x += kScTile_Width;
-        }
-        x = _scroll_pos;
-        y += kScTile_Height;
-    }
-
-    video_scale_draw_bitmap(_scroller_bm, kScLayer_VisibleFieldWidth * kScTile_Width, kScLayer_Height * kScTile_Height,
+    video_scale_draw_bitmap(_scroller_bm, bm_vis_width, bm_height, bm_width,
         _scroller_window.top, _scroller_window.left, _scroller_window.right - _scroller_window.left, _scroller_window.bottom - _scroller_window.top, kVideo_Filter_None);
     video_present();
 
-    //_scroll_pos = (_scroll_pos + 1) % kScTile_Width;
+    ++_scroll_pos;
+    if ((_scroll_pos % kScTile_Width) == 0) {
+        // wrap; generate a new rigthmost column
+        scroller_generate_field(true);
+
+        // fill the bitmap rightmost column with fresh pixels
+        size_t y = 0;
+        for (size_t row = 0; row < kScLayer_Height; ++row) {
+            for (size_t col = kScLayer_VisibleFieldWidth-1; col < kScLayer_LayerFieldWidth; ++col) {
+                const uint8_t* sprite = &_scroller_sprites[_scroller_layers[row][col]];
+                for (size_t i = 0; i < kScTile_Height; ++i) {
+                    for (size_t j = 0; j < kScTile_Width; ++j) {
+                        _scroller_bm[y + i][bm_vis_width + j] = _scroller_palette[*sprite++];
+                    }
+                }
+            }
+            y += kScTile_Height;
+        }
+    }
 }
 
 video_mode_info_t _info = { .vertical_resolution = 768, .pixel_format = kVideo_Pixel_Format_RBGx };
@@ -482,7 +502,7 @@ static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         _scroller_window.right = _info.horisontal_resolution - 8;
         _scroller_window.bottom = _info.vertical_resolution - 8;
 
-        scroller_generate_field();
+        scroller_generate_field(false);
     }
     break;
     case WM_PAINT:
@@ -502,15 +522,8 @@ static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         switch (wParam)
         {
         case VK_RETURN:
-        {
-            /*static size_t returns = 1;
-            wchar_t buffer[128];
-            swprintf_s(buffer, (int)(sizeof(buffer) / sizeof(wchar_t)), L"line %lld...\n", returns++);
-            output_console_output_string(buffer);*/
-
-            //scroller_generate_field();
+        {            
             scroller_render_field();
-
             InvalidateRect(hWnd, 0, TRUE);
         }
         break;

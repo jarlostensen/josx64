@@ -290,7 +290,7 @@ void video_scroll_up_region_full_width(size_t top, size_t bottom, size_t linesTo
     }
 }
 
-void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t src_height, size_t dest_top, size_t dest_left, size_t dest_width, size_t dest_height, video_filter_mode_t filter_mode) {
+void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t src_height, size_t src_stride, size_t dest_top, size_t dest_left, size_t dest_width, size_t dest_height, video_filter_mode_t filter_mode) {
 
     //TODO: need asserts...
     if (!bitmap || !src_width || !src_height || !dest_width || !dest_height) {
@@ -338,7 +338,7 @@ void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t sr
 
                     wptr += _info.pixels_per_scan_line;
                     src_y += fp_y_add;
-                    src_row = bitmap + (src_y >> 16) * src_width;
+                    src_row = bitmap + (src_y >> 16) * src_stride;
                     ++y;
                 }
             }
@@ -346,7 +346,7 @@ void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t sr
         }
         else {
             // generic re-size and filtering
-            stbir_resize_uint8_srgb(bitmap, src_width, src_height, src_width << 2, backbuffer_wptr(dest_top, dest_left), dest_width, dest_height, _info.pixels_per_scan_line << 2, 4, STBIR_ALPHA_CHANNEL_NONE, 0);
+            stbir_resize_uint8_srgb(bitmap, src_width, src_height, src_stride<<2, backbuffer_wptr(dest_top, dest_left), dest_width, dest_height, _info.pixels_per_scan_line << 2, 4, STBIR_ALPHA_CHANNEL_NONE, 0);
         }
     }
 }
