@@ -126,22 +126,314 @@ typedef struct _IO_FILE {
 
     // a string, for example
     struct {
-        uint8_t*      _begin;
-        const uint8_t*      _end;
-        uint8_t*      _rp;
+        uint8_t* _begin;
+        const uint8_t* _end;
+        const uint8_t* _rp;
+        uint8_t* _wp;
+        size_t              _size;
     } _buffer;
+
+    size_t(*read)(struct _IO_FILE* file, unsigned char*, size_t);
+    size_t(*write)(struct _IO_FILE* file, const unsigned char*, size_t);
+
 
 } IO_FILE;
 
 #define _jo_fromstring(f, s)\
-((f)->_buffer._begin = (f)->_buffer._rp = (uint8_t*)(s), (f)->_buffer._end = (const uint8_t*)-1)
+((f)->_buffer._begin = (f)->_buffer._rp = (const uint8_t*)(s), (f)->_buffer._end = (const uint8_t*)-1, (f)->_buffer._size = 0)
 
 #define _jo_getch(f) ((f)->_buffer._rp!=(f)->_buffer._end ? *(f)->_buffer._rp++ : 0)
 #define _jo_ungetch(f) ((f)->_buffer._rp!=(f)->_buffer._begin ? (f)->_buffer._rp-- ; (void)0)
 
+#define _jo_tobuffer(f, buffer, length)\
+((f)->_buffer._rp = (void)0, (f)->_buffer._begin = (f)->_buffer._wp = (uint8_t*)(buffer), (f)->_buffer._end = ((f)->_buffer._wp + ((f)->_buffer._size = length)))
 
+int _jos_getc(IO_FILE* stream) {
+
+    if (stream->_buffer._rp == stream->_buffer._end) {
+        if (stream->_buffer._size) {
+            /*CHECK FOR ERROR*/ stream->read(stream, stream->_buffer._begin, 1);
+            stream->_buffer._end = stream->_buffer._begin + 1;
+            stream->_buffer._rp = stream->_buffer._begin;
+        }
+        else {
+            // a fixed size buffer, we're underflowing
+            return 0;
+        }
+    }
+    return (int)(*stream->_buffer._rp++);
+}
+
+int _jos_putc(int c, IO_FILE* stream) {
+
+    if (stream->_buffer._wp == stream->_buffer._end) {
+        if (stream->_buffer._size) {
+
+            stream->write(stream, stream->_buffer._begin, 1);
+            stream->_buffer._wp = stream->_buffer._begin;
+        }
+        else {
+            // a fixed size buffer, we're overflowing
+            return 0;
+        }
+    }
+}
+
+size_t _stdout_write(IO_FILE* file, const unsigned char* buffer, size_t len) {
+    return fwrite(buffer, 1, len, stdout);
+}
+
+size_t _stdin_read(IO_FILE* file, unsigned char* buffer, size_t len) {
+    return fread(buffer, 1, len, stdin);
+}
+
+static IO_FILE _jos_stdin = { .read = _stdin_read };
+#define jos_stdin &_jos_stdin
+
+void test_io_file(void) {
+    _jos_stdin._buffer._size = 32;
+    _jos_stdin._buffer._begin = malloc(32);
+    _jos_stdin._buffer._end = _jos_stdin._buffer._begin + 1;
+    _jos_stdin._buffer._rp = _jos_stdin._buffer._end;
+
+    int c = _jos_getc(jos_stdin);
+    printf("%c\n", c);
+}
+
+typedef int (*_getch_t)(void);
+
+jo_status_t basic_line_editor(char* out_buffer, size_t buffer_len, size_t* out_characters_read, _getch_t getch) {
+    if (!out_buffer || buffer_len < 2) {
+        return _JO_STATUS_FAILED_PRECONDITION;
+    }
+
+    jo_status_t status = _JO_STATUS_SUCCESS;
+
+
+
+    return status;
+}
 
 // =================================================================================================
+
+typedef enum _scroller_tile_type {
+
+    kScTile_Ground1,
+    kScTile_PipeBody1,
+    kScTile_Cloud,
+    kScTile_Sky,
+
+    kScTile_NumberOfTiles
+
+} scroller_tile_t;
+
+enum _scroller_constants {
+
+    kScLayer_Height = 8,
+
+    kScLayer_VisibleFieldWidth = 32,
+    kScLayer_LayerFieldWidth,   //< NOTE: kScLayer_VisibleLayerWidth+1
+
+    // pixels
+    kScTile_Height = 8,
+    kScTile_Width = 8,
+};
+
+static uint32_t _scroller_palette[] = {
+
+    // black
+    0,
+    // dark brown
+    0x663300,
+    // light brown
+    0x99c400,
+    // dark green
+    0x193300,
+    // grass green
+    0x006600,
+    // pipe body silver 
+    0xc0c0c0,
+    // pipe body dark 
+    0x808080,
+    // sky blue
+    0x00ffff,
+    // cloud white
+    0x99ffff,
+    // white
+    0xffffff,
+};
+
+enum _scroller_palette_colour {
+
+    kScColour_Black,
+    kScColour_DarkBrown,
+    kScColour_LightBrown,
+    kScColour_DarkGreen,
+    kScColour_GrassGreen,
+    kScColour_PipeBodySilver,
+    kScColour_PipeBodyDark,
+    kScColour_SkyBlue,
+    kScColour_CloudWhite,
+    kScColour_White
+};
+
+// top down
+static uint8_t _scroller_sprites[kScTile_NumberOfTiles][kScTile_Height][kScTile_Width] = {
+
+    // ground
+    {
+        { kScColour_GrassGreen, kScColour_GrassGreen, kScColour_GrassGreen, kScColour_GrassGreen,kScColour_GrassGreen, kScColour_GrassGreen, kScColour_GrassGreen, kScColour_GrassGreen },
+        { kScColour_GrassGreen, kScColour_GrassGreen, kScColour_GrassGreen, kScColour_GrassGreen,kScColour_GrassGreen, kScColour_GrassGreen, kScColour_GrassGreen, kScColour_GrassGreen },
+        { kScColour_GrassGreen, kScColour_DarkGreen, kScColour_DarkGreen, kScColour_GrassGreen, kScColour_DarkGreen, kScColour_GrassGreen, kScColour_GrassGreen, kScColour_DarkGreen },
+        { kScColour_DarkGreen, kScColour_DarkGreen, kScColour_GrassGreen, kScColour_DarkGreen, kScColour_DarkGreen, kScColour_GrassGreen, kScColour_GrassGreen, kScColour_DarkGreen },
+        { kScColour_DarkGreen, kScColour_DarkGreen, kScColour_DarkGreen, kScColour_DarkGreen, kScColour_DarkGreen, kScColour_GrassGreen, kScColour_DarkGreen, kScColour_DarkGreen },
+        { kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown },
+        { kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown },
+        { kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown, kScColour_DarkBrown },
+    },
+
+    // pipe body
+    {
+        { kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite,kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite },
+        { kScColour_CloudWhite, kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodySilver,kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodyDark },
+        { kScColour_CloudWhite, kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodySilver,kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodyDark },
+        { kScColour_CloudWhite, kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodySilver,kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodyDark },
+        { kScColour_CloudWhite, kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodySilver,kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodyDark },
+        { kScColour_CloudWhite, kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodySilver,kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodyDark },
+        { kScColour_CloudWhite, kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodySilver,kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodySilver, kScColour_PipeBodyDark },
+        { kScColour_CloudWhite, kScColour_PipeBodyDark, kScColour_PipeBodyDark, kScColour_PipeBodyDark, kScColour_PipeBodyDark, kScColour_PipeBodyDark, kScColour_PipeBodyDark, kScColour_PipeBodyDark },
+    },
+
+    // cloud 
+    {
+        { kScColour_SkyBlue, kScColour_SkyBlue, kScColour_CloudWhite, kScColour_CloudWhite,kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue},
+        { kScColour_SkyBlue, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite,kScColour_SkyBlue, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_SkyBlue },
+        { kScColour_SkyBlue, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_SkyBlue },
+        { kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite,kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite},
+        { kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite,kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite},
+        { kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite,kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_SkyBlue },
+        { kScColour_SkyBlue, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_SkyBlue,kScColour_CloudWhite, kScColour_CloudWhite, kScColour_CloudWhite, kScColour_SkyBlue },
+        { kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue },
+    },
+
+    // sky
+    {
+        { kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue },
+        { kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue },
+        { kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue },
+        { kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue },
+        { kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue },
+        { kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue },
+        { kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue },
+        { kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue, kScColour_SkyBlue },
+    }
+};
+
+//NOTE: a multiple of kScTile_Height and Width
+static rect_t _scroller_window;
+// the tile field which we'll be rendering
+static scroller_tile_t _scroller_layers[kScLayer_Height][kScLayer_LayerFieldWidth];
+static uint32_t _scroller_bm[kScLayer_Height * kScTile_Height][kScLayer_VisibleFieldWidth * kScTile_Width];
+
+//TEST:
+void scroller_generate_field(void) {
+
+    for (size_t row = 0; row < kScLayer_Height; ++row) {
+        for (size_t col = 0; col < kScLayer_LayerFieldWidth; ++col) {
+            _scroller_layers[row][col] = kScTile_Sky;
+        }
+    }
+    // ground
+    for (size_t col = 0; col < kScLayer_LayerFieldWidth; ++col) {
+        _scroller_layers[kScLayer_Height - 1][col] = kScTile_Ground1;
+    }
+
+    // a few clouds 
+    for (size_t col = 0; col < kScLayer_LayerFieldWidth; ++col) {
+        if (!(rand() % 4)) {
+            _scroller_layers[rand() % 3][col] = kScTile_Cloud;
+        }
+    }
+
+    // a few intermittent tiles to step on 
+    for (size_t col = 0; col < kScLayer_LayerFieldWidth; ++col) {
+        if (!(rand() % 6)) {
+            _scroller_layers[kScLayer_Height - 2][col] = kScTile_PipeBody1;
+        }
+    }
+
+    size_t x = 0;
+    size_t y = 0;
+    for (size_t row = 0; row < kScLayer_Height; ++row) {
+        for (size_t col = 0; col < kScLayer_VisibleFieldWidth; ++col) {
+
+            const uint8_t* sprite = &_scroller_sprites[_scroller_layers[row][col]];
+
+            for (size_t i = 0; i < kScTile_Height; ++i) {
+                for (size_t j = 0; j < kScTile_Width; ++j) {
+
+                    _scroller_bm[y + i][x + j] = _scroller_palette[*sprite++];
+                }
+            }
+            x += kScTile_Width;
+        }
+        x = 0;
+        y += kScTile_Height;
+    }
+}
+
+static size_t _scroll_pos = 0;
+
+void scroller_render_field(void) {
+
+    size_t x = 0;
+    size_t y = 0;
+
+    size_t row = 0;
+    size_t col = 0;
+
+    if (_scroll_pos) {               
+        // draw first and last column
+        x = 0;
+        y = 0;
+        
+        for (size_t row = 0; row < kScLayer_Height; ++row) {
+            const uint8_t* sprite = &_scroller_sprites[_scroller_layers[row][0]] + _scroll_pos;
+            for (size_t i = 0; i < kScTile_Height; ++i) {
+                for (size_t j = 0; j < (kScTile_Width-_scroll_pos); ++j) {
+
+                    _scroller_bm[y + i][x + j] = _scroller_palette[*sprite++];
+                }
+                sprite += _scroll_pos;
+            }
+            y += kScTile_Height;
+        }
+
+        col = 1;            
+        x = _scroll_pos;
+    }
+
+    for (; row < kScLayer_Height; ++row) {
+        for (; col < kScLayer_VisibleFieldWidth; ++col) {
+            const uint8_t* sprite = &_scroller_sprites[_scroller_layers[row][col]];
+            for (size_t i = 0; i < kScTile_Height; ++i) {
+                for (size_t j = 0; j < kScTile_Width; ++j) {
+
+                    _scroller_bm[y + i][x + j] = _scroller_palette[*sprite++];
+                }
+            }
+            x += kScTile_Width;
+        }
+        x = _scroll_pos;
+        y += kScTile_Height;
+    }
+
+    video_scale_draw_bitmap(_scroller_bm, kScLayer_VisibleFieldWidth * kScTile_Width, kScLayer_Height * kScTile_Height,
+        _scroller_window.top, _scroller_window.left, _scroller_window.right - _scroller_window.left, _scroller_window.bottom - _scroller_window.top, kVideo_Filter_None);
+    video_present();
+
+    //_scroll_pos = (_scroll_pos + 1) % kScTile_Width;
+}
 
 video_mode_info_t _info = { .vertical_resolution = 768, .pixel_format = kVideo_Pixel_Format_RBGx };
 static size_t _window_width = 1024;
@@ -163,7 +455,7 @@ static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         SelectObject(hdc_mem, bm);
         ZeroMemory(&bm_info_header, sizeof bm_info_header);
         bm_info_header.biSize = sizeof bm_info_header;
-        bm_info_header.biWidth = _window_width;
+        bm_info_header.biWidth = _info.horisontal_resolution = _window_width;
         bm_info_header.biHeight = -(LONG)(_info.vertical_resolution);
         bm_info_header.biPlanes = 1;
         bm_info_header.biBitCount = 32;
@@ -182,6 +474,15 @@ static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         output_console_set_font((const uint8_t*)font8x8_basic, 8, 8);
         video_clear_screen(0x6495ed);
         output_console_output_string(L"Press CR...\n");
+
+        srand(1001107);
+
+        _scroller_window.left = 8;
+        _scroller_window.top = 50;
+        _scroller_window.right = _info.horisontal_resolution - 8;
+        _scroller_window.bottom = _info.vertical_resolution - 8;
+
+        scroller_generate_field();
     }
     break;
     case WM_PAINT:
@@ -202,10 +503,14 @@ static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         {
         case VK_RETURN:
         {
-            static size_t returns = 1;
+            /*static size_t returns = 1;
             wchar_t buffer[128];
             swprintf_s(buffer, (int)(sizeof(buffer) / sizeof(wchar_t)), L"line %lld...\n", returns++);
-            output_console_output_string(buffer);
+            output_console_output_string(buffer);*/
+
+            //scroller_generate_field();
+            scroller_render_field();
+
             InvalidateRect(hWnd, 0, TRUE);
         }
         break;
@@ -293,6 +598,9 @@ static void ui_test_loop(void) {
     }
 }
 
+
+// ==============================================================================================================
+
 int main(void)
 {
     /*char buffer[512];
@@ -334,6 +642,7 @@ int main(void)
     slice = pdb_index_symbol_name_for_address(137950);
 */
 
+//test_io_file();
     ui_test_loop();
 
     return 0;

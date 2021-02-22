@@ -44,13 +44,25 @@ typedef struct _draw_text_segment_args {
 
 } draw_text_segment_args_t;
 
+typedef enum _video_filter_mode {
+
+    kVideo_Filter_None,
+    kVideo_Filter_Default,
+
+} video_filter_mode_t;
+
 void video_draw_text_segment(draw_text_segment_args_t* args, const wchar_t* text);
 void video_draw_text(draw_text_segment_args_t* args, const wchar_t* text);
-void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t src_height, size_t dest_top, size_t dest_left, size_t dest_width, size_t dest_height);
+
+void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t src_height, size_t dest_top, size_t dest_left, size_t dest_width, size_t dest_height, video_filter_mode_t filter_mode);
+
 void video_scale_draw_indexed_bitmap(const uint8_t* bitmap, const uint32_t* colourmap, size_t colourmap_size, 
                                         size_t src_width, size_t src_height, 
                                         size_t dest_top, size_t dest_left, size_t dest_width, size_t dest_height);
 void video_scroll_up_region_full_width(size_t top, size_t bottom, size_t linesToScroll);
+
+void video_put_pixel(size_t x, size_t y, uint32_t rgba);
+uint32_t video_get_pixel(size_t x, size_t y);
 
 void video_present(void);
 
