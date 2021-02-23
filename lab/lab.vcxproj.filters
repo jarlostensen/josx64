@@ -25,6 +25,9 @@
     <Filter Include="libc\extensions">
       <UniqueIdentifier>{3b721336-29ab-49f3-a4df-a6751d1144f6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="kernel\programs">
+      <UniqueIdentifier>{11e79597-0121-40d4-b073-09285fb8474c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="lab.c">
@@ -54,6 +57,9 @@
     <ClCompile Include="..\kernel\video.c">
       <Filter>kernel</Filter>
     </ClCompile>
+    <ClCompile Include="..\kernel\programs\scroller.c">
+      <Filter>kernel\programs</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\libc\include\extensions\slices.h">
@@ -66,6 +72,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\kernel\include\video.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\kernel\programs\scroller.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

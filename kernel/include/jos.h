@@ -16,9 +16,29 @@ typedef struct _jos_allocator {
 
 } jos_allocator_t;
 
-extern uint16_t kJosKernelCS;
+// ========================================================================= misc types
+
+// generic position
+typedef struct _pos {
+
+    size_t      x;
+    size_t      y;
+
+} pos_t;
+// generic rectangle [top, bottom>, [left, right>
+typedef struct _rect {
+    size_t      top;
+    size_t      left;
+    size_t      bottom;
+    size_t      right;
+} rect_t;
+
 
 #ifdef _JOS_KERNEL_BUILD
+
+//TODO: this will be removed
+extern uint16_t kJosKernelCS;
+
 #define _JOS_MAYBE_UNUSED __attribute__((unused))
 #define _JOS_INLINE_FUNC __attribute__((unused)) static
 

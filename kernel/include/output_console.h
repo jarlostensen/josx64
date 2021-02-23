@@ -3,20 +3,6 @@
 
 #include <wchar.h>
 
-typedef struct _pos {
-
-    size_t      x;
-    size_t      y;
-
-} pos_t;
-
-typedef struct _rect {
-    size_t      top;
-    size_t      left;
-    size_t      bottom;
-    size_t      right;
-} rect_t;
-
 typedef void* region_handle_t;
 
 jo_status_t output_console_initialise(void);

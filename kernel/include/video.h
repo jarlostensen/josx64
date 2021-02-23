@@ -54,7 +54,8 @@ typedef enum _video_filter_mode {
 void video_draw_text_segment(draw_text_segment_args_t* args, const wchar_t* text);
 void video_draw_text(draw_text_segment_args_t* args, const wchar_t* text);
 
-void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t src_height, size_t dest_top, size_t dest_left, size_t dest_width, size_t dest_height, video_filter_mode_t filter_mode);
+void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t src_height, size_t src_stride,
+    size_t dest_top, size_t dest_left, size_t dest_width, size_t dest_height, video_filter_mode_t filter_mode);
 
 void video_scale_draw_indexed_bitmap(const uint8_t* bitmap, const uint32_t* colourmap, size_t colourmap_size, 
                                         size_t src_width, size_t src_height, 

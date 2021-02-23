@@ -145,6 +145,7 @@
     <ClCompile Include="..\kernel\hex_dump.c" />
     <ClCompile Include="..\kernel\output_console.c" />
     <ClCompile Include="..\kernel\pe.c" />
+    <ClCompile Include="..\kernel\programs\scroller.c" />
     <ClCompile Include="..\kernel\video.c" />
     <ClCompile Include="..\libc\extensions\pdb_index.c" />
     <ClCompile Include="..\libc\extensions\slices.c" />
@@ -155,6 +156,7 @@
   <ItemGroup>
     <ClInclude Include="..\kernel\include\output_console.h" />
     <ClInclude Include="..\kernel\include\video.h" />
+    <ClInclude Include="..\kernel\programs\scroller.h" />
     <ClInclude Include="..\libc\include\extensions\pdb_index.h" />
     <ClInclude Include="..\libc\include\extensions\slices.h" />
   </ItemGroup>
