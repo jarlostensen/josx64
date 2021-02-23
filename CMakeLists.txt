@@ -86,6 +86,7 @@ target_include_directories(boot PUBLIC
 "${CMAKE_SOURCE_DIR}/c-efi"
 "${CMAKE_SOURCE_DIR}/kernel/include"
 "${CMAKE_SOURCE_DIR}/deps" 
+"${CMAKE_SOURCE_DIR}/kernel"
 )
 
 target_link_libraries(boot PRIVATE libc)

@@ -23,6 +23,7 @@
 #include <pe.h>
 #include <x86_64.h>
 
+#include <programs/scroller.h>
 #include <font8x8/font8x8_basic.h>
 
 //https://github.com/rust-lang/rust/issues/62785/
@@ -234,6 +235,13 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     clock_initialise();
     keyboard_initialise();
 
+    scroller_initialise(&(rect_t){
+        .top = 50,
+        .left = 8,
+        .bottom = 400,
+        .right = 600
+    });
+
     uint64_t elapsed = __rdtsc();
     x86_64_io_wait();
     elapsed = __rdtsc() - elapsed;
@@ -248,6 +256,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 
     video_present();
 
+    uint64_t t0 = clock_ms_since_boot();
     bool done = false;
     while(!done) {
         if ( keyboard_has_key() ) {
@@ -317,8 +326,16 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
                 }                
             }
         }
+
+        uint64_t t1 = clock_ms_since_boot();
+        if( t1 - t0 > 33 ) {
+            t0 = t1;
+            scroller_render_field();
+            video_present();
+        }
     }
     output_console_line_break();
+
 
     // size_t dim;
     // const uint8_t* memory_bitmap = memory_get_memory_bitmap(&dim);
