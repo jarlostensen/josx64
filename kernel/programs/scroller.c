@@ -1,7 +1,9 @@
 
 #include <jos.h>
+#include <scroller.h>
 #include <video.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 typedef enum _scroller_tile_type {
 
@@ -65,7 +67,7 @@ enum _scroller_palette_colour {
 };
 
 // top down
-static uint8_t _scroller_sprites[kScTile_NumberOfTiles][kScTile_Height][kScTile_Width] = {
+static const uint8_t _scroller_sprites[kScTile_NumberOfTiles][kScTile_Height][kScTile_Width] = {
 
     // ground
     {
@@ -155,7 +157,7 @@ void scroller_initialise(rect_t* dest_rect) {
     for (size_t row = 0; row < kScLayer_Height; ++row) {
         for (size_t col = 0; col < kScLayer_LayerFieldWidth; ++col) {
 
-            const uint8_t* sprite = &_scroller_sprites[_scroller_layers[row][col]];
+            const uint8_t* sprite = (const uint8_t*)&_scroller_sprites[_scroller_layers[row][col]];
 
             for (size_t i = 0; i < kScTile_Height; ++i) {
                 for (size_t j = 0; j < kScTile_Width; ++j) {
@@ -208,7 +210,7 @@ void scroller_render_field(void) {
 
     if (_scroll_pos) {
         // scroll bitmap horisontally, feed in from rightmost column
-        uint32_t* bm_row = _scroller_bm;
+        uint32_t* bm_row = (uint32_t*)_scroller_bm;
         for (size_t row = 0; row < bm_height; ++row) {
             for (size_t j = 0; j < (bm_width - 1); ++j) {
                 bm_row[j] = bm_row[j + 1];

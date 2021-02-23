@@ -29,6 +29,7 @@ enum _kbd_encoder_status_codes {
 #define KBD_NOT_A_KEY (wchar_t)0
 // mask for scan code without break code
 #define SCAN_CODE_MAKE_MASK 0x7f
+#define SCAN_CODE_EXTENDED 0xe0
 
 #define KBD_BUFFER_SIZE 32
 static uint8_t _keyboard_buffer[KBD_BUFFER_SIZE];
@@ -43,7 +44,6 @@ static lock_t _keyboard_buffer_lock;
 
 // used in the LUT to indicate a key that should be intercepted by the IRQ handler.
 #define KEYBOARD_VK_INVALID 0xff
-
 
 // ======================================================================
 // NOTE: THIS CODE USES SET 1 SCAN CODES ONLY
@@ -181,10 +181,10 @@ static void _irq_1_handler(int irqNum) {
 
         // get scan code from the encoder's output buffer and just buffer it
         uint8_t scan_code = KBD_ENCODER_READ();
-        if ( scan_code == 0x0e ) {
+        if ( scan_code == SCAN_CODE_EXTENDED ) {
             // extended scan code, next scan code will be the actual key
             _extended_code = true;
-            return;
+            scan_code = KBD_ENCODER_READ();
         }
 
         uint8_t pressed = 1 ^ ((scan_code & 0x80)>>7);
@@ -279,6 +279,9 @@ uint32_t     keyboard_get_last_key(void) {
     LOCK_BUFFER();    
     if (_keys_in_buffer) {
          sc = _keyboard_buffer[--_keys_in_buffer];
+         if(sc == SCAN_CODE_EXTENDED) {
+             sc = _keyboard_buffer[--_keys_in_buffer];
+         }
     }
     UNLOCK_BUFFER();
 

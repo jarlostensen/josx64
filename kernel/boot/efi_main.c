@@ -23,9 +23,7 @@
 #include <pe.h>
 #include <x86_64.h>
 
-#define STB_IMAGE_RESIZE_IMPLEMENTATION
-#include <stb/stb_image_resize.h>
-#include "../font8x8/font8x8_basic.h"
+#include <font8x8/font8x8_basic.h>
 
 //https://github.com/rust-lang/rust/issues/62785/
 // TL;DR linker error we get when building with Clang on Windows 
@@ -256,7 +254,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
             uint32_t key = keyboard_get_last_key();
             if ( KEYBOARD_VK_PRESSED(key) ) {
                 short c = (short)KEYBOARD_VK_CHAR(key);
-                swprintf(buf, bufcount, L"%c", c);
+                swprintf(buf, bufcount, L"0x%x ", c);
                 output_console_output_string(buf);
 
                 video_present();
@@ -266,42 +264,54 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
                         output_console_output_string(L"\ngot ESC\n");
                         done = true;
                         break;
-                    // case KEYBOARD_VK_F1:
-                    //     output_console_output_string(L" F1 ");
-                    //     break;
-                    // case KEYBOARD_VK_F2:
-                    //     output_console_output_string(L" F2 ");
-                    //     break;
-                    // case KEYBOARD_VK_F3:
-                    //     output_console_output_string(L" F3 ");
-                    //     break;
-                    // case KEYBOARD_VK_F4:
-                    //     output_console_output_string(L" F4 ");
-                    //     break;
-                    // case KEYBOARD_VK_F5:
-                    //     output_console_output_string(L" F5 ");
-                    //     break;
-                    // case KEYBOARD_VK_F6:
-                    //     output_console_output_string(L" F6 ");
-                    //     break;
-                    // case KEYBOARD_VK_F7:
-                    //     output_console_output_string(L" F7 ");
-                    //     break;
-                    // case KEYBOARD_VK_F8:
-                    //     output_console_output_string(L" F8 ");
-                    //     break;
-                    // case KEYBOARD_VK_F9:
-                    //     output_console_output_string(L" F9 ");
-                    //     break;
-                    // case KEYBOARD_VK_F10:
-                    //     output_console_output_string(L" F10 ");
-                    //     break;
-                    // case KEYBOARD_VK_F11:
-                    //     output_console_output_string(L" F11 ");
-                    //     break;
-                    // case KEYBOARD_VK_F12:
-                    //     output_console_output_string(L" F12 ");
-                    //     break;
+                    case KEYBOARD_VK_RIGHT:
+                        output_console_output_string(L" -> ");
+                        break;
+                    case KEYBOARD_VK_LEFT:
+                        output_console_output_string(L" <- ");
+                        break;
+                    case KEYBOARD_VK_UP:
+                        output_console_output_string(L" ^ ");
+                        break;
+                    case KEYBOARD_VK_DOWN:
+                        output_console_output_string(L" v ");
+                        break;
+                    case KEYBOARD_VK_F1:
+                        output_console_output_string(L" F1 ");
+                        break;
+                    case KEYBOARD_VK_F2:
+                        output_console_output_string(L" F2 ");
+                        break;
+                    case KEYBOARD_VK_F3:
+                        output_console_output_string(L" F3 ");
+                        break;
+                    case KEYBOARD_VK_F4:
+                        output_console_output_string(L" F4 ");
+                        break;
+                    case KEYBOARD_VK_F5:
+                        output_console_output_string(L" F5 ");
+                        break;
+                    case KEYBOARD_VK_F6:
+                        output_console_output_string(L" F6 ");
+                        break;
+                    case KEYBOARD_VK_F7:
+                        output_console_output_string(L" F7 ");
+                        break;
+                    case KEYBOARD_VK_F8:
+                        output_console_output_string(L" F8 ");
+                        break;
+                    case KEYBOARD_VK_F9:
+                        output_console_output_string(L" F9 ");
+                        break;
+                    case KEYBOARD_VK_F10:
+                        output_console_output_string(L" F10 ");
+                        break;
+                    case KEYBOARD_VK_F11:
+                        output_console_output_string(L" F11 ");
+                        break;
+                    case KEYBOARD_VK_F12:
+                        output_console_output_string(L" F12 ");
+                        break;
                     default:
                     break;
                 }                

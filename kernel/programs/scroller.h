@@ -1,4 +1,6 @@
 #pragma once
 
-void scroller_initialise(void);
+#include <jos.h>
+
+void scroller_initialise(rect_t* dest_rect);
 void scroller_render_field(void);

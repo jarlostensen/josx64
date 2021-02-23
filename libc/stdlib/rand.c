@@ -1,4 +1,4 @@
-//NOTE: taken straight from MUSL
+//NOTE: taken straight from MUSL, no modification
 
 #include <stdlib.h>
 #include <stdint.h>
