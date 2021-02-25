@@ -42,12 +42,12 @@ size_t              processors_get_processor_count();
 
 const uintptr_t*     processors_get_per_cpu_ptr(size_t index);
 
-jos_status_t        processors_initialise(void);
+jo_status_t        processors_initialise(void);
 size_t              processors_get_processor_count(void);
 size_t              processors_get_bsp_id();
 jo_status_t        processors_get_processor_information(processor_information_t* out_info, size_t processor_index);
 bool                processors_has_acpi_20();
-jos_status_t        processors_get_this_processor_info(processor_information_t* out_info);
+jo_status_t        processors_get_this_processor_info(processor_information_t* out_info);
 
 typedef void (*ap_worker_function_t)(void*);
 jo_status_t        processors_startup_aps(ap_worker_function_t ap_worker_function, void* per_ap_data, size_t per_ap_data_stride);

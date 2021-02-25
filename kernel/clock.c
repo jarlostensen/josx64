@@ -133,9 +133,17 @@ void clock_initialise(void) {
     output_console_output_string(buf);
 
     i8253_start_clock(_pit_interval._divisor);
-    interrupts_set_irq_handler(0, _irq_0_handler);
+    interrupts_set_irq_handler(&(irq_handler_def_t){ 
+        ._irq_number = 0,
+        ._handler = _irq_0_handler,
+        ._priority = kInterrupt_Critical
+    });
     
-    interrupts_set_irq_handler(0x8, _irq_8_handler);
+    interrupts_set_irq_handler(&(irq_handler_def_t){ 
+        ._irq_number = 8,
+        ._handler = _irq_8_handler,
+        ._priority = kInterrupt_Critical
+    });
     _enable_rtc_timer();
 
     output_console_output_string(L"waiting for about 10 MS...\n");

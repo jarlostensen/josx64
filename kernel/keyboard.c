@@ -107,7 +107,7 @@ static char _xt_set1[126][2] = {
     {',','<'},                                                                  // 0x33
     {'.','>'},                                                                  // 0x34
     {'/','?'},                                                                  // 0x35
-    {KEYBOARD_VK_INVALID,KEYBOARD_VK_INVALID},                                  // 0x36 rshift
+    {KEYBOARD_VK_INVALID,KEYBOARD_VK_INVALID},                                  // 036 rshift
     {'*','*'},                                                                  // 0x37
     {KEYBOARD_VK_INVALID,KEYBOARD_VK_INVALID},                                  // 0x38 lalt
     {' ',' '},                                                                  // 0x39
@@ -255,7 +255,11 @@ void keyboard_initialise(void) {
         _keyboard_id_code |= ((short)KBD_ENCODER_READ() << 16);
     }
 
-    interrupts_set_irq_handler(0x01, _irq_1_handler);    
+    interrupts_set_irq_handler(&(irq_handler_def_t){ 
+        ._handler = _irq_1_handler,
+        ._irq_number = 0x01,
+        ._priority = kInterrupt_NonCritical_Deferrable
+    });
 }
 
 void        keyboard_get_state(keyboard_state_t* state) {

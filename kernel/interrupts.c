@@ -162,7 +162,7 @@ void interrupts_isr_handler(interrupt_stack_t *stack) {
 
     if ( _interrupts_enabled )
     {        
-        isr_handler_func_t handler = _isr_handlers[stack->handler_id];
+        isr_handler_func_t handler = _isr_handlers[stack->handler_id]._handler;
         if( handler ) {
 
             // provide a read only context for the handler
@@ -212,7 +212,7 @@ void interrupts_irq_handler(int irq) {
     i8259a_disable_irq(irq);    
     // let the PIC get on with other IRQs
     i8259a_send_eoi(irq);    
-    irq_handler_func_t handler = _irq_handlers[irq];
+    irq_handler_func_t handler = _irq_handlers[irq]._handler;
     if ( handler ) {
         x86_64_sti();
         handler(irq);
@@ -225,10 +225,11 @@ void interrupts_irq_handler(int irq) {
 void interrupts_set_irq_handler(irq_handler_def_t* def) {
     //TODO: check if this IRQ is enabled or not, it shouldn't be (for now we only allow one handler ever)
     x86_64_cli();
-    _irq_handlers[irqId] = handler;
+    _irq_handlers[def->_irq_number]._handler = def->_handler;
+    _irq_handlers[def->_irq_number]._priority = def->_priority;
     x86_64_sti();
     // enable it right away
-    i8259a_enable_irq(irqId);
+    i8259a_enable_irq(def->_irq_number);
 }
 
 void interrupts_initialise_early(void) {

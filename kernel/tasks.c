@@ -81,7 +81,7 @@ static void _yield_to_next_task(void) {
 }
 
 //NOTE: when we switch to proper SMP this will be per CPU
-static jos_status_t _idle_task(void* ptr) {
+static jo_status_t _idle_task(void* ptr) {
 
     task_context_t* idle_task = (task_context_t*)ptr;
     //ZZZ: not so much "true" as wait for a kernel shutdown signal
@@ -90,7 +90,7 @@ static jos_status_t _idle_task(void* ptr) {
         x86_64_pause_cpu();
     }
     _JOS_UNREACHABLE();
-    return _JOS_K_STATUS_SUCCESS;
+    return _JO_STATUS_SUCCESS;
 }
 
 static void _task_wrapper(task_context_t* ctx) {
@@ -98,7 +98,7 @@ static void _task_wrapper(task_context_t* ctx) {
     // pre-amble
     
     // invoke
-    jos_status_t status = ctx->_func(ctx->_ptr);
+    jo_status_t status = ctx->_func(ctx->_ptr);
 
     // post-amble
     //TODO: remove this task from the task list, or mark as "done" for removal later

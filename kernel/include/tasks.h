@@ -12,7 +12,7 @@ typedef enum _task_priority_level {
 } task_priority_level_t;
 
 typedef void*   task_handle_t;
-typedef jos_status_t (*task_func_t)(void* ptr);
+typedef jo_status_t (*task_func_t)(void* ptr);
 
 typedef struct _task_create_args {
 

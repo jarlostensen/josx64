@@ -45,6 +45,7 @@ extern uint16_t kJosKernelCS;
 #define _JOS_ALWAYS_INLINE __attribute__((always_inline))
 
 #define _JOS_PACKED_ __attribute((packed))
+#define _JOS_UNREACHABLE() __builtin_unreachable()
 
 void trace(const char* channel, const char* msg,...);
 #define _JOS_KTRACE_CHANNEL(channel, msg,...) trace(channel, msg,##__VA_ARGS__)

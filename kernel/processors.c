@@ -175,7 +175,7 @@ static void initialise_this_ap(void* arg) {
     //NOTE: at this point we assume that we can use these MSRs
     x86_64_wrmsr(_JOS_K_IA32_GS_BASE, ((uintptr_t)per_cpu_block) & 0xffffffff, ((uintptr_t)per_cpu_block) >> 32);
     //TESTING:
-    ((processor_information_t*)arg)->_test = processors_get_per_cpu_ptr(_JOS_K_PER_CPU_IDX_PROCESSOR_INFO);    
+    //TODO: ((processor_information_t*)arg)->_test = processors_get_per_cpu_ptr(_JOS_K_PER_CPU_IDX_PROCESSOR_INFO);    
 }
 
 jo_status_t    processors_initialise() {
@@ -266,7 +266,7 @@ jo_status_t        processors_get_processor_information(processor_information_t*
     return _JO_STATUS_SUCCESS;
 }
 
-jos_status_t        processors_get_this_processor_info(processor_information_t* out_info)
+jo_status_t        processors_get_this_processor_info(processor_information_t* out_info)
 {
     //TODO: how do we identify "this" processor?  
     //ZZZ: just return the BSP's info for now
