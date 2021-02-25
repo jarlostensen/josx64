@@ -153,6 +153,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     if ( processors_has_acpi_20() ) {
         output_console_output_string(L"ACPI 2.0 configuration enabled\n");
     }
+    #if 0
     for ( size_t p = processors_get_processor_count(); p>0; --p ) {
         processor_information_t info;
         jo_status_t status = processors_get_processor_information(&info, p-1);
@@ -199,6 +200,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
             output_console_output_string(buf);
         }
     }
+    #endif
     
 
 #ifdef _JOS_KERNEL_BUILD
@@ -236,7 +238,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     keyboard_initialise();
 
     scroller_initialise(&(rect_t){
-        .top = 50,
+        .top = 250,
         .left = 8,
         .bottom = 400,
         .right = 600

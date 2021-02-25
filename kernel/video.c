@@ -32,6 +32,9 @@ static size_t _blue_shift;
 // are copied to the framebuffer
 static uint8_t* _backbuffer = 0;
 
+#define _FONT_HEIGHT    8
+#define _FONT_WIDTH     8
+
 #ifndef _JOS_KERNEL_BUILD
 // implemented in the LAB code base
 extern uint32_t* framebuffer_base(void);
@@ -190,6 +193,64 @@ video_mode_info_t video_get_video_mode_info() {
 #endif
 }
 
+void video_create_draw_glyph_context(draw_text_segment_args_t* args, _video_glyp_draw_context_t* out_ctx) {
+    out_ctx->_wptr = backbuffer_wptr(args->top, args->left);
+    out_ctx->_lut[0] = args->bg_colour;
+    out_ctx->_lut[1] = args->colour;
+    out_ctx->_font_ptr = args->font_ptr;
+}
+
+void video_draw_glyph(_video_glyp_draw_context_t* ctx, const wchar_t c) {
+
+    if (!ctx || !ctx->_wptr) {
+        return;
+    }
+
+    //ZZZ: since we're just throwing away the unicode bit anyway we might as well not use it..?
+    size_t glyph_offset = (((size_t)c & 0xff) << 3);
+    size_t line = 0;
+    uint32_t* line_ptr = ctx->_wptr;
+    const uint32_t bg_colour = ctx->_lut[0];
+    const uint32_t fg_colour = ctx->_lut[1];
+    while (line < _FONT_HEIGHT) {
+
+        uint8_t pixels = ctx->_font_ptr[glyph_offset + line];
+        switch (pixels) {
+        case 0:
+        {
+            line_ptr[0] = bg_colour; line_ptr[1] = bg_colour;
+            line_ptr[2] = bg_colour; line_ptr[3] = bg_colour;
+            line_ptr[4] = bg_colour; line_ptr[5] = bg_colour;
+            line_ptr[6] = bg_colour; line_ptr[7] = bg_colour;
+        }
+        break;
+        case 0xff:
+        {
+            line_ptr[0] = fg_colour; line_ptr[1] = fg_colour;
+            line_ptr[2] = fg_colour; line_ptr[3] = fg_colour;
+            line_ptr[4] = fg_colour; line_ptr[5] = fg_colour;
+            line_ptr[6] = fg_colour; line_ptr[7] = fg_colour;
+        }
+        break;
+        default:
+        {
+            uint8_t index = 0;
+            while (index < _FONT_WIDTH) {
+                uint8_t set = pixels & 1;
+                line_ptr[index] = ctx->_lut[set];
+                pixels >>= 1;
+                ++index;
+            }
+        }
+        break;
+        }
+        ++line;
+        line_ptr += _info.pixels_per_scan_line;
+    }
+    // advance to the next glyph position
+    ctx->_wptr += ctx->_kerning;
+}
+
 void video_draw_text_segment(draw_text_segment_args_t* args, const wchar_t* text) {
 
     if (!args || !text || wcslen(text) == 0) {
@@ -209,12 +270,12 @@ void video_draw_text_segment(draw_text_segment_args_t* args, const wchar_t* text
     while (n < end) {
 
         wchar_t c = text[n];
-        size_t gyph_offset = (size_t)((c & 0xff) << 3);
+        size_t glyph_offset = (size_t)((c & 0xff) << 3);
         size_t line = 0;
         uint32_t* line_ptr = wptr;
         while (line < 8) {
 
-            uint8_t pixels = args->font_ptr[gyph_offset + line];
+            uint8_t pixels = args->font_ptr[glyph_offset + line];
             switch (pixels) {
             case 0:
             {

@@ -112,7 +112,7 @@ void clock_initialise(void) {
 
     _JOS_KTRACE(kClockChannel, "initialising");
 
-    //ZZZ: this hangs and the note in i8253.c (Linux arch\x86) suggests it may be disabled:
+    //NOTE from i8253.c (Linux arch\x86):
     /*
         * Modern chipsets can disable the PIT clock which makes it unusable. It
         * would be possible to enable the clock but the registers are chipset
@@ -124,7 +124,7 @@ void clock_initialise(void) {
     */
    // HOWEVER: Qemu reports APIC disabled, so why should the PIT also be disabled..?
 
-    uint64_t bsp_freq = 1; //_est_cpu_freq();
+    uint64_t bsp_freq = _est_cpu_freq();
     wchar_t buf[128];
     
     _pit_interval = _make_pit_interval(HZ);
@@ -145,12 +145,13 @@ void clock_initialise(void) {
     uint64_t tsc_start = __rdtsc();
     while(ms_now-ms_start<=10) {
         ms_now = clock_ms_since_boot();
+        x86_64_io_wait();
     }
     uint64_t delta = __rdtsc() - tsc_start;
     uint64_t cpu_hz = 100*delta;
     _micro_epsilon = delta/10000;
 
-    swprintf(buf,128,L"clock: bsp freq estimated ~ %llu MHz, 1ue = %llu, %llu 1KHz ticks measured\n", cpu_hz/1000000, _micro_epsilon, _1khz_counter);
+    swprintf(buf,128,L"clock: bsp freq estimated ~ %llu MHz, 1ue = %llu, %llu 1KHz ticks measured\n", bsp_freq/1000000, _micro_epsilon, _1khz_counter);
     output_console_output_string(buf);
 
     _JOS_KTRACE(kClockChannel, "initialised");

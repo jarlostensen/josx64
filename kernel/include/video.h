@@ -51,6 +51,16 @@ typedef enum _video_filter_mode {
 
 } video_filter_mode_t;
 
+typedef struct _video_glyp_draw_context {
+    uint32_t*                   _wptr;
+    uint32_t                    _lut[2];
+    size_t                      _kerning;
+    const uint8_t*              _font_ptr;
+} _video_glyp_draw_context_t;
+
+void video_create_draw_glyph_context(draw_text_segment_args_t* args, _video_glyp_draw_context_t* out_ctx);
+void video_draw_glyph(_video_glyp_draw_context_t* ctx, const wchar_t c);
+
 void video_draw_text_segment(draw_text_segment_args_t* args, const wchar_t* text);
 void video_draw_text(draw_text_segment_args_t* args, const wchar_t* text);
 
