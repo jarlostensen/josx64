@@ -12,25 +12,6 @@
 // in efi_main.c for now, loaded with the kernel's CS selector on boot
 extern uint16_t kJosKernelCS;
 
-typedef struct _isr_stack
-{    
-    // bottom of stack (rsp)
-
-    uint64_t        rdi, rsi, rbp, rdx, rcx, rbx, rax;
-    uint64_t        r15, r14, r13, r12, r11, r10, r9, r8;
-
-    uint64_t        handler_id;
-    uint64_t        error_code; //< will be pushed as 0 by our stub if not done by the CPU    
-
-    uint64_t        rip;    
-    uint64_t        cs;
-    uint64_t        rflags;
-    //NOTE: CPU always pushes these 64-bit mode (not just for CPL changes) 
-    uint64_t        rsp;
-    uint64_t        ss;     // <- top of stack (rsp + 184)
-
-} _JOS_PACKED_ isr_stack_t;
-
 enum {
     kInterruptGate  = 0xe,
     kTrapGate       = 0xf,
@@ -38,11 +19,27 @@ enum {
     kTaskGate       = 0x5,
 };
 
-static isr_handler_func_t _isr_handlers[256];
-static irq_handler_func_t _irq_handlers[32];
+typedef struct _isr_handler {
+
+    isr_handler_func_t              _handler;
+    interrupt_handler_priority_t    _priority;
+
+} isr_handler_t;
+
+typedef struct _irq_handler {
+
+    irq_handler_func_t              _handler;
+    interrupt_handler_priority_t    _priority;
+
+} irq_handler_t;
+
+static isr_handler_t  _isr_handlers[256];
+static irq_handler_t  _irq_handlers[32];
 // we use this to control interrupts at a "soft" level; if this flag is true we forward interrupts to ISR handlers
 // if false we don't, and we may filter some IRQs as well
 static bool _interrupts_enabled = true;
+//TODO: this all needs to be per CPU
+static interrupt_handler_priority_t _current_priority = kInterrupt_NonCritical_Deferrable;
 
 
 // Intel IA dev guide Vol 3 6.14.1 64-Bit Mode IDT
@@ -161,14 +158,7 @@ static void idt_init(idt_entry_t* entry, void* handler) {
     idt_set_rip(entry, (uint64_t)handler);
 }
 
-void interrupts_isr_set_handler(int i, isr_handler_func_t handler) {
-    //TODO: assert on handler already being set
-    x86_64_cli();
-    _isr_handlers[i] = handler;
-    x86_64_sti();
-}
-
-void interrupts_isr_handler(isr_stack_t *stack) {
+void interrupts_isr_handler(interrupt_stack_t *stack) {
 
     if ( _interrupts_enabled )
     {        
@@ -208,10 +198,11 @@ void interrupts_isr_handler(isr_stack_t *stack) {
     }
 }
 
-void interrupts_set_isr_handler(int i, isr_handler_func_t handler) {
+void interrupts_set_isr_handler(isr_handler_def_t* def) {
     //TODO: assert on handler already being set
     x86_64_cli();
-    _isr_handlers[i] = handler;
+    _isr_handlers[def->_isr_number]._handler = def->_handler;
+    _isr_handlers[def->_isr_number]._priority = def->_priority;
     x86_64_sti();
 }
 
@@ -231,7 +222,7 @@ void interrupts_irq_handler(int irq) {
     i8259a_enable_irq(irq);
 }
 
-void interrupts_set_irq_handler(int irqId, irq_handler_func_t handler) {
+void interrupts_set_irq_handler(irq_handler_def_t* def) {
     //TODO: check if this IRQ is enabled or not, it shouldn't be (for now we only allow one handler ever)
     x86_64_cli();
     _irq_handlers[irqId] = handler;

@@ -86,8 +86,7 @@ void image_protocol_info(CEfiHandle h, CEfiStatus (*_efi_main)(CEfiHandle, CEfiS
     }    
 }
 
-extern uint16_t x86_64_get_cs(void);
-extern uint64_t x86_64_get_rflags(void);
+
 
 void pre_exit_boot_services() {
     wchar_t buf[256];
@@ -148,8 +147,9 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     wchar_t buf[256];
     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
     size_t bsp_id = processors_get_bsp_id();
-    swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", processors_get_processor_count(), bsp_id);
+    swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", processors_get_processor_count(), bsp_id);    
     output_console_output_string(buf);
+    
     if ( processors_has_acpi_20() ) {
         output_console_output_string(L"ACPI 2.0 configuration enabled\n");
     }
@@ -159,13 +159,14 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         jo_status_t status = processors_get_processor_information(&info, p-1);
         if ( _JO_SUCCEEDED(status) ) {
 
-            swprintf(buf, 256, L"\tid %d, status 0x%x, package %d, core %d, thread %d, TSC is %S\n", 
+            swprintf(buf, 256, L"\tid %d, status 0x%x, package %d, core %d, thread %d, TSC is %S, Intel 64 arch %S\n", 
                     info._uefi_info.processor_id,
                     info._uefi_info.status_flag,
                     info._uefi_info.extended_information.location.package,
                     info._uefi_info.extended_information.location.core,
                     info._uefi_info.extended_information.location.thread,
-                    info._has_tsc ? "enabled":"disabled"
+                    info._has_tsc ? "enabled":"disabled",
+                    info._intel_64_arch ? "supported" : "not supported"
                     );
             output_console_output_string(buf);
 

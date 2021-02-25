@@ -61,7 +61,9 @@ _JOS_INLINE_FUNC void vector_push_back(vector_t* vec, void* element)
 
 	if(vec->_size == vec->_capacity)
 	{
-		vec->_data = realloc(vec->_data, (vec->_capacity+=32)*vec->_element_size);
+		// optimal growth ratio if we want to stand a chance to re-use memory for future growth
+		vec->_capacity += vec->_capacity>>1;
+		vec->_data = realloc(vec->_data, vec->_capacity*vec->_element_size);
 	}
 
 	const size_t i = vec->_size*vec->_element_size;

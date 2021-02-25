@@ -84,6 +84,7 @@ if(!(cond))\
 
 #else
 //TODO: check if this is actually VS, but we're assuming it because we're in control...
+#define _JOS_UNREACHABLE()
 #define _JOS_MAYBE_UNUSED
 #define _JOS_INLINE_FUNC static
 #define _JOS_BOCHS_DBGBREAK() __debugbreak()

@@ -22,6 +22,10 @@ static processor_information_t* _processors = 0;
 // used as a placeholder event for 
 static CEfiEvent    _ap_event = 0;
 
+#define _JOS_K_IA32_FS_BASE             0xc0000100
+#define _JOS_K_IA32_GS_BASE             0xc0000101
+#define _JOS_K_IA32_KERNEL_GS_BASE      0xc0000102
+
 // ===================================================================================================
 // TODO: move this into a separate acpi module, should be "internal"?
 
@@ -147,16 +151,31 @@ static void collect_this_cpu_information(processor_information_t* info) {
         apic_collect_this_cpu_information(info);
         info->_local_apic_info._has_x2apic = (ecx & (1<<21)) == (1<<21);
     }
-
+    
+    __get_cpuid(0x80000001, &eax, &ebx, &ecx, &edx);
+    info->_intel_64_arch = (edx & (1<<29));
+    info->_has_1GB_pages = (edx & (1<<26));
+    
     //NOTE: if x2APIC is supported we can use 1b or b CPUID functions for topology information as well
     
     info->_is_good = true;
 }
 
 // wrapper for UEFI callback protocol
-static void collect_ap_information(void* arg) {
+static void initialise_this_ap(void* arg) {
 
     collect_this_cpu_information((processor_information_t*)arg);
+
+    // set gs to point to a small block of memory that holds the pointer LUT for per-cpu information
+    // this never gets freed so we don't keep the pointer around
+    uintptr_t*   per_cpu_block = (uintptr_t*)malloc(2*sizeof(uintptr_t));
+    per_cpu_block[_JOS_K_PER_CPU_IDX_PROCESSOR_INFO] = (uintptr_t)arg;
+    per_cpu_block[_JOS_K_PER_CPU_IDX_TASK_INFO] = 0; // for now
+
+    //NOTE: at this point we assume that we can use these MSRs
+    x86_64_wrmsr(_JOS_K_IA32_GS_BASE, ((uintptr_t)per_cpu_block) & 0xffffffff, ((uintptr_t)per_cpu_block) >> 32);
+    //TESTING:
+    ((processor_information_t*)arg)->_test = processors_get_per_cpu_ptr(_JOS_K_PER_CPU_IDX_PROCESSOR_INFO);    
 }
 
 jo_status_t    processors_initialise() {
@@ -194,8 +213,8 @@ jo_status_t    processors_initialise() {
             _processors = (processor_information_t*)malloc(sizeof(processor_information_t) * _num_processors);
             memset(_processors, 0, sizeof(processor_information_t) * _num_processors);
             // collect information about the BSP
-            collect_ap_information(&_processors[_bsp_id]);
-
+            initialise_this_ap(&_processors[_bsp_id]);
+            
             for(size_t p = 0; p < _num_processors; ++p) {
                 if( p != _bsp_id ) {
                     // note that this only works for processors that support x2APIC (i.e. 1f and b CPUID leafs)
@@ -203,7 +222,7 @@ jo_status_t    processors_initialise() {
                     if ( efi_status == C_EFI_SUCCESS ) {
                         // execute the information collect function on this processor
                         //NOTE: infinite timeout here because the callback is quick, if that changes this has to be re-considered
-                        efi_status = _mpp->startup_this_ap(_mpp, collect_ap_information, p, NULL, 0, (void*)(_processors+p), NULL);
+                        efi_status = _mpp->startup_this_ap(_mpp, initialise_this_ap, p, NULL, 0, (void*)(_processors+p), NULL);
                         if ( efi_status != C_EFI_SUCCESS ) {
                             _processors[p]._is_good = false;
                         }
@@ -247,6 +266,20 @@ jo_status_t        processors_get_processor_information(processor_information_t*
     return _JO_STATUS_SUCCESS;
 }
 
+jos_status_t        processors_get_this_processor_info(processor_information_t* out_info)
+{
+    //TODO: how do we identify "this" processor?  
+    //ZZZ: just return the BSP's info for now
+    return processors_get_processor_information(out_info, processors_get_bsp_id());
+}
+
+const uintptr_t*     processors_get_per_cpu_ptr(size_t index) {
+    uint64_t val = 0;
+    x86_64_read_gs(_JOS_K_PER_CPU_IDX_PROCESSOR_INFO, &val);
+    return (const uintptr_t*)val;
+}
+
+//ZZZ: per-processor, not like this...
 bool processors_has_acpi_20() {
     return _xsdt != 0;
 }
