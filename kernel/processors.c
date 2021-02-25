@@ -268,7 +268,12 @@ jo_status_t        processors_get_this_processor_info(processor_information_t* o
 {
     //TODO: how do we identify "this" processor?  
     //ZZZ: just return the BSP's info for now
-    return processors_get_processor_information(out_info, processors_get_bsp_id());
+    const processor_information_t* info = (const processor_information_t*)processors_get_per_cpu_ptr(_JOS_K_PER_CPU_IDX_PROCESSOR_INFO);
+    if(info) {
+        memcpy(out_info, info, sizeof(processor_information_t));
+        return _JO_STATUS_SUCCESS;
+    }
+    return _JO_STATUS_UNAVAILABLE;
 }
 
 const uintptr_t*     processors_get_per_cpu_ptr(size_t index) {

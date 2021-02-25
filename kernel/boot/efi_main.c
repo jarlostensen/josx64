@@ -153,92 +153,76 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     if ( processors_has_acpi_20() ) {
         output_console_output_string(L"ACPI 2.0 configuration enabled\n");
     }
-
-    const processor_information_t* proc_info = (const processor_information_t*)processors_get_per_cpu_ptr(_JOS_K_PER_CPU_IDX_PROCESSOR_INFO);
-    if(proc_info) {        
-        swprintf(buf, 256, L"\tid %d, status 0x%x, package %d, core %d, thread %d, TSC is %S, Intel 64 arch %S\n", 
-                    proc_info->_uefi_info.processor_id,
-                    proc_info->_uefi_info.status_flag,
-                    proc_info->_uefi_info.extended_information.location.package,
-                    proc_info->_uefi_info.extended_information.location.core,
-                    proc_info->_uefi_info.extended_information.location.thread,
-                    proc_info->_has_tsc ? "enabled":"disabled",
-                    proc_info->_intel_64_arch ? "supported" : "not supported"
-                    );
-            output_console_output_string(buf);
-    }
-
-    #if 0
-    for ( size_t p = processors_get_processor_count(); p>0; --p ) {
-        processor_information_t info;
-        jo_status_t status = processors_get_processor_information(&info, p-1);
-        if ( _JO_SUCCEEDED(status) ) {
-
-            swprintf(buf, 256, L"\tid %d, status 0x%x, package %d, core %d, thread %d, TSC is %S, Intel 64 arch %S\n", 
-                    info._uefi_info.processor_id,
-                    info._uefi_info.status_flag,
-                    info._uefi_info.extended_information.location.package,
-                    info._uefi_info.extended_information.location.core,
-                    info._uefi_info.extended_information.location.thread,
-                    info._has_tsc ? "enabled":"disabled",
-                    info._intel_64_arch ? "supported" : "not supported"
-                    );
-            output_console_output_string(buf);
-
-            if ( (p-1) == bsp_id ) {
-                swprintf(buf, 256, L"\tBSP vendor is \"%S\",%S hypervisor detected ", 
-                    info._vendor_string,
-                    info._has_hypervisor?L" ":L" no");
+    
+    if ( processors_get_processor_count()==1 ) {
+        processor_information_t info;    
+        if ( _JO_SUCCEEDED(processors_get_this_processor_info(&info) ) ) {
+            swprintf(buf, 256, L"BSP id %d, status 0x%x, package %d, core %d, thread %d, TSC is %S, Intel 64 arch %S\n", 
+                        info._uefi_info.processor_id,
+                        info._uefi_info.status_flag,
+                        info._uefi_info.extended_information.location.package,
+                        info._uefi_info.extended_information.location.core,
+                        info._uefi_info.extended_information.location.thread,
+                        info._has_tsc ? "enabled":"disabled",
+                        info._intel_64_arch ? "supported" : "not supported"
+                        );
                 output_console_output_string(buf);
-                if ( info._has_hypervisor ) {
-                    swprintf(buf, 256, L"\"%s\"\n", info._hypervisor_id);
+        }
+    }
+    else {
+        for ( size_t p = processors_get_processor_count(); p>0; --p ) {
+            processor_information_t info;    
+            jo_status_t status = processors_get_processor_information(&info, p-1);
+            if ( _JO_SUCCEEDED(status) ) {
+
+                swprintf(buf, 256, L"\tid %d, status 0x%x, package %d, core %d, thread %d, TSC is %S, Intel 64 arch %S\n", 
+                        info._uefi_info.processor_id,
+                        info._uefi_info.status_flag,
+                        info._uefi_info.extended_information.location.package,
+                        info._uefi_info.extended_information.location.core,
+                        info._uefi_info.extended_information.location.thread,
+                        info._has_tsc ? "enabled":"disabled",
+                        info._intel_64_arch ? "supported" : "not supported"
+                        );
+                output_console_output_string(buf);
+
+                if ( (p-1) == bsp_id ) {
+                    swprintf(buf, 256, L"\tBSP vendor is \"%S\",%S hypervisor detected ", 
+                        info._vendor_string,
+                        info._has_hypervisor?L" ":L" no");
+                    output_console_output_string(buf);
+                    if ( info._has_hypervisor ) {
+                        swprintf(buf, 256, L"\"%s\"\n", info._hypervisor_id);
+                        output_console_output_string(buf);
+                    }
+                    else {
+                        output_console_output_string(L"\n");
+                    }
+                }
+                
+                if ( info._has_local_apic ) {
+                    swprintf(buf, 256, L"\t\tlocal APIC id %d (0x%x) is %S, %S, x2APIC %S supported\n", 
+                        info._local_apic_info._id >> 24, info._local_apic_info._id, 
+                        info._local_apic_info._enabled ? "enabled":"disabled",
+                        info._local_apic_info._version? "integrated":"discrete 8248DX",
+                        info._local_apic_info._has_x2apic ? "is":"not"
+                        );
                     output_console_output_string(buf);
                 }
-                else {
-                    output_console_output_string(L"\n");
-                }
+                output_console_output_string(L"\n");
             }
-            
-            if ( info._has_local_apic ) {
-                swprintf(buf, 256, L"\t\tlocal APIC id %d (0x%x) is %S, %S, x2APIC %S supported\n", 
-                    info._local_apic_info._id, info._local_apic_info._id >> 24, 
-                    info._local_apic_info._enabled ? "enabled":"disabled",
-                    info._local_apic_info._version? "integrated":"discrete 8248DX",
-                    info._local_apic_info._has_x2apic ? "is":"not"
-                    );
+            else
+            {
+                swprintf(buf, 256, L"processors_get_processor_information returned %x\n", status);
                 output_console_output_string(buf);
             }
-            output_console_output_string(L"\n");
-        }
-        else
-        {
-            swprintf(buf, 256, L"processors_get_processor_information returned %x\n", status);
-            output_console_output_string(buf);
         }
     }
-    #endif
     
 
 #ifdef _JOS_KERNEL_BUILD
     output_console_output_string(L"\n\nkernel build\n");
 #endif
-
-    if(processors_get_processor_count()>1)
-    {
-        size_t* ids = (size_t*)malloc(sizeof(size_t)*processors_get_processor_count());
-        for(size_t n = 0; n < processors_get_processor_count(); ++n )
-        {
-            ids[n] = n;
-        }
-        
-        //ZZZ:
-        // jo_status_t status = processors_startup_aps(ap_idle_func, (void*)ids, sizeof(size_t));
-        // if ( _JO_FAILED(status )) {
-        //     output_console_set_colour(video_make_color(0xff,0,0));
-        //     swprintf(buf, bufcount, L"\tstartup aps failed with 0x%x\n", status);
-        //     output_console_output_string(buf);
-        // }
-    }
 
     // after this point we can no longer use boot services (only runtime)
     
@@ -346,33 +330,13 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         }
 
         uint64_t t1 = clock_ms_since_boot();
-        if( t1 - t0 > 33 ) {
+        if( t1 - t0 >= 33 ) {
             t0 = t1;
             scroller_render_field();
             video_present();
         }
     }
     output_console_line_break();
-
-
-    // size_t dim;
-    // const uint8_t* memory_bitmap = memory_get_memory_bitmap(&dim);
-    // const size_t new_w = dim * 8;
-    // const size_t new_h = 64;
-    // const size_t channels = 4;
-    // uint8_t* scaled_bitmap = (uint8_t*)malloc(new_w*new_h*channels);
-    // if ( scaled_bitmap )
-    // {
-    //     stbir_resize_uint8(memory_bitmap, dim,1,dim, scaled_bitmap, new_w,new_h, new_w, channels);
-
-    //     uint32_t palette[_C_EFI_MEMORY_TYPE_N];
-    //     uint8_t dc = 0xff/_C_EFI_MEMORY_TYPE_N;
-    //     for(size_t i = 0; i < _C_EFI_MEMORY_TYPE_N; ++i) {
-    //         uint8_t c = dc*i;
-    //         palette[i] = video_make_color(c,c,c);
-    //     }
-    //     video_scale_draw_indexed_bitmap( scaled_bitmap, palette, _C_EFI_MEMORY_TYPE_N, new_w,new_h, 200,500, new_w,new_h );
-    // } 
 
     //TEST:
     asm volatile (
