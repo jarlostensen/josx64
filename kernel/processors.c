@@ -173,9 +173,7 @@ static void initialise_this_ap(void* arg) {
     per_cpu_block[_JOS_K_PER_CPU_IDX_TASK_INFO] = 0; // for now
 
     //NOTE: at this point we assume that we can use these MSRs
-    x86_64_wrmsr(_JOS_K_IA32_GS_BASE, ((uintptr_t)per_cpu_block) & 0xffffffff, ((uintptr_t)per_cpu_block) >> 32);
-    //TESTING:
-    //TODO: ((processor_information_t*)arg)->_test = processors_get_per_cpu_ptr(_JOS_K_PER_CPU_IDX_PROCESSOR_INFO);    
+    x86_64_wrmsr(_JOS_K_IA32_GS_BASE, (uint32_t)((uintptr_t)per_cpu_block) & 0xffffffff, (uint32_t)((uintptr_t)per_cpu_block >> 32));        
 }
 
 jo_status_t    processors_initialise() {
@@ -235,7 +233,7 @@ jo_status_t    processors_initialise() {
     {
         // uni processor
         _processors = (processor_information_t*)malloc(sizeof(processor_information_t));
-        collect_this_cpu_information(_processors);
+        initialise_this_ap(_processors);        
         _processors->_is_good = true;
     }
 
@@ -275,7 +273,7 @@ jo_status_t        processors_get_this_processor_info(processor_information_t* o
 
 const uintptr_t*     processors_get_per_cpu_ptr(size_t index) {
     uint64_t val = 0;
-    x86_64_read_gs(_JOS_K_PER_CPU_IDX_PROCESSOR_INFO, &val);
+    x86_64_read_gs(index, &val);
     return (const uintptr_t*)val;
 }
 
