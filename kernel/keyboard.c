@@ -128,15 +128,15 @@ static char _xt_set1[126][2] = {
 
     // keypad
     {'7','7'},                                                                  // 0x47
-    {'8','8'},                                                                  // 0x48
+    {KEYBOARD_VK_UP,KEYBOARD_VK_UP},                                            // 0x48
     {'9','9'},                                                                  // 0x49
     {'-','-'},                                                                  // 0x4a
-    {'4','4'},                                                                  // 0x4b
+    {KEYBOARD_VK_LEFT,KEYBOARD_VK_LEFT},                                        // 0x4b
     {'5','5'},                                                                  // 0x4c
-    {'6','6'},                                                                  // 0x4d
+    {KEYBOARD_VK_RIGHT,KEYBOARD_VK_RIGHT},                                      // 0x4d
     {'+','+'},                                                                  // 0x4e
     {'1','1'},                                                                  // 0x4f
-    {'2','2'},                                                                  // 0x50
+    {KEYBOARD_VK_DOWN,KEYBOARD_VK_DOWN},                                        // 0x50
     {'3','3'},                                                                  // 0x51
     {'0','0'},                                                                  // 0x52
     {'.','.'},                                                                  // 0x53
@@ -175,54 +175,61 @@ static void _irq_1_handler(int irqNum) {
         return;
     }
 
-    uint8_t controller_status = KBD_CONTROLLER_READ();
-    // check the controller, is there anything to read from the output buffer?
-    if ( controller_status & 1 ) {
-
-        // get scan code from the encoder's output buffer and just buffer it
+    // keep reading while there's something available
+    while( KBD_CONTROLLER_READ() & 0x01 ) {
         uint8_t scan_code = KBD_ENCODER_READ();
         if ( scan_code == SCAN_CODE_EXTENDED ) {
-            // extended scan code, next scan code will be the actual key
             _extended_code = true;
-            scan_code = KBD_ENCODER_READ();
-        }
-
-        uint8_t pressed = 1 ^ ((scan_code & 0x80)>>7);
-        switch(scan_code & SCAN_CODE_MAKE_MASK) {
-            case 0x1d:
-            if ( _extended_code )
-                _keyboard_state.rctrl = pressed;
-            else
-                _keyboard_state.lctrl = pressed;
-            break;
-        case 0x6a:
-            if ( _extended_code )
-                _keyboard_state.ralt = pressed;
-            else
-                _keyboard_state.lalt = pressed;
-            break;
-        case 0x2a:
-            if ( _extended_code )
-                _keyboard_state.rshift = pressed;
-            else
-                _keyboard_state.lshift = pressed;
-            break;
-        case 0x3a:
-            _keyboard_state.caps ^= 1;
-            break;
-        //TODO: process more special keys
-        //TODO: including more extended keys
-        default:
-        {
-            // everything else we just store in the buffer
             LOCK_BUFFER();
-            _keyboard_buffer[_keys_in_buffer++] = scan_code;
+            _keyboard_buffer[_keys_in_buffer++] = SCAN_CODE_EXTENDED;
             UNLOCK_BUFFER();
         }
-        break;
+        else {
+            uint8_t pressed = (scan_code & 0x80) == 0;
+            switch(scan_code & SCAN_CODE_MAKE_MASK) {
+                case 0x1d:
+                if ( _extended_code ) {
+                    _keyboard_state.rctrl = pressed;                
+                }
+                else
+                    _keyboard_state.lctrl = pressed;
+                break;
+            case 0x6a:
+                if ( _extended_code ) {
+                    _keyboard_state.ralt = pressed;
+                }
+                else
+                    _keyboard_state.lalt = pressed;
+                break;
+            case 0x2a:
+                if ( _extended_code ) {
+                    _keyboard_state.rshift = pressed;
+                }
+                else
+                    _keyboard_state.lshift = pressed;
+                break;
+            case 0x3a:
+                _keyboard_state.caps ^= 1;
+                break;
+            //TODO: process more special keys
+            //TODO: including more extended keys
+            default:
+            {
+                // everything else we just store in the buffer
+                LOCK_BUFFER();
+                _keyboard_buffer[_keys_in_buffer++] = scan_code;
+                UNLOCK_BUFFER();
+            }
+            break;
+            }
+
+            _extended_code = false;
         }
 
-        _extended_code = false;
+        if( _keys_in_buffer == KBD_BUFFER_SIZE ) {
+            //TODO: beep...
+            break;
+        }
     }
 }
 
@@ -277,19 +284,25 @@ bool        keyboard_has_key(void) {
     return has_keys;
 }
 
-#define MAKE_VK(scancode, character) ((((uint32_t)scancode)<<24) | (uint32_t)character)
+#define MAKE_VK(scancode, character) ((((uint32_t)scancode)<<24) | (uint32_t)character & 0xff)
 uint32_t     keyboard_get_last_key(void) {
     uint8_t sc = 0;
+    bool extended = false;
     LOCK_BUFFER();    
     if (_keys_in_buffer) {
          sc = _keyboard_buffer[--_keys_in_buffer];
-         if(sc == SCAN_CODE_EXTENDED) {
+         //ZZZ: if the buffer is empty....it can happen!
+         if(sc == SCAN_CODE_EXTENDED && _keys_in_buffer) {
+             extended = true;             
              sc = _keyboard_buffer[--_keys_in_buffer];
          }
     }
     UNLOCK_BUFFER();
 
     if (sc) {
+        if ( extended ) {
+            return MAKE_VK(SCAN_CODE_EXTENDED, _xt_set1[sc & SCAN_CODE_MAKE_MASK][_keyboard_state.caps | _keyboard_state.lshift | _keyboard_state.rshift]);
+        }
         //TODO: assert(_xt_set1[sc][_keyboard_state.caps | _keyboard_state.lshift | _keyboard_state.rshift]]!=KEYBOARD_VK_INVALID)
         return MAKE_VK(sc, _xt_set1[sc & SCAN_CODE_MAKE_MASK][_keyboard_state.caps | _keyboard_state.lshift | _keyboard_state.rshift]);
     }

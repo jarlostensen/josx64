@@ -265,12 +265,8 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
             uint32_t key = keyboard_get_last_key();
             if ( KEYBOARD_VK_PRESSED(key) ) {
                 short c = (short)KEYBOARD_VK_CHAR(key);
-                swprintf(buf, bufcount, L"0x%x ", c);
-                output_console_output_string(buf);
-
-                video_present();
-
-                switch(c) {
+                
+                    switch(c) {
                     case KEYBOARD_VK_ESC:
                         output_console_output_string(L"\ngot ESC\n");
                         done = true;
@@ -286,6 +282,12 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
                         break;
                     case KEYBOARD_VK_DOWN:
                         output_console_output_string(L" v ");
+                        break;
+                    case KEYBOARD_VK_BACKSPACE:
+                        output_console_output_string(L"bs");
+                        break;
+                    case KEYBOARD_VK_CR:
+                        output_console_line_break();
                         break;
                     case KEYBOARD_VK_F1:
                         output_console_output_string(L" F1 ");
@@ -323,7 +325,10 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
                     case KEYBOARD_VK_F12:
                         output_console_output_string(L" F12 ");
                         break;
-                    default:
+                    default: {
+                        swprintf(buf, bufcount, L"0x%x ", key);
+                        output_console_output_string(buf);                
+                    }
                     break;
                 }                
             }
