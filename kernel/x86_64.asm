@@ -71,38 +71,56 @@ section .text
 ; task handlers
 
 ;NOTE: this is also invoked from tasks.c
-global x86_64_task_switch_trampoline
 x86_64_task_switch_trampoline:
-    POPAQ
-    add rsp, 16
-    iret
+    
+
+%define TASK_CONTEXT_T_RSP 160
+%define TASK_CONTEXT_T_SS  168
 
 global x86_64_task_switch
-; task_context_t* int x86_64_task_yield(task_context_t* curr, task_context_t* new)
+; task_context_t* int x86_64_task_switch((interrupt_stack_t* curr_stack, interrupt_stack_t* new_stack)
 x86_64_task_switch:
+
+    ; prev may be 0 when idle tasks are started
+    test    rcx, rcx
+    jz      ._task_switch_next
 
     ; save current context on this stack
     ; cs:_task_switch_resume for our return to this task
 
-    pushfq     
+    pushfq
+    pop     rax
+    ; make sure IF=1 always so that tasks never resume with it off
+    or      rax, (1<<9)
+    push    rax
     xor     rax, rax
     mov     ax, cs
     push    ax
+    ; we'll continue here when we next switch back to this task
     lea     rax,[._task_switch_resume]
     push    rax
     push    0
     push    0
     PUSHAQ
-    ; save current task's stack
-    mov     [ecx+168], rsp
-    mov     ax, ss
-    mov     [ecx+176], rax
 
+    cli
+    ; save current task's stack
+    mov     [rcx+TASK_CONTEXT_T_RSP], rsp
+    mov     ax, ss
+    mov     [rcx+TASK_CONTEXT_T_SS], rax
+
+._task_switch_next:
+    
+    cli
     ; switch to new task's stack
-    mov     rsp, [edx+168]
-    mov     rax, [edx+176]
-    mov     ss, ax          ;< this isn't really needed, since we never change ss but kept for good measure
-    jmp x86_64_task_switch_trampoline
+    mov     rsp, [rdx+TASK_CONTEXT_T_RSP]
+    mov     rax, [rdx+TASK_CONTEXT_T_SS]
+    mov     ss, ax          ;< this isn't really needed, since we never change ss but kept for good measure    
+    sti
+
+    ; restore registers for the task we're switching to and jump to it
+    ISR_CLEAN_STACK
+    iretq
 
 ._task_switch_resume:
     ; when we next switch back to "curr"'s context we'll appear here

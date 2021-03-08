@@ -33,6 +33,8 @@ typedef struct _irq_handler {
 
 } irq_handler_t;
 
+const char* kInterruptsChannel = "interrupts";
+
 static isr_handler_t  _isr_handlers[256];
 static irq_handler_t  _irq_handlers[32];
 // we use this to control interrupts at a "soft" level; if this flag is true we forward interrupts to ISR handlers
@@ -166,13 +168,8 @@ void interrupts_isr_handler(interrupt_stack_t *stack) {
         if( handler ) {
 
             // provide a read only context for the handler
-            isr_context_t ctx;
-            memcpy(&ctx.rdi, &stack->rdi, 15*sizeof(uint64_t));
-            ctx.handler_code = stack->error_code;
-            ctx.rip = stack->rip;
-            ctx.cs = stack->cs;
-            ctx.rflags = stack->rflags; 
-
+            interrupt_stack_t ctx;
+            memcpy(&ctx, stack, sizeof(interrupt_stack_t));
             x86_64_sti();       
             handler(&ctx);
             x86_64_cli();
@@ -298,7 +295,7 @@ void interrupts_initialise_early(void) {
     
     x86_64_load_idt(&_idt_desc);
 
-    //ZZZ: trace
-    output_console_output_string(L"interrupts initialised\n");
+    _JOS_KTRACE_CHANNEL(kInterruptsChannel, "initialised");
+    output_console_output_string(L"interrupts initialised\n");    
 }
 

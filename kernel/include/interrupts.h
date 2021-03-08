@@ -5,20 +5,6 @@
 
 #define _JOS_KERNEL_NUM_EXCEPTIONS      32
 
-// ISR handlers get access to a copy of the interrupt context
-typedef struct _isr_context {
-
-    uint64_t        handler_code;
-
-    uint64_t        rdi, rsi, rbp, rdx, rcx, rbx, rax;
-    uint64_t        r15, r14, r13, r12, r11, r10, r9, r8;
-
-    uint64_t        rip;    
-    uint64_t        cs;
-    uint64_t        rflags;
-    
-} isr_context_t;
-
 typedef struct _interrupt_stack
 {    
     // bottom of stack (rsp)
@@ -32,7 +18,6 @@ typedef struct _interrupt_stack
     uint64_t        rip;    
     uint64_t        cs;
     uint64_t        rflags;
-    //NOTE: CPU always pushes these 64-bit mode (not just for CPL changes) 
     uint64_t        rsp;    // rsp + 168
     uint64_t        ss;     // rsp + 176
 
@@ -46,7 +31,7 @@ typedef enum _interrupt_handler_priority {
     kInterrupt_NonCritical_Deferrable
 } interrupt_handler_priority_t;
 
-typedef void (*isr_handler_func_t)(const isr_context_t * context);
+typedef void (*isr_handler_func_t)(const interrupt_stack_t * context);
 typedef struct _isr_handler_def {
 
     int                             _isr_number;

@@ -87,6 +87,8 @@ void output_console_clear_screen(void) {
     video_clear_screen(_active_context->_bg_colour);
     _active_context->_cursor_pos.x = _active_context->_rect.left;
     _active_context->_cursor_pos.y = _active_context->_rect.top;
+
+    video_present();
 }
 
 void output_console_line_break(void) {
@@ -97,6 +99,8 @@ void output_console_line_break(void) {
         _active_context->_cursor_pos.y -= LINE_HEIGHT_PIXELS;
         video_scroll_up_region_full_width(_active_context->_rect.top, _active_context->_cursor_pos.y, LINE_HEIGHT_PIXELS);
     }
+
+    video_present();
 }
 
 void output_console_output_string(const wchar_t* text) {
@@ -143,4 +147,8 @@ void output_console_output_string(const wchar_t* text) {
 
         _active_context->_cursor_pos.x += pos * CHAR_WIDTH_PIXELS;
     }
+
+    //TODO: not sure if this is the best place to do this, but it may be...?
+    //      for substantial updates a "region" concept is obviously ideal
+    video_present();
 }

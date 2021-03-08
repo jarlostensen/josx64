@@ -62,17 +62,12 @@ void trace_buf(const char* channel, const void* data, size_t length);
 trace(0, "break at %s:%d\n", __FILE__,__LINE__);\
 asm volatile ("xchg %bx,%bx")
 
-#ifdef _DEBUG
 #define _JOS_ASSERT_COND(cond) #cond
 #define _JOS_ASSERT(cond)\
 if(!(cond))\
 {\
     trace(0, "assert %s, %s:%d \n", _JOS_ASSERT_COND(cond), __FILE__,__LINE__);\
-    asm volatile ("xchg %bx,%bx");\
 }
-#else
-#define _JOS_ASSERT(cond)
-#endif
 
 #define _JOS_ALIGN(type,name,alignment) type name __attribute__ ((aligned (alignment)))
 

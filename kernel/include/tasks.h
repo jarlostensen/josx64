@@ -23,6 +23,7 @@ typedef struct _task_create_args {
 } task_create_args_t;
 
 void            task_initialise(void);
+void            task_start_idle(void);
 task_handle_t   task_create(task_create_args_t* args);
 void            task_yield(void);
 

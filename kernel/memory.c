@@ -180,7 +180,9 @@ const uint8_t* memory_get_memory_bitmap(size_t *out_dim) {
 // TODO: more pools and arenas?
 
 void* malloc(size_t size) {
-    return vmem_arena_alloc(_bootstrap_arena, size);
+    void* ptr = vmem_arena_alloc(_bootstrap_arena, size);
+    _JOS_ASSERT(ptr);
+    return ptr;
 }
 
 void free(void* block) {

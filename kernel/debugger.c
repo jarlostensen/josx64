@@ -3,6 +3,7 @@
 #include <jos.h>
 #include <interrupts.h>
 #include <hex_dump.h>
+#include <kernel.h>
 #include <debugger.h>
 
 #include <Zydis/Zydis.h>
@@ -17,7 +18,7 @@ static void re_set_trap_flag(void) {
     
 }
 
-static void _int_3_handler(const isr_context_t * context) {
+static void _int_3_handler(const interrupt_stack_t * context) {
 
     _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx\n", context->rip);
 
@@ -31,18 +32,23 @@ static void _int_3_handler(const isr_context_t * context) {
     // dump registers
     swprintf(buf, bufcount,
         L"\trax 0x%016llx\trbx 0x%016llx\n\trcx 0x%016llx\trdx 0x%016llx\n"
-        L"\trsi 0x%016llx\trdi 0x%016llx\n\trbp 0x%016llx\n\trflags 0x%016llx\n"
+        L"\trsi 0x%016llx\trdi 0x%016llx\n\trbp 0x%016llx\trsp 0x%016llx\n"
         L"\tr8  0x%016llx\tr9  0x%016llx\n\tr10 0x%016llx\tr11 0x%016llx\n"
-        L"\tr12 0x%016llx\tr13 0x%016llx\n\tr14 0x%016llx\tr15 0x%016llx\n",
+        L"\tr12 0x%016llx\tr13 0x%016llx\n\tr14 0x%016llx\tr15 0x%016llx\n"
+        L"\tcs 0x%04llx\tss 0x%04llx\n",
         context->rax, context->rbx, context->rcx, context->rdx,
-        context->rsi, context->rdi, context->rbp, context->rflags,
+        context->rsi, context->rdi, context->rbp, context->rsp,
         context->r8, context->r9, context->r10, context->r11,
-        context->r12, context->r13, context->r14, context->r15
+        context->r12, context->r13, context->r14, context->r15,
+        context->cs, context->ss
     );
-
     output_console_line_break();
     output_console_output_string(buf);
 
+    output_console_line_break();
+
+    // a wee stack dump
+    hex_dump_mem((void*)context->rsp, 8*10, k64bitInt);
     output_console_line_break();
 
     // Initialize decoder context
