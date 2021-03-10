@@ -169,8 +169,8 @@ static void initialise_this_ap(void* arg) {
     // set gs to point to a small block of memory that holds the pointer LUT for per-cpu information
     // this never gets freed so we don't keep the pointer around
     uintptr_t*   per_cpu_block = (uintptr_t*)malloc(2*sizeof(uintptr_t));
-    per_cpu_block[_JOS_K_PER_CPU_IDX_PROCESSOR_INFO] = (uintptr_t)arg;
-    per_cpu_block[_JOS_K_PER_CPU_IDX_TASK_INFO] = 0; // for now
+    per_cpu_block[kPerCpu_ProcessorInfo] = (uintptr_t)arg;
+    per_cpu_block[kPerCpu_TaskInfo] = 0; // this will be set later (in tasks.c)
 
     //NOTE: at this point we assume that we can use these MSRs
     x86_64_wrmsr(_JOS_K_IA32_GS_BASE, (uint32_t)((uintptr_t)per_cpu_block) & 0xffffffff, (uint32_t)((uintptr_t)per_cpu_block >> 32));        
@@ -254,8 +254,7 @@ size_t processors_get_bsp_id() {
     return _bsp_id;
 }
 
-jo_status_t        processors_get_processor_information(processor_information_t* out_info, size_t processor_index)
-{
+jo_status_t        processors_get_processor_information(processor_information_t* out_info, size_t processor_index) {
     if ( processor_index >= _num_processors ) {
         return _JO_STATUS_OUT_OF_RANGE;
     }
@@ -264,11 +263,8 @@ jo_status_t        processors_get_processor_information(processor_information_t*
     return _JO_STATUS_SUCCESS;
 }
 
-jo_status_t        processors_get_this_processor_info(processor_information_t* out_info)
-{
-    //TODO: how do we identify "this" processor?  
-    //ZZZ: just return the BSP's info for now
-    const processor_information_t* info = (const processor_information_t*)processors_get_per_cpu_ptr(_JOS_K_PER_CPU_IDX_PROCESSOR_INFO);
+jo_status_t        processors_get_this_processor_info(processor_information_t* out_info) {
+    const processor_information_t* info = (const processor_information_t*)processors_get_per_cpu_ptr(kPerCpu_ProcessorInfo);
     if(info) {
         memcpy(out_info, info, sizeof(processor_information_t));
         return _JO_STATUS_SUCCESS;
@@ -276,10 +272,15 @@ jo_status_t        processors_get_this_processor_info(processor_information_t* o
     return _JO_STATUS_UNAVAILABLE;
 }
 
-const uintptr_t*     processors_get_per_cpu_ptr(size_t index) {
+void*           processors_get_per_cpu_ptr(per_cpu_ptr_t ptr_id) {
     uint64_t val = 0;
-    x86_64_read_gs(index, &val);
-    return (const uintptr_t*)val;
+    x86_64_read_gs((size_t)ptr_id, &val);
+    return (void*)val;
+}
+
+void           processors_set_per_cpu_ptr(per_cpu_ptr_t ptr_id, void* ptr) {
+    uint64_t val = (uint64_t)ptr;
+    x86_64_write_gs((size_t)ptr_id, &val);
 }
 
 //ZZZ: per-processor, not like this...

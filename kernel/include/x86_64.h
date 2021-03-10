@@ -33,6 +33,10 @@ static _JOS_ALWAYS_INLINE void x86_64_read_gs(size_t offset, uint64_t * val) {
     asm volatile("movq %%gs:(%1), %0" : "=r" (*val) : "r" (offset));
 }
 
+static _JOS_ALWAYS_INLINE void x86_64_write_gs(size_t offset, uint64_t * val) {
+    asm volatile("movq %0, %%gs:(%1)" : : "r" (*val), "r" (offset));
+}
+
 //TODO: this is the "hard" way, we need a softer way to do it as well (as what Linux does)
 static _JOS_ALWAYS_INLINE void x86_64_cli(void) {
     asm volatile("cli" ::: "memory");
@@ -52,6 +56,5 @@ static _JOS_ALWAYS_INLINE void x86_64_pause_cpu(void) {
 extern uint16_t x86_64_get_cs(void);
 extern uint16_t x86_64_get_ss(void);
 extern uint64_t x86_64_get_rflags(void);
-extern uint64_t x86_64_read_gs0(void);
 
 #endif // _JOS_KERNEL_X86_64_H_
