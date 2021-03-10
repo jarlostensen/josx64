@@ -9,7 +9,7 @@ cmake.exe --version
 rem https://stackoverflow.com/questions/46553436/building-with-cmake-ninja-and-clang-on-windows
 cmake.exe -G Ninja -Bbuild^
  -DCMAKE_C_COMPILER:PATH="%CD%\external\LLVM\bin\clang.exe" -DCMAKE_C_COMPILER_ID="Clang" -DCMAKE_SYSTEM_NAME="Generic"^
- -DCMAKE_LINKER:PATH="%CD%\external\LLVM\bin\lld-link.exe" -DCMAKE_BUILD_TYPE=Release
+ -DCMAKE_LINKER:PATH="%CD%\external\LLVM\bin\lld-link.exe" -DCMAKE_BUILD_TYPE=Debug
 
 endlocal
 
