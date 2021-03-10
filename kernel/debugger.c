@@ -8,6 +8,7 @@
 
 #include <Zydis/Zydis.h>
 
+#include <string.h>
 #include <stdio.h>
 #include <output_console.h>
 
@@ -16,6 +17,68 @@ static bool _trapping = false;
 
 static void re_set_trap_flag(void) {
     
+}
+
+void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length) {
+    
+    ZydisDecoder decoder;
+    ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
+
+    ZydisFormatter formatter;
+    ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
+
+    // Loop over the instructions in our buffer.
+    ZyanU64 runtime_address = (ZyanU64)at;
+    ZyanUSize offset = 0u;
+    const ZyanUSize length = 50u;
+    ZydisDecodedInstruction instruction;
+    while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, (const void*)runtime_address, length - offset, &instruction)))
+    {
+        // Format & print the binary instruction structure to human readable format
+        char instruction_buffer[256];
+        ZydisFormatterFormatInstruction(&formatter, &instruction, instruction_buffer, sizeof(instruction_buffer), runtime_address);
+
+#define _CHECK_OUTPUT_LENGTH(w)\
+        if( output_buffer_length >= w ) {\
+            output_buffer_length -= w;\
+        }\
+        else {\
+            output_buffer[output_buffer_length-2] = L'@';\
+            output_buffer[output_buffer_length-1] = 0;\
+            return;\
+        }
+
+        // write address
+        int written = swprintf(output_buffer, output_buffer_length, L"%016llx  ", runtime_address);
+        output_buffer += written;
+        _CHECK_OUTPUT_LENGTH(written);
+
+        // write instruction bytes
+        for(ZyanU8 b = 0; b < instruction.length; ++b) {
+            swprintf(output_buffer, output_buffer_length, L"%02x ", ((uint8_t*)runtime_address)[b]);
+            output_buffer += 3;
+            _CHECK_OUTPUT_LENGTH(3);
+        }
+
+        // the maximum width of an instruction is 15 bytes (x86_64), so adjust to the max width
+        int gap = 45 - 3*instruction.length;
+        if(gap>0) {
+            _CHECK_OUTPUT_LENGTH(gap);
+            for(int c = 0; c < gap; ++c) {
+                *output_buffer++ = L' ';
+            }
+        }
+        
+        // write disassembly
+        written = swprintf(output_buffer, output_buffer_length, L" %S\n", instruction_buffer);
+        output_buffer += written;
+        _CHECK_OUTPUT_LENGTH(written);
+        
+        offset += instruction.length;
+        runtime_address += instruction.length;
+    }
+
+    output_buffer[output_buffer_length-1] = 0;
 }
 
 static void _int_3_handler(const interrupt_stack_t * context) {
@@ -35,7 +98,7 @@ static void _int_3_handler(const interrupt_stack_t * context) {
         L"\trsi 0x%016llx\trdi 0x%016llx\n\trbp 0x%016llx\trsp 0x%016llx\n"
         L"\tr8  0x%016llx\tr9  0x%016llx\n\tr10 0x%016llx\tr11 0x%016llx\n"
         L"\tr12 0x%016llx\tr13 0x%016llx\n\tr14 0x%016llx\tr15 0x%016llx\n"
-        L"\tcs 0x%04llx\tss 0x%04llx\n",
+        L"\tcs 0x%04llx\tss 0x%04llx\n\n",
         context->rax, context->rbx, context->rcx, context->rdx,
         context->rsi, context->rdi, context->rbp, context->rsp,
         context->r8, context->r9, context->r10, context->r11,
@@ -44,42 +107,22 @@ static void _int_3_handler(const interrupt_stack_t * context) {
     );
     output_console_line_break();
     output_console_output_string(buf);
+    
+    // stack dump
+    const uint64_t* stack = (const uint64_t*)context->rsp;
+    swprintf(buf, bufcount, 
+        L"stack @ 0x%016llx:\n\t"
+        L"0x%016llx\n\t0x%016llx\n\t0x%016llx\n\t0x%016llx\n\t"
+        L"0x%016llx\n\t0x%016llx\n\t0x%016llx\n\t0x%016llx\n\n",
+        stack,
+        stack[0], stack[1], stack[2], stack[3],
+        stack[4], stack[5], stack[6], stack[7]
+    );    
+    output_console_output_string(buf);
 
-    output_console_line_break();
-
-    // a wee stack dump
-    hex_dump_mem((void*)context->rsp, 8*10, k64bitInt);
-    output_console_line_break();
-
-    // Initialize decoder context
-    ZydisDecoder decoder;
-    ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
-
-    // Initialize formatter. Only required when you actually plan to do instruction
-    // formatting ("disassembling"), like we do here
-    ZydisFormatter formatter;
-    ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
-
-    // Loop over the instructions in our buffer.
-    ZyanU64 runtime_address = context->rip;
-    ZyanUSize offset = 0;
-    const ZyanUSize length = 50;
-    ZydisDecodedInstruction instruction;
-    while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, (const void*)(context->rip + offset), length - offset,
-        &instruction)))
-    {
-        // Format & print the binary instruction structure to human readable format
-        char buffer[256];
-        ZydisFormatterFormatInstruction(&formatter, &instruction, buffer, sizeof(buffer),
-            runtime_address);
-        
-        swprintf(buf,bufcount, L"%016llx  %S\n", runtime_address, buffer);
-        output_console_output_string(buf);
-
-        offset += instruction.length;
-        runtime_address += instruction.length;
-    }
-
+    wchar_t output_buffer[512];
+    debugger_disasm((void*)context->rip, 50, output_buffer, 512);
+    output_console_output_string(output_buffer);
     output_console_line_break();
 }
 

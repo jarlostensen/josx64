@@ -5,9 +5,7 @@
 
 // to be called after early initialisation of interrupts
 void debugger_initialise(void);
-
-static _JOS_ALWAYS_INLINE void debug_break(void) {
-    asm volatile("int $0x3");
-}
+// outputs disassembly to the console 
+void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length);
 
 #endif // _JOS_KERNEL_DEBUGGER_H
