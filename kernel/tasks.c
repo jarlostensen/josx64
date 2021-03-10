@@ -1,11 +1,14 @@
 #include <jos.h>
 #include <collections.h>
 #include <interrupts.h>
+#include <debugger.h>
 #include <x86_64.h>
 #include <tasks.h>
 
 #include <stdlib.h>
 #include <string.h>
+
+#include <output_console.h>
 
 // one meg
 #define TASK_STACK_SIZE     1024*1024
@@ -20,6 +23,8 @@ typedef struct _task_context {
     task_func_t     _func;
     // task handler argument
     void*           _ptr;
+    // 'tis helpful 
+    const char*     _name;
 
 } _JOS_PACKED_ task_context_t;
 
@@ -60,15 +65,16 @@ static void _yield_to_next_task(void) {
     task_context_t* prev = _running_task;
     _running_task = _select_next_task_to_run();
     if( _running_task ) {
-        _JOS_ASSERT(_running_task->_rsp);
+        _JOS_KTRACE_CHANNEL(kTaskChannel, "switching from \"%s\" to \"%s\"", 
+            prev ? prev->_name : "(0)", _running_task->_name);
         x86_64_task_switch(prev ? (interrupt_stack_t*)prev->_rsp : 0, (interrupt_stack_t*)_running_task->_rsp);
     }
 }
 
 //NOTE: when we switch to proper SMP this will be per CPU
-static jo_status_t _idle_task(void* ptr) {
-
+static jo_status_t _idle_task(void* ptr) {    
     task_context_t* idle_task = (task_context_t*)ptr;
+    _JOS_KTRACE_CHANNEL(kTaskChannel, "idle starting");
     //ZZZ: not so much "true" as wait for a kernel shutdown signal
     while(true) {
         _yield_to_next_task();
@@ -80,7 +86,8 @@ static jo_status_t _idle_task(void* ptr) {
 
 static void _task_wrapper(task_context_t* ctx) {
 
-    _JOS_KTRACE_CHANNEL(kTaskChannel, "task_wrapper(0x%llx [0x%llx])", ctx->_func, ctx->_ptr);
+    _JOS_KTRACE_CHANNEL(kTaskChannel, "task_wrapper starting \"%s\"(0x%llx [0x%llx])", 
+            ctx->_name, ctx->_func, ctx->_ptr);
     // pre-amble
     
     // invoke
@@ -88,9 +95,10 @@ static void _task_wrapper(task_context_t* ctx) {
 
     // post-amble
     //TODO: remove this task from the task list, or mark as "done" for removal later
+    _JOS_KTRACE_CHANNEL(kTaskChannel, "TODO: task \"\" has ended", ctx->_name);
 }
 
-static task_context_t* _create_task_context(task_func_t func, void* ptr) {
+static task_context_t* _create_task_context(task_func_t func, void* ptr, const char* name) {
 
     // allocate memory for the stack and the task context object
     const size_t stack_size = TASK_STACK_SIZE + sizeof(task_context_t);
@@ -98,7 +106,8 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr) {
     _JOS_ASSERT(ctx);
     ctx->_func = func;
     ctx->_ptr = ptr ? ptr : (void*)ctx;    //< we can also pass in "self"...
-
+    ctx->_name = name;
+    
     // set up returnable stack for the task, rounded down to make it 10h byte aligned
     const size_t stack_top = ((size_t)ctx + TASK_STACK_SIZE) & ~0x0f;
     interrupt_stack_t* interrupt_frame = (interrupt_stack_t*)(stack_top - sizeof(interrupt_stack_t));
@@ -124,10 +133,10 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr) {
 // ------------------------------------------------------
 
 task_handle_t   task_create(task_create_args_t* args) {
-    task_context_t* ctx = _create_task_context(args->func, args->ptr);
-    queue_push_ptr(&_ready_tasks[args->pri], (void*)ctx);
-
-    _JOS_KTRACE_CHANNEL(kTaskChannel, "created task 0x%llx (0x%llx), pri %d", args->func, args->ptr, args->pri);
+    _JOS_KTRACE_CHANNEL(kTaskChannel, "created task \"%s\" 0x%llx (0x%llx), pri %d", 
+        args->name, args->func, args->ptr, args->pri);
+    task_context_t* ctx = _create_task_context(args->func, args->ptr, args->name);
+    queue_push_ptr(&_ready_tasks[args->pri], (void*)ctx);    
 
     return (task_handle_t)ctx;
 }
@@ -145,19 +154,20 @@ void task_initialise(void) {
         queue_create(&_ready_tasks[pri], TASK_QUEUE_SIZE, sizeof(task_context_t*));
         queue_create(&_waiting_tasks[pri], TASK_QUEUE_SIZE, sizeof(task_context_t*));
     }
-
-    _JOS_KTRACE_CHANNEL(kTaskChannel,"initialised");
 }
 
 void task_start_idle(void) {
-    _JOS_ASSERT(_running_task==0);
+    _JOS_ASSERT(_running_task==0);    
     // add idle task to this CPU
-    task_create(&(task_create_args_t){
+    _running_task = task_create(&(task_create_args_t){
         .func = _idle_task,
-        .pri = kTaskPri_Lowest
+        .pri = kTaskPri_Lowest,
+        .name = "idle_task"
     });
-    // and start
-    _yield_to_next_task();
+    _JOS_KTRACE_CHANNEL(kTaskChannel, "starting idle");
+    // we call this directly to kick things off and the first thing it will do 
+    // is to find another (higher priorrity) task to switch to
+    _idle_task(0);    
     _JOS_UNREACHABLE();
 }
 

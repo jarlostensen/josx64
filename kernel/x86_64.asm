@@ -70,10 +70,6 @@ section .text
 ; --------------------------------------------------------------------------
 ; task handlers
 
-;NOTE: this is also invoked from tasks.c
-x86_64_task_switch_trampoline:
-    
-
 %define TASK_CONTEXT_T_RSP 160
 %define TASK_CONTEXT_T_SS  168
 
@@ -148,7 +144,6 @@ isr_handler_stub:
     call interrupts_isr_handler
     
     ISR_CLEAN_STACK
-
     iretq
 
 ; an isr/fault/trap that doesn't provide an error code

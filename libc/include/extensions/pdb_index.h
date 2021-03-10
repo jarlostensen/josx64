@@ -59,4 +59,5 @@ pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice
 // Camels | Are | Ok | Too
 char_array_slice_t pdb_index_next_token(char_array_slice_t* body);
 const pdb_index_node_t* pdb_index_load_from_pdb_yml(void);
+// find the closest function to the given RVA (i.e. the offset of the function relative to the .text segment)
 char_array_slice_t pdb_index_symbol_name_for_address(uint32_t rva);

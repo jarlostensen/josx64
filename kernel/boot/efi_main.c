@@ -225,25 +225,14 @@ jo_status_t main_task(void* ptr) {
         }
     }
     output_console_line_break();
-
-    _JOS_KTRACE_CHANNEL("main_task", "triggering int 0x3");
-    asm volatile (
-        "nop\r\n"
-        "movq $0x1234567812345678, %r11\r\n"
-        "int $0x3\r\n"
-        "nop\r\n"   
-        "movq $0x1234567812345678, %r12\r\n"
-        );
-
     output_console_set_colour(video_make_color(0xff,0,0));
 
     swprintf(buf,128,L"\nThe kernel is halting @ %dms\n", clock_ms_since_boot());
     output_console_output_string(buf);
-    video_present();
     
     _JOS_KTRACE_CHANNEL("main_task", "halting %llu ms after boot", clock_ms_since_boot());    
     halt_cpu();
-
+    _JOS_UNREACHABLE();
     return _JO_STATUS_SUCCESS;
 }
 
@@ -332,7 +321,6 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         }
     }
     
-
 #ifdef _JOS_KERNEL_BUILD
     output_console_output_string(L"\n\nkernel build\n");
 #endif
@@ -364,16 +352,15 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     elapsed = __rdtsc() - elapsed;
 
     _JOS_KTRACE_CHANNEL("efi_main", "port 0x80 wait took ~ %d cycles\n", elapsed);
-    
-    keyboard_state_t kbd_state;
-    keyboard_get_state(&kbd_state);
-    _JOS_KTRACE_CHANNEL("efi_main", "keyboard controller id is 0x%x, scan code set 0x%x\n", keyboard_get_id(), kbd_state.set);
-    
+        
     task_handle_t main_task_handle = task_create(&(task_create_args_t){
         .func = main_task,
-        .ptr = 0,
-        .pri = kTaskPri_Normal
+        .pri = kTaskPri_Normal,
+        .name = "main_task"        
     });
+
+    output_console_output_string(L"starting idle task...\n");
+
     // this never returns...
     task_start_idle();
 

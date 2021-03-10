@@ -19,10 +19,13 @@ typedef struct _task_create_args {
     task_func_t             func;
     void*                   ptr;
     task_priority_level_t   pri;
+    const char*             name;
 
 } task_create_args_t;
 
 void            task_initialise(void);
+// start the idle task on this CPU.
+// this function never returns
 void            task_start_idle(void);
 task_handle_t   task_create(task_create_args_t* args);
 void            task_yield(void);

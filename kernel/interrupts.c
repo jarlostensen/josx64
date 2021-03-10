@@ -5,6 +5,7 @@
 #include <string.h>
 #include <x86_64.h>
 #include <i8259a.h>
+#include <debugger.h>
 
 #include <stdio.h>
 #include <output_console.h>
@@ -174,24 +175,19 @@ void interrupts_isr_handler(interrupt_stack_t *stack) {
             handler(&ctx);
             x86_64_cli();
         }
-        else {
-            // =============================================================
-            //ZZZ:
-            wchar_t buf[128];
-            const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
-
-            swprintf(buf,bufcount,L"UNHANDLED: int 0x%x, error code 0x%x: rip : 0x%llx\n", 
-                stack->handler_id, 
-                stack->error_code,
-                stack->rip);
-            output_console_output_string(buf);
-        }
     }
 
     // and hard handling, like this one
     if ( stack->handler_id == 0xd ) {
-        output_console_output_string(L"\nGPF, halting...");
-        halt_cpu();   
+        _JOS_KTRACE_CHANNEL(kInterruptsChannel, "#GPF: error code 0x%x, rip 0x%llx", stack->error_code,stack->rip);
+        wchar_t buf[512];
+        swprintf(buf,512,L"\nGPF, error code 0x%x: rip : 0x%016llx\n", 
+            stack->error_code,
+            stack->rip);
+        output_console_output_string(buf);
+        debugger_disasm((void*)stack->rip, 50, buf, 512);
+        output_console_output_string(buf);
+        halt_cpu();
     }
 }
 
