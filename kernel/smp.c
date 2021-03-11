@@ -176,7 +176,7 @@ static void initialise_this_ap(void* arg) {
     x86_64_wrmsr(_JOS_K_IA32_GS_BASE, (uint32_t)((uintptr_t)per_cpu_block) & 0xffffffff, (uint32_t)((uintptr_t)per_cpu_block >> 32));        
 }
 
-jo_status_t    processors_initialise() {
+jo_status_t    smp_initialise() {
 
     CEfiHandle handle_buffer[3];
     CEfiUSize handle_buffer_size = sizeof(handle_buffer);
@@ -246,15 +246,15 @@ jo_status_t    processors_initialise() {
     return _JO_STATUS_SUCCESS;        
 }
 
-size_t processors_get_processor_count() {
+size_t smp_get_processor_count() {
     return _num_processors;
 }
 
-size_t processors_get_bsp_id() {
+size_t smp_get_bsp_id() {
     return _bsp_id;
 }
 
-jo_status_t        processors_get_processor_information(processor_information_t* out_info, size_t processor_index) {
+jo_status_t        smp_get_processor_information(processor_information_t* out_info, size_t processor_index) {
     if ( processor_index >= _num_processors ) {
         return _JO_STATUS_OUT_OF_RANGE;
     }
@@ -263,8 +263,8 @@ jo_status_t        processors_get_processor_information(processor_information_t*
     return _JO_STATUS_SUCCESS;
 }
 
-jo_status_t        processors_get_this_processor_info(processor_information_t* out_info) {
-    const processor_information_t* info = (const processor_information_t*)processors_get_per_cpu_ptr(kPerCpu_ProcessorInfo);
+jo_status_t        smp_get_this_processor_info(processor_information_t* out_info) {
+    const processor_information_t* info = (const processor_information_t*)smp_get_per_cpu_ptr(kPerCpu_ProcessorInfo);
     if(info) {
         memcpy(out_info, info, sizeof(processor_information_t));
         return _JO_STATUS_SUCCESS;
@@ -272,23 +272,23 @@ jo_status_t        processors_get_this_processor_info(processor_information_t* o
     return _JO_STATUS_UNAVAILABLE;
 }
 
-void*           processors_get_per_cpu_ptr(per_cpu_ptr_t ptr_id) {
+void*           smp_get_per_cpu_ptr(per_cpu_ptr_t ptr_id) {
     uint64_t val = 0;
     x86_64_read_gs((size_t)ptr_id, &val);
     return (void*)val;
 }
 
-void           processors_set_per_cpu_ptr(per_cpu_ptr_t ptr_id, void* ptr) {
+void           smp_set_per_cpu_ptr(per_cpu_ptr_t ptr_id, void* ptr) {
     uint64_t val = (uint64_t)ptr;
     x86_64_write_gs((size_t)ptr_id, &val);
 }
 
 //ZZZ: per-processor, not like this...
-bool processors_has_acpi_20() {
+bool smp_has_acpi_20() {
     return _xsdt != 0;
 }
 
-jo_status_t        processors_startup_aps(ap_worker_function_t ap_worker_function, void* per_ap_data_, size_t per_ap_data_stride) {
+jo_status_t        smp_startup_aps(ap_worker_function_t ap_worker_function, void* per_ap_data_, size_t per_ap_data_stride) {
 
     if(!g_boot_services) {
         return _JO_STATUS_PERMISSION_DENIED;
