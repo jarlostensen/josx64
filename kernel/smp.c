@@ -5,7 +5,7 @@
 #include <cpuid.h>
 #include <x86_64.h>
 #include <collections.h>
-#include <processors.h>
+#include <smp.h>
 #include <apic.h>
 
 
@@ -14,8 +14,9 @@ extern CEfiBootServices * g_boot_services;
 static CEfiMultiProcessorProtocol*  _mpp = 0;
 
 static size_t   _bsp_id = 0;
-static size_t   _num_processors = 1;
-static size_t   _num_enabled_processors = 1;
+//NOTE: we can't use any PER_CPU storage before smp_initialise setus up this 
+static size_t   _num_processors = 0;
+static size_t   _num_enabled_processors = 0;
 
 static processor_information_t* _processors = 0;
 
@@ -25,6 +26,8 @@ static CEfiEvent    _ap_event = 0;
 #define _JOS_K_IA32_FS_BASE             0xc0000100
 #define _JOS_K_IA32_GS_BASE             0xc0000101
 #define _JOS_K_IA32_KERNEL_GS_BASE      0xc0000102
+
+static const char* kSmpChannel = "smp";
 
 // ===================================================================================================
 // TODO: move this into a separate acpi module, should be "internal"?
@@ -120,8 +123,6 @@ jo_status_t    intitialise_acpi() {
 
 static void collect_this_cpu_information(processor_information_t* info) {
 
-    memset(info,0,sizeof(processor_information_t));
-
     info->_max_basic_cpuid = __get_cpuid_max(0, NULL);
     info->_max_ext_cpuid = __get_cpuid_max(0x80000000, NULL);
 
@@ -161,19 +162,22 @@ static void collect_this_cpu_information(processor_information_t* info) {
     info->_is_good = true;
 }
 
-// wrapper for UEFI callback protocol
 static void initialise_this_ap(void* arg) {
 
-    collect_this_cpu_information((processor_information_t*)arg);
+    processor_information_t* proc_info = (processor_information_t*)arg;
+    collect_this_cpu_information(proc_info);
 
-    // set gs to point to a small block of memory that holds the pointer LUT for per-cpu information
-    // this never gets freed so we don't keep the pointer around
-    uintptr_t*   per_cpu_block = (uintptr_t*)malloc(2*sizeof(uintptr_t));
-    per_cpu_block[kPerCpu_ProcessorInfo] = (uintptr_t)arg;
-    per_cpu_block[kPerCpu_TaskInfo] = 0; // this will be set later (in tasks.c)
+    // store the address of the ID field in the processor info block directory in gs:0
+    // i.e. 
+    //
+    //  | cpu0 | cpu1 | ... | cpuN |
+    //    gs:0   gs:0   ...   gs:0
+    //    info0  info1  ...   infoN
+    //    
+    uint64_t proc_info_ptr = &proc_info->_id;
+    x86_64_wrmsr(_JOS_K_IA32_GS_BASE, (uint32_t)(proc_info_ptr) & 0xffffffff, (uint32_t)(proc_info_ptr >> 32));
 
-    //NOTE: at this point we assume that we can use these MSRs
-    x86_64_wrmsr(_JOS_K_IA32_GS_BASE, (uint32_t)((uintptr_t)per_cpu_block) & 0xffffffff, (uint32_t)((uintptr_t)per_cpu_block >> 32));        
+    _JOS_KTRACE_CHANNEL(kSmpChannel, "initialised ap %d, gs @ 0x%llx -> %d", proc_info->_id, proc_info_ptr, per_cpu_this_cpu_id());
 }
 
 jo_status_t    smp_initialise() {
@@ -184,7 +188,6 @@ jo_status_t    smp_initialise() {
 
     CEfiStatus efi_status = g_boot_services->locate_handle(C_EFI_BY_PROTOCOL, &C_EFI_MULTI_PROCESSOR_PROTOCOL_GUID, 0, &handle_buffer_size, handle_buffer);
     if ( efi_status==C_EFI_SUCCESS ) {
-
         //TODO: this works but it's not science; what makes one handle a better choice than another? 
         //      
         size_t num_handles = handle_buffer_size/sizeof(CEfiHandle);
@@ -198,24 +201,31 @@ jo_status_t    smp_initialise() {
         }
         
         if ( efi_status == C_EFI_SUCCESS ) {                
+
+            _JOS_KTRACE_CHANNEL(kSmpChannel, "using UEFI MP protocol");
+
             efi_status = _mpp->who_am_i(_mpp, &_bsp_id);
             if ( efi_status != C_EFI_SUCCESS ) {
                 return _JO_STATUS_INTERNAL;
-            }
+            }            
 
             efi_status = _mpp->get_number_of_processors(_mpp, &_num_processors, &_num_enabled_processors);
             if ( efi_status != C_EFI_SUCCESS ) {
                 return _JO_STATUS_INTERNAL;
             }
 
+            _JOS_KTRACE_CHANNEL(kSmpChannel, "BSP id is %d, %d processors present", _bsp_id, _num_processors);
+
             _processors = (processor_information_t*)malloc(sizeof(processor_information_t) * _num_processors);
             memset(_processors, 0, sizeof(processor_information_t) * _num_processors);
-            // collect information about the BSP
-            initialise_this_ap(&_processors[_bsp_id]);
+            _processors[_bsp_id]._id = _bsp_id;
+            initialise_this_ap((void*)&_processors[_bsp_id]);
             
             for(size_t p = 0; p < _num_processors; ++p) {
+
+                // assigning the id this way ensures we don't depend on any hw particulars
+                _processors[p]._id = p;
                 if( p != _bsp_id ) {
-                    // note that this only works for processors that support x2APIC (i.e. 1f and b CPUID leafs)
                     efi_status = _mpp->get_processor_info(_mpp, p, &_processors[p]._uefi_info);
                     if ( efi_status == C_EFI_SUCCESS ) {
                         // execute the information collect function on this processor
@@ -232,9 +242,13 @@ jo_status_t    smp_initialise() {
     else
     {
         // uni processor
+        _JOS_KTRACE_CHANNEL(kSmpChannel, "uni processor system, or no UEFI MP protocol handler available");
         _processors = (processor_information_t*)malloc(sizeof(processor_information_t));
+        _processors->_id = 0;
         initialise_this_ap(_processors);        
         _processors->_is_good = true;
+        _num_processors = 1;
+        _num_enabled_processors = 1;
     }
 
     // ACPI 
@@ -247,6 +261,7 @@ jo_status_t    smp_initialise() {
 }
 
 size_t smp_get_processor_count() {
+    _JOS_ASSERT(_num_processors);
     return _num_processors;
 }
 
@@ -255,32 +270,12 @@ size_t smp_get_bsp_id() {
 }
 
 jo_status_t        smp_get_processor_information(processor_information_t* out_info, size_t processor_index) {
+    _JOS_ASSERT(_num_processors);
     if ( processor_index >= _num_processors ) {
         return _JO_STATUS_OUT_OF_RANGE;
     }
-
     memcpy(out_info, _processors+processor_index, sizeof(processor_information_t));
     return _JO_STATUS_SUCCESS;
-}
-
-jo_status_t        smp_get_this_processor_info(processor_information_t* out_info) {
-    const processor_information_t* info = (const processor_information_t*)smp_get_per_cpu_ptr(kPerCpu_ProcessorInfo);
-    if(info) {
-        memcpy(out_info, info, sizeof(processor_information_t));
-        return _JO_STATUS_SUCCESS;
-    }
-    return _JO_STATUS_UNAVAILABLE;
-}
-
-void*           smp_get_per_cpu_ptr(per_cpu_ptr_t ptr_id) {
-    uint64_t val = 0;
-    x86_64_read_gs((size_t)ptr_id, &val);
-    return (void*)val;
-}
-
-void           smp_set_per_cpu_ptr(per_cpu_ptr_t ptr_id, void* ptr) {
-    uint64_t val = (uint64_t)ptr;
-    x86_64_write_gs((size_t)ptr_id, &val);
 }
 
 //ZZZ: per-processor, not like this...
@@ -288,7 +283,10 @@ bool smp_has_acpi_20() {
     return _xsdt != 0;
 }
 
+#if 0
 jo_status_t        smp_startup_aps(ap_worker_function_t ap_worker_function, void* per_ap_data_, size_t per_ap_data_stride) {
+
+    _JOS_ASSERT(_num_processors);
 
     if(!g_boot_services) {
         return _JO_STATUS_PERMISSION_DENIED;
@@ -334,4 +332,23 @@ jo_status_t        smp_startup_aps(ap_worker_function_t ap_worker_function, void
     }
 
     return _JO_STATUS_SUCCESS;
+}
+#endif 
+
+// ====================================================================================
+// per CPU 
+
+per_cpu_ptr_t       per_cpu_create_ptr(void) {
+    _JOS_ASSERT(_num_processors);
+    return (per_cpu_ptr_t)malloc(sizeof(uintptr_t)*_num_processors);
+}
+
+per_cpu_queue_t     per_cpu_create_queue(void) {
+    _JOS_ASSERT(_num_processors);
+    return (per_cpu_ptr_t)malloc(sizeof(queue_t)*_num_processors);
+}
+
+per_cpu_qword_t     per_cpu_create_qword(void) {
+    _JOS_ASSERT(_num_processors);
+    return (per_cpu_ptr_t)malloc(sizeof(uint64_t)*_num_processors);
 }

@@ -14,7 +14,7 @@
 #include <memory.h>
 #include <serial.h>
 #include <trace.h>
-#include <processors.h>
+#include <smp.h>
 #include <hex_dump.h>
 #include <interrupts.h>
 #include <clock.h>
@@ -106,7 +106,7 @@ void pre_exit_boot_services() {
         halt_cpu();
     }
 
-    status = processors_initialise();
+    status = smp_initialise();
     if ( !_JO_SUCCEEDED(status) ) {
         swprintf(buf, bufcount, L"***FATAL ERROR: MP initialise returned 0x%x\n\r", status);
         _EFI_PRINT(buf);
@@ -248,23 +248,19 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 
     wchar_t buf[256];
     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
-    size_t bsp_id = processors_get_bsp_id();
-    swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", processors_get_processor_count(), bsp_id);    
+    size_t bsp_id = smp_get_bsp_id();
+    swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", smp_get_processor_count(), bsp_id);    
     output_console_output_string(buf);    
     
-    if ( processors_has_acpi_20() ) {
+    if ( smp_has_acpi_20() ) {
         output_console_output_string(L"ACPI 2.0 configuration enabled\n");
     }
     
-    if ( processors_get_processor_count()==1 ) {
+    if ( smp_get_processor_count()==1 ) {
         processor_information_t info;    
-        if ( _JO_SUCCEEDED(processors_get_this_processor_info(&info) ) ) {
-            swprintf(buf, 256, L"BSP id %d, status 0x%x, package %d, core %d, thread %d, TSC is %S, Intel 64 arch %S\n", 
-                        info._uefi_info.processor_id,
-                        info._uefi_info.status_flag,
-                        info._uefi_info.extended_information.location.package,
-                        info._uefi_info.extended_information.location.core,
-                        info._uefi_info.extended_information.location.thread,
+        if ( _JO_SUCCEEDED(smp_get_this_processor_info(&info) ) ) {
+            swprintf(buf, 256, L"BSP id %d, TSC is %S, Intel 64 arch %S\n", 
+                        info._id,
                         info._has_tsc ? "enabled":"disabled",
                         info._intel_64_arch ? "supported" : "not supported"
                         );
@@ -272,9 +268,9 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         }
     }
     else {
-        for ( size_t p = processors_get_processor_count(); p>0; --p ) {
+        for ( size_t p = smp_get_processor_count(); p>0; --p ) {
             processor_information_t info;    
-            jo_status_t status = processors_get_processor_information(&info, p-1);
+            jo_status_t status = smp_get_processor_information(&info, p-1);
             if ( _JO_SUCCEEDED(status) ) {
 
                 swprintf(buf, 256, L"\tid %d, status 0x%x, package %d, core %d, thread %d, TSC is %S, Intel 64 arch %S\n", 
@@ -315,7 +311,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
             }
             else
             {
-                swprintf(buf, 256, L"processors_get_processor_information returned %x\n", status);
+                swprintf(buf, 256, L"smp_get_processor_information returned %x\n", status);
                 output_console_output_string(buf);
             }
         }
@@ -338,7 +334,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     clock_initialise();
     keyboard_initialise();
     
-    task_initialise();
+    tasks_initialise();
 
     scroller_initialise(&(rect_t){
         .top = 250,
@@ -353,7 +349,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 
     _JOS_KTRACE_CHANNEL("efi_main", "port 0x80 wait took ~ %d cycles\n", elapsed);
         
-    task_handle_t main_task_handle = task_create(&(task_create_args_t){
+    task_handle_t main_task_handle = tasks_create(&(task_create_args_t){
         .func = main_task,
         .pri = kTaskPri_Normal,
         .name = "main_task"        
@@ -362,7 +358,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     output_console_output_string(L"starting idle task...\n");
 
     // this never returns...
-    task_start_idle();
+    tasks_start_idle();
 
     return C_EFI_SUCCESS;
 }

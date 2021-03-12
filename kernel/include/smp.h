@@ -1,9 +1,14 @@
+#pragma once
+
 #ifndef _JOS_KERNEL_smp_H_
 #define _JOS_KERNEL_smp_H_
 
 #include <jos.h>
 #include <stdint.h>
+#include <collections.h>
+#include <x86_64.h>
 #include <c-efi-protocol-multi-processor.h>
+
 
 typedef struct _local_apic_information {
 
@@ -17,6 +22,8 @@ typedef struct _local_apic_information {
 
 typedef struct _processor_information {
 
+    // this is *our* ID, not dependent on any hw ID
+    size_t                          _id;    
     CEfiProcessorInformation        _uefi_info;
     uint32_t                        _max_basic_cpuid;
     uint32_t                        _max_ext_cpuid;
@@ -34,26 +41,52 @@ typedef struct _processor_information {
     
 } processor_information_t;
 
-jo_status_t        smp_initialise();
-size_t              smp_get_processor_count();
+// ===============================================================================================
 
+typedef queue_t*        per_cpu_queue_t;
+typedef uintptr_t*      per_cpu_ptr_t;
+typedef uint64_t*       per_cpu_qword_t;
 
+// invoked from processor initialisation code
+void per_cpu_initialise(void);
+
+per_cpu_ptr_t       per_cpu_create_ptr(void);
+per_cpu_queue_t     per_cpu_create_queue(void);
+per_cpu_qword_t     per_cpu_create_qword(void);
+
+_JOS_INLINE_FUNC    size_t per_cpu_this_cpu_id(void) {
+    uint64_t val;
+    x86_64_read_gs(0,&val);
+    // processor_information_t* proc_info = (processor_information_t*)val;
+    // return proc_info->_id;
+    return val;
+}
+
+#define _JOS_PER_CPU_THIS_QUEUE(queue)\
+(queue)[per_cpu_this_cpu_id()]
+
+#define _JOS_PER_CPU_THIS_PTR(ptr)\
+(ptr)[per_cpu_this_cpu_id()]
+
+#define _JOS_PER_CPU_THIS_QWORD(qword)\
+(qword)[per_cpu_this_cpu_id()]
+
+#define _JOS_PER_CPU_PTR(ptr, cpu)\
+(ptr)[(cpu)]
+
+// ===============================================================================================
+
+//NOTE: called on the BSP *only*
+jo_status_t     smp_initialise();
+
+size_t          smp_get_processor_count();
 jo_status_t     smp_initialise(void);
 size_t          smp_get_processor_count(void);
 size_t          smp_get_bsp_id();
 jo_status_t     smp_get_processor_information(processor_information_t* out_info, size_t processor_index);
 bool            smp_has_acpi_20();
-jo_status_t     smp_get_this_processor_info(processor_information_t* out_info);
-
-typedef enum _per_cpu_ptr {
-    kPerCpu_ProcessorInfo   = 0*sizeof(void*),
-    kPerCpu_TaskInfo        = 1*sizeof(void*),
-} per_cpu_ptr_t;
-// 0..n
-void*           smp_get_per_cpu_ptr(per_cpu_ptr_t ptr_id);
-void            smp_set_per_cpu_ptr(per_cpu_ptr_t ptr_id, void* ptr);
-
-typedef void (*ap_worker_function_t)(void*);
-jo_status_t        smp_startup_aps(ap_worker_function_t ap_worker_function, void* per_ap_data, size_t per_ap_data_stride);
+_JOS_INLINE_FUNC jo_status_t     smp_get_this_processor_info(processor_information_t* out_info) {
+    return smp_get_processor_information(out_info, per_cpu_this_cpu_id());
+}
 
 #endif //_JOS_KERNEL_smp_H_

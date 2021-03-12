@@ -1,7 +1,7 @@
 #ifndef _JOS_KERNEL_APIC_H
 #define _JOS_KERNEL_APIC_H
 
-#include <processors.h>
+#include <smp.h>
 
 // Intel IA dev guide 10-6 VOL 3A
 

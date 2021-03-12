@@ -219,7 +219,7 @@ void scroller_render_field(void) {
         }
     }
 
-    video_scale_draw_bitmap(_scroller_bm, bm_vis_width, bm_height, bm_width,
+    video_scale_draw_bitmap((const uint32_t*)_scroller_bm, bm_vis_width, bm_height, bm_width,
         _scroller_window.top, _scroller_window.left, _scroller_window.right - _scroller_window.left, _scroller_window.bottom - _scroller_window.top, kVideo_Filter_None);
     video_present();
 

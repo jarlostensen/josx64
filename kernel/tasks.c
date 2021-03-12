@@ -1,7 +1,7 @@
 #include <jos.h>
 #include <collections.h>
 #include <interrupts.h>
-#include <processors.h>
+#include <smp.h>
 #include <debugger.h>
 #include <x86_64.h>
 #include <tasks.h>
@@ -44,17 +44,16 @@ typedef struct _cpu_task_context {
 
 } cpu_task_context_t;
 
-static cpu_task_context_t* _cpu_task_context(void) {
-    return (cpu_task_context_t*)processors_get_per_cpu_ptr(kPerCpu_TaskInfo);
-}
-
 // in x86_64.asm
 extern task_context_t* x86_64_task_switch(interrupt_stack_t* curr_stack, interrupt_stack_t* new_stack);
+
+// handle to per-cpu context instances
+static per_cpu_ptr_t _per_cpu_ctx;
 
 //NOTE: interrupts need to be disabled when this runs
 static task_context_t*  _select_next_task_to_run(void) {
     
-    cpu_task_context_t* cpu_ctx = processors_get_per_cpu_ptr(kPerCpu_TaskInfo);
+    cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     // pick the next highest priority task available
     for(int pri = (int)kTaskPri_Highest; pri < (int)kTaskPri_NumPris; ++pri) {
         if ( !queue_is_empty(&cpu_ctx->_ready_tasks[pri]) ) {
@@ -73,7 +72,7 @@ static task_context_t*  _select_next_task_to_run(void) {
 }
 
 static void _yield_to_next_task(void) {
-    cpu_task_context_t* cpu_ctx = processors_get_per_cpu_ptr(kPerCpu_TaskInfo);
+    cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     task_context_t* prev = cpu_ctx->_running_task;
     cpu_ctx->_running_task = _select_next_task_to_run();
     if( cpu_ctx->_running_task ) {
@@ -107,10 +106,9 @@ static void _task_wrapper(task_context_t* ctx) {
     jo_status_t status = ctx->_func(ctx->_ptr);
 
     // post-amble
-    //TODO: remove this task from the task list, or mark as "done" for removal later
-    _JOS_KTRACE_CHANNEL(kTaskChannel, "TODO: task \"\" has ended", ctx->_name);
-
-
+    _JOS_KTRACE_CHANNEL(kTaskChannel, "task \"%s\" has ended", ctx->_name);
+    cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
+    //TODO: remove the task from _running and don't re-add, then do a switch
 }
 
 static task_context_t* _create_task_context(task_func_t func, void* ptr, const char* name) {
@@ -147,42 +145,49 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
 
 // ------------------------------------------------------
 
-task_handle_t   task_create(task_create_args_t* args) {
+task_handle_t   tasks_create(task_create_args_t* args) {
 
     _JOS_KTRACE_CHANNEL(kTaskChannel, "created task \"%s\" 0x%llx (0x%llx), pri %d", 
         args->name, args->func, args->ptr, args->pri);
 
     task_context_t* ctx = _create_task_context(args->func, args->ptr, args->name);
-    cpu_task_context_t* cpu_ctx = processors_get_per_cpu_ptr(kPerCpu_TaskInfo);
+    cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     queue_push_ptr(&cpu_ctx->_ready_tasks[args->pri], (void*)ctx);    
     
     return (task_handle_t)ctx;
 }
 
-void task_yield(void) {
+void tasks_yield(void) {
     //ZZZ: this is not pre-emptive safe yet!
     _yield_to_next_task();
 }
 
-void task_initialise(void) {
+void tasks_initialise(void) {
 
-    //NOTE: task_initialise will be called per-CPU
-    cpu_task_context_t* ctx = (cpu_task_context_t*)malloc(sizeof(cpu_task_context_t));
-    processors_set_per_cpu_ptr(kPerCpu_TaskInfo, ctx);
+    //NOTE: called on the BSP *only*
+    _JOS_ASSERT(smp_get_bsp_id() == per_cpu_this_cpu_id());
+    _per_cpu_ctx = per_cpu_create_ptr();
 
-    memset(ctx, 0, sizeof(cpu_task_context_t));
-    for(int pri = (int)kTaskPri_Highest; pri < (int)kTaskPri_NumPris; ++pri) {
+    for(size_t cpu = 0; cpu < smp_get_processor_count(); ++cpu ) {
 
-        queue_create(&ctx->_ready_tasks[pri], TASK_QUEUE_SIZE, sizeof(task_context_t*));
-        queue_create(&ctx->_waiting_tasks[pri], TASK_QUEUE_SIZE, sizeof(task_context_t*));
+        _JOS_KTRACE_CHANNEL(kTaskChannel, "initialising for ap %d", cpu);
+
+        cpu_task_context_t* ctx = (cpu_task_context_t*)malloc(sizeof(cpu_task_context_t));        
+        memset(ctx, 0, sizeof(cpu_task_context_t));
+        for(int pri = (int)kTaskPri_Highest; pri < (int)kTaskPri_NumPris; ++pri) {
+
+            queue_create(&ctx->_ready_tasks[pri], TASK_QUEUE_SIZE, sizeof(task_context_t*));
+            queue_create(&ctx->_waiting_tasks[pri], TASK_QUEUE_SIZE, sizeof(task_context_t*));
+        }
+
+        _JOS_PER_CPU_PTR(_per_cpu_ctx,cpu) = (uintptr_t)ctx;
     }
-
-    _JOS_ASSERT(ctx == processors_get_per_cpu_ptr(kPerCpu_TaskInfo));
 }
 
-void task_start_idle(void) {
+//NOTE: called on each AP (+BSP)
+void tasks_start_idle(void) {
     
-    cpu_task_context_t* ctx = processors_get_per_cpu_ptr(kPerCpu_TaskInfo);
+    cpu_task_context_t* ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     // add idle task to this CPU
     ctx->_running_task = ctx->_cpu_idle = _create_task_context(_idle_task, 0, "cpu_idle");
     // we call this directly to kick things off and the first thing it will do 
