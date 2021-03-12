@@ -1,3 +1,12 @@
+// ===================================================================================
+// tasks and task switching
+//
+//  TL;DR
+//      this implementation is currently COOPERATIVE, there is no pre-emption of tasks 
+//      and tasks are expected to yield and play nice.
+//  
+//
+
 #include <jos.h>
 #include <collections.h>
 #include <interrupts.h>
@@ -17,9 +26,11 @@
 
 typedef struct _task_context {
 
+    // current priority level
+    task_priority_level_t _pri;
+
     // a little below the top of the stack for this task (holds registers+iretq stack frame)
     uintptr_t       _rsp;
-
     // entry point
     task_func_t     _func;
     // task handler argument
@@ -32,39 +43,50 @@ typedef struct _task_context {
 static const char* kTaskChannel = "tasks";
 
 // ===================================================================================
-//TODO: all of this needs to be per-CPU and concurrency safe, ultimately
 
 typedef struct _cpu_task_context {
 
+    // tasks for each priority level that are ready to run at that level
     queue_t              _ready_tasks[kTaskPri_NumPris];
-    queue_t              _waiting_tasks[kTaskPri_NumPris];
-    task_context_t*      _running_tasks[kTaskPri_NumPris];
+    // each CPU can only have one running task at one time, and this is the one
     task_context_t*      _running_task;
+    // the idle task for this cpu which we fall back to when there is nothing else to do
     task_context_t*      _cpu_idle;
 
 } cpu_task_context_t;
 
 // in x86_64.asm
 extern task_context_t* x86_64_task_switch(interrupt_stack_t* curr_stack, interrupt_stack_t* new_stack);
-
 // handle to per-cpu context instances
 static per_cpu_ptr_t _per_cpu_ctx;
 
-//NOTE: interrupts need to be disabled when this runs
 static task_context_t*  _select_next_task_to_run(void) {
-    
+
+    // =====================================================
+    //NOTE: 
+    //      Interrupts are NOT disabled here because we're still 
+    //      running co-operatively, and no CPUs can interfere with each other's task queues.
+    //      IF that changes this has to be made re-entrant safe
+
     cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     // pick the next highest priority task available
     for(int pri = (int)kTaskPri_Highest; pri < (int)kTaskPri_NumPris; ++pri) {
         if ( !queue_is_empty(&cpu_ctx->_ready_tasks[pri]) ) {
-            if(cpu_ctx->_running_tasks[pri]!=0) {
-                // move currently running task to the back of the queue
-                queue_push_ptr(&cpu_ctx->_ready_tasks[pri], (void*)(&cpu_ctx->_running_tasks[pri]));
+            _JOS_KTRACE_CHANNEL(kTaskChannel, "available tasks at pri level %d", pri);
+            if(cpu_ctx->_running_task!=0
+                &&
+                // ignore if it's the IDLE task
+                cpu_ctx->_running_task->_pri!=kTaskPri_NumPris
+                ) {
+                _JOS_KTRACE_CHANNEL(kTaskChannel, "switching out existing");
+                // move currently running task to the back of its  queue
+                queue_push_ptr(&cpu_ctx->_ready_tasks[ cpu_ctx->_running_task->_pri ], (void*)cpu_ctx->_running_task);
             }
-            // make the head of the queue the running task
-            cpu_ctx->_running_tasks[pri] = (task_context_t*)queue_front_ptr(cpu_ctx->_ready_tasks + pri);
+            // make the head of this pri queue the new running task
+            cpu_ctx->_running_task = (task_context_t*)queue_front_ptr(&cpu_ctx->_ready_tasks[pri]);
+            _JOS_KTRACE_CHANNEL(kTaskChannel, "next available running task is \"%s\"", cpu_ctx->_running_task->_name);
             queue_pop(&cpu_ctx->_ready_tasks[pri]);
-            return cpu_ctx->_running_tasks[pri];
+            return cpu_ctx->_running_task;
         }
     }
     // if we get here the only task left to run is idle
@@ -74,16 +96,25 @@ static task_context_t*  _select_next_task_to_run(void) {
 static void _yield_to_next_task(void) {
     cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     task_context_t* prev = cpu_ctx->_running_task;
-    cpu_ctx->_running_task = _select_next_task_to_run();
-    if( cpu_ctx->_running_task ) {
+    task_context_t* next_task = _select_next_task_to_run();
+    if( next_task ) {
         _JOS_KTRACE_CHANNEL(kTaskChannel, "switching from \"%s\" to \"%s\"", 
             prev ? prev->_name : "(0)", cpu_ctx->_running_task->_name);
         x86_64_task_switch(prev ? (interrupt_stack_t*)prev->_rsp : 0, (interrupt_stack_t*)cpu_ctx->_running_task->_rsp);
     }
-    // else we're idling
+    // else we're now idling
+    _JOS_KTRACE_CHANNEL(kTaskChannel, "back to idling on cpu %d", per_cpu_this_cpu_id());
+    cpu_ctx->_running_task = cpu_ctx->_cpu_idle;
+    x86_64_task_switch(0, (interrupt_stack_t*)cpu_ctx->_cpu_idle->_rsp);
 }
 
-//NOTE: when we switch to proper SMP this will be per CPU
+// the idle task is the task we fall back to when there is NO OTHER WORK TO DO on this CPU.
+// it just keeps the wheels turning and waits for work to do
+// NOTE: 
+//  since we are not preemtive (yet), once we fall through to the idle task nothing else will 
+//  happen because no other code can run. For that reason this task is only run at startup and 
+//  as the last thing when all other tasks are done.
+//
 static jo_status_t _idle_task(void* ptr) {    
     task_context_t* idle_task = (task_context_t*)ptr;
     _JOS_KTRACE_CHANNEL(kTaskChannel, "idle starting");
@@ -104,11 +135,19 @@ static void _task_wrapper(task_context_t* ctx) {
     
     // invoke
     jo_status_t status = ctx->_func(ctx->_ptr);
+    if ( _JO_SUCCEEDED(status) ) {
+        _JOS_KTRACE_CHANNEL(kTaskChannel, "task \"%s\" terminated normally", ctx->_name);
+    }
+    else {
+        _JOS_KTRACE_CHANNEL(kTaskChannel, "task \"%s\" terminated with error 0x%x", ctx->_name, status);
+    }
 
-    // post-amble
-    _JOS_KTRACE_CHANNEL(kTaskChannel, "task \"%s\" has ended", ctx->_name);
+    // post-amble: remove this task and switch to a new one
     cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
-    //TODO: remove the task from _running and don't re-add, then do a switch
+    _JOS_ASSERT(cpu_ctx->_running_task == ctx);
+    // pick a fresh task, or idle
+    cpu_ctx->_running_task = 0;
+    _yield_to_next_task();
 }
 
 static task_context_t* _create_task_context(task_func_t func, void* ptr, const char* name) {
@@ -177,9 +216,7 @@ void tasks_initialise(void) {
         for(int pri = (int)kTaskPri_Highest; pri < (int)kTaskPri_NumPris; ++pri) {
 
             queue_create(&ctx->_ready_tasks[pri], TASK_QUEUE_SIZE, sizeof(task_context_t*));
-            queue_create(&ctx->_waiting_tasks[pri], TASK_QUEUE_SIZE, sizeof(task_context_t*));
         }
-
         _JOS_PER_CPU_PTR(_per_cpu_ctx,cpu) = (uintptr_t)ctx;
     }
 }
@@ -190,6 +227,8 @@ void tasks_start_idle(void) {
     cpu_task_context_t* ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     // add idle task to this CPU
     ctx->_running_task = ctx->_cpu_idle = _create_task_context(_idle_task, 0, "cpu_idle");
+    //NOTE: idle priority is special, and lower than anything else
+    ctx->_cpu_idle->_pri = kTaskPri_NumPris;
     // we call this directly to kick things off and the first thing it will do 
     // is to find another (higher priorrity) task to switch to
     _idle_task(0);

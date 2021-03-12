@@ -17,7 +17,7 @@ target_sources(kernel PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/memory.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/output_console.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/serial.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/processors.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/smp.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/interrupts.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/apic.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/kernel.c"

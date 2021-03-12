@@ -227,12 +227,12 @@ jo_status_t main_task(void* ptr) {
     output_console_line_break();
     output_console_set_colour(video_make_color(0xff,0,0));
 
-    swprintf(buf,128,L"\nThe kernel is halting @ %dms\n", clock_ms_since_boot());
+    swprintf(buf,128,L"\nmain task is done @ %dms\n", clock_ms_since_boot());
     output_console_output_string(buf);
     
-    _JOS_KTRACE_CHANNEL("main_task", "halting %llu ms after boot", clock_ms_since_boot());    
-    halt_cpu();
-    _JOS_UNREACHABLE();
+    _JOS_KTRACE_CHANNEL("main_task", "terminating %llu ms after boot", clock_ms_since_boot());    
+    // halt_cpu();
+    // _JOS_UNREACHABLE();
     return _JO_STATUS_SUCCESS;
 }
 

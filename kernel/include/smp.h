@@ -41,7 +41,9 @@ typedef struct _processor_information {
     
 } processor_information_t;
 
-// ===============================================================================================
+// ==================================================================================================
+// per cpu structures are just arrays of N items, where N is the number of processors in the system.
+// the unique ID of each CPU is stored in gs:0 and used to index these structures
 
 typedef queue_t*        per_cpu_queue_t;
 typedef uintptr_t*      per_cpu_ptr_t;
@@ -57,8 +59,6 @@ per_cpu_qword_t     per_cpu_create_qword(void);
 _JOS_INLINE_FUNC    size_t per_cpu_this_cpu_id(void) {
     uint64_t val;
     x86_64_read_gs(0,&val);
-    // processor_information_t* proc_info = (processor_information_t*)val;
-    // return proc_info->_id;
     return val;
 }
 
