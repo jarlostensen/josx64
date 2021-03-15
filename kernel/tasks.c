@@ -38,28 +38,68 @@ typedef struct _task_context {
     // 'tis helpful 
     const char*     _name;
 
+    //WIP: task queue link
+    struct _task_context*   _next;
+
 } _JOS_PACKED_ task_context_t;
 
 static const char* kTaskChannel = "tasks";
 
 // ===================================================================================
 
+// each CPU has one of these, accessed via gs:0
 typedef struct _cpu_task_context {
 
-    // tasks for each priority level that are ready to run at that level
-    queue_t              _ready_tasks[kTaskPri_NumPris];
+    struct _ready_queue {
+        task_context_t      _head;
+        task_context_t*     _tail;    
+    } _ready_queues[kTaskPri_NumPris];
+    
     // each CPU can only have one running task at one time, and this is the one
     task_context_t*      _running_task;
+
     // the idle task for this cpu which we fall back to when there is nothing else to do
     task_context_t*      _cpu_idle;
 
 } cpu_task_context_t;
+
+static void cpu_context_initialise(cpu_task_context_t* cpu_ctx) {
+    memset(cpu_ctx, 0, sizeof(cpu_task_context_t));
+    for ( int pri = (int)kTaskPri_Highest; pri < (int)kTaskPri_NumPris; ++pri) {        
+        cpu_ctx->_ready_queues[pri]._tail = &cpu_ctx->_ready_queues[pri]._head;
+    }
+}
+
+static void cpu_context_push_task(cpu_task_context_t* cpu_ctx, size_t pri, task_context_t* task) {
+
+    x86_64_cli();
+    cpu_ctx->_ready_queues[pri]._tail->_next = task;
+    cpu_ctx->_ready_queues[pri]._tail = task;
+    task->_next = 0;
+    x86_64_sti();
+}
+
+static task_context_t* cpu_context_try_pop_task(cpu_task_context_t* cpu_ctx, size_t pri) {
+
+    task_context_t* task = 0;
+    x86_64_cli();
+
+    if( cpu_ctx->_ready_queues[pri]._head._next) {
+        task = cpu_ctx->_ready_queues[pri]._head._next;
+        cpu_ctx->_ready_queues[pri]._head._next = task->_next;
+    }
+    
+    x86_64_sti();
+
+    return task;
+}
 
 // in x86_64.asm
 extern task_context_t* x86_64_task_switch(interrupt_stack_t* curr_stack, interrupt_stack_t* new_stack);
 // handle to per-cpu context instances
 static per_cpu_ptr_t _per_cpu_ctx;
 
+// selects the next task to run *on this CPU*
 static task_context_t*  _select_next_task_to_run(void) {
 
     // =====================================================
@@ -71,24 +111,29 @@ static task_context_t*  _select_next_task_to_run(void) {
     cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     // pick the next highest priority task available
     for(int pri = (int)kTaskPri_Highest; pri < (int)kTaskPri_NumPris; ++pri) {
-        if ( !queue_is_empty(&cpu_ctx->_ready_tasks[pri]) ) {
-            _JOS_KTRACE_CHANNEL(kTaskChannel, "available tasks at pri level %d", pri);
+        
+        // anything on this queue? 
+        task_context_t* task = cpu_context_try_pop_task(cpu_ctx, pri);
+        if ( task ) {
+            _JOS_KTRACE_CHANNEL(kTaskChannel, "next task \"%s\" ready at pri level %d", task->_name, pri);
+            // check if we need to swap out the currently running task
             if(cpu_ctx->_running_task!=0
                 &&
                 // ignore if it's the IDLE task
                 cpu_ctx->_running_task->_pri!=kTaskPri_NumPris
                 ) {
-                _JOS_KTRACE_CHANNEL(kTaskChannel, "switching out existing");
-                // move currently running task to the back of its  queue
-                queue_push_ptr(&cpu_ctx->_ready_tasks[ cpu_ctx->_running_task->_pri ], (void*)cpu_ctx->_running_task);
+                
+                _JOS_KTRACE_CHANNEL(kTaskChannel, "switching out \"%s\"", cpu_ctx->_running_task->_name);
+                // move currently running back to the end of the queue
+                cpu_context_push_task(cpu_ctx, pri, cpu_ctx->_running_task);
             }
-            // make the head of this pri queue the new running task
-            cpu_ctx->_running_task = (task_context_t*)queue_front_ptr(&cpu_ctx->_ready_tasks[pri]);
-            _JOS_KTRACE_CHANNEL(kTaskChannel, "next available running task is \"%s\"", cpu_ctx->_running_task->_name);
-            queue_pop(&cpu_ctx->_ready_tasks[pri]);
+            
+            // enable new running task
+            cpu_ctx->_running_task = task;
             return cpu_ctx->_running_task;
         }
     }
+
     // if we get here the only task left to run is idle
     return 0;
 }
@@ -190,9 +235,11 @@ task_handle_t   tasks_create(task_create_args_t* args) {
         args->name, args->func, args->ptr, args->pri);
 
     task_context_t* ctx = _create_task_context(args->func, args->ptr, args->name);
-    cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
-    queue_push_ptr(&cpu_ctx->_ready_tasks[args->pri], (void*)ctx);    
-    
+    cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);    
+
+    //ZZZ: this should probably be done in a separate "start" function?
+    cpu_context_push_task(cpu_ctx, args->pri, ctx);
+
     return (task_handle_t)ctx;
 }
 
@@ -212,11 +259,8 @@ void tasks_initialise(void) {
         _JOS_KTRACE_CHANNEL(kTaskChannel, "initialising for ap %d", cpu);
 
         cpu_task_context_t* ctx = (cpu_task_context_t*)malloc(sizeof(cpu_task_context_t));        
-        memset(ctx, 0, sizeof(cpu_task_context_t));
-        for(int pri = (int)kTaskPri_Highest; pri < (int)kTaskPri_NumPris; ++pri) {
-
-            queue_create(&ctx->_ready_tasks[pri], TASK_QUEUE_SIZE, sizeof(task_context_t*));
-        }
+        cpu_context_initialise(ctx);
+        
         _JOS_PER_CPU_PTR(_per_cpu_ctx,cpu) = (uintptr_t)ctx;
     }
 }

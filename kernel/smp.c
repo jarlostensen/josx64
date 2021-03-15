@@ -174,7 +174,7 @@ static void initialise_this_ap(void* arg) {
     //    gs:0   gs:0   ...   gs:0
     //    info0  info1  ...   infoN
     //    
-    uint64_t proc_info_ptr = &proc_info->_id;
+    uint64_t proc_info_ptr = (uint64_t)&proc_info->_id;
     x86_64_wrmsr(_JOS_K_IA32_GS_BASE, (uint32_t)(proc_info_ptr) & 0xffffffff, (uint32_t)(proc_info_ptr >> 32));
 
     _JOS_KTRACE_CHANNEL(kSmpChannel, "initialised ap %d, gs @ 0x%llx -> %d", proc_info->_id, proc_info_ptr, per_cpu_this_cpu_id());
