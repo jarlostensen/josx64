@@ -1,6 +1,6 @@
 # TL;DR josx64
 I loved working on the 32-bit from-the-bottom-up jOS kernel project but having to deal with the arcana of BIOS memory structures and idiosynchrasies got to me in the end.</br>
-I really wanted to be able to develop and build the kernel entirely on Windows (even though I'll admit WSL is pretty good) and inspired by how easy it is to build kernels in Rust I also wanted to use Clang and avoid having to use a specially cross compiled version of gcc.<br/>
+I also really wanted was to be able to develop and build the kernel entirely on Windows (even though I'll admit WSL is pretty good) and inspired by how easy it is to build kernels in Rust I also wanted to use Clang and avoid having to use a specially cross compiled version of gcc.<br/>
 
 Burned by the hassle of old school BIOS I also wanted a more modern interface to machine capabilities, memory layout, etc, so UEFI was the obvious choice: <br/> 
 * It provides a rich API for obtaining information about the underlying hardware.
