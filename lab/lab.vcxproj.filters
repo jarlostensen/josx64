@@ -28,6 +28,9 @@
     <Filter Include="kernel\programs">
       <UniqueIdentifier>{11e79597-0121-40d4-b073-09285fb8474c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Zydis">
+      <UniqueIdentifier>{bf5068da-20ba-4314-915f-3ba3a3af1231}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="lab.c">

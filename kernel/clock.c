@@ -110,7 +110,7 @@ static void _irq_0_handler(int i)
 
 void clock_initialise(void) {
 
-    _JOS_KTRACE(kClockChannel, "initialising");
+    _JOS_KTRACE_CHANNEL(kClockChannel, "initialising");
 
     //NOTE from i8253.c (Linux arch\x86):
     /*
@@ -162,5 +162,5 @@ void clock_initialise(void) {
     swprintf(buf,128,L"clock: bsp freq estimated ~ %llu MHz, 1ue = %llu, %llu 1KHz ticks measured\n", bsp_freq/1000000, _micro_epsilon, _1khz_counter);
     output_console_output_string(buf);
 
-    _JOS_KTRACE(kClockChannel, "initialised");
+    _JOS_KTRACE_CHANNEL(kClockChannel, "initialised");
 }

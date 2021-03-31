@@ -5,10 +5,12 @@
 #include <stddef.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <wchar.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 
 int swprintf(wchar_t* __restrict buffer, size_t sizeOfBuffer, const wchar_t* __restrict format, ...);
 int snprintf(char* __restrict buffer, size_t sizeOfBuffer, const char* __restrict format, ...);

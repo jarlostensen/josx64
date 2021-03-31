@@ -4,7 +4,10 @@
 
 #include <stdint.h>
 
-typedef uint16_t wchar_t;
+#ifndef _JOS_WCHAR_DEFINED
+    #define _JOS_WCHAR_DEFINED
+    typedef uint16_t   wchar_t;
+#endif
 
 size_t wcslen( const wchar_t *str );
 

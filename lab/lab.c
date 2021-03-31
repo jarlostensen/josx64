@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <conio.h>
 
 #include <windows.h>
 
@@ -200,18 +201,153 @@ void test_io_file(void) {
     printf("%c\n", c);
 }
 
-typedef int (*_getch_t)(void);
+static int _jos_stdin_getch(void) {
+    return _jos_getc(jos_stdin);
+}
 
-jo_status_t basic_line_editor(char* out_buffer, size_t buffer_len, size_t* out_characters_read, _getch_t getch) {
+typedef int (*_getch_t)(void);
+typedef int (*_putc_t)(int);
+
+#define EXT_KEY 0xe0
+#define VK_CR 0x0d
+#define VK_TAB '\t'
+#define VK_LEFT 0x4b
+#define VK_RIGHT 0x4d
+#define VK_BS 0x08
+
+int _lab_getch(void) {
+    int c = _getch();
+    if (c == EXT_KEY) {
+        c = _getch();
+    }
+    return c;
+}
+
+typedef struct _console_interface {
+    
+    size_t  (*cursor_left)(void);
+    size_t  (*cursor_right)(void);
+    void    (*putc)(int c);
+    void    (*clear_from_cursor)(void);
+} console_interface_t;
+
+// ==============================================================================
+// Windows Console stuff
+static HANDLE _std_in, _std_out;
+static CONSOLE_SCREEN_BUFFER_INFO _std_out_info;
+
+static void con_cursor_left(void) {
+    CONSOLE_SCREEN_BUFFER_INFO con_info;
+    GetConsoleScreenBufferInfo(_std_out, &con_info);
+    if (con_info.dwCursorPosition.X) {
+        --con_info.dwCursorPosition.X;
+        SetConsoleCursorPosition(_std_out, con_info.dwCursorPosition);
+    }
+}
+
+static void con_cursor_right(void) {
+    CONSOLE_SCREEN_BUFFER_INFO con_info;
+    GetConsoleScreenBufferInfo(_std_out, &con_info);
+    if (con_info.dwCursorPosition.X < con_info.srWindow.Right) {
+        ++con_info.dwCursorPosition.X;
+        SetConsoleCursorPosition(_std_out, con_info.dwCursorPosition);
+    }
+}
+
+static void con_clear_from_cursor(void) {
+    CONSOLE_SCREEN_BUFFER_INFO con_info;
+    GetConsoleScreenBufferInfo(_std_out, &con_info);
+    DWORD written;
+    FillConsoleOutputCharacter(_std_out, ' ', con_info.srWindow.Right - con_info.dwCursorPosition.X, con_info.dwCursorPosition, &written);
+}
+
+static void con_putc(int c) {
+    putc(c, stdout);
+}
+
+jo_status_t basic_line_editor(char* out_buffer, size_t buffer_len, _getch_t _getch, console_interface_t* console);
+static void test_line_editor(void) {
+
+    _std_in = GetStdHandle(STD_INPUT_HANDLE);
+    _std_out = GetStdHandle(STD_OUTPUT_HANDLE);
+    GetConsoleScreenBufferInfo(_std_out, &_std_out_info);
+    
+    _jos_stdin._buffer._size = 32;
+    _jos_stdin._buffer._begin = malloc(32);
+    _jos_stdin._buffer._end = _jos_stdin._buffer._begin + 1;
+    _jos_stdin._buffer._rp = _jos_stdin._buffer._end;
+
+    console_interface_t con;
+    con.clear_from_cursor = con_clear_from_cursor;
+    con.cursor_left = con_cursor_left;
+    con.cursor_right = con_cursor_right;
+    con.putc = con_putc;
+    char buffer[256];
+    basic_line_editor(buffer, sizeof(buffer), _lab_getch, &con);
+
+    printf("\nWe got: \"%s\"", buffer);
+}
+
+// ==============================================================================
+
+jo_status_t basic_line_editor(char* out_buffer, size_t buffer_len, _getch_t _getch, console_interface_t* console) {
     if (!out_buffer || buffer_len < 2) {
         return _JO_STATUS_FAILED_PRECONDITION;
     }
 
-    jo_status_t status = _JO_STATUS_SUCCESS;
+    int c;
+    size_t wp = 0;
+    size_t end = 0;
+    while (wp < buffer_len && (c = _getch()) != VK_CR) {
 
+        switch (c) {
+        case VK_BS:
+        {
+            if (wp) {
+                --wp;
+                end = wp;
+                out_buffer[wp] = 0;
+                console->cursor_left();
+                console->clear_from_cursor();
+            }
+        }
+        break;
+        case VK_LEFT:
+        {
+            if (wp) {
+                --wp;
+                console->cursor_left();
+            }
+        }
+        break;
+        case VK_RIGHT:
+        {
+            if (wp < end) {
+                ++wp;
+                console->cursor_right();
+            }
+        }
+        break;
+        case VK_TAB:
+        {
+            //TODO: insert 4 spaces...
+        }
+        break;
+        //TODO: VK_HOME, VK_END...
+        default:
+        {
+            out_buffer[wp++] = (char)(c & 0xff);
+            if (wp > end) {
+                end = wp;
+                out_buffer[wp] = 0;
+            }            
+            console->putc(c);
+        }
+        break;
+        }
+    }
 
-
-    return status;
+    return _JO_STATUS_SUCCESS;
 }
 
 // =================================================================================================
@@ -412,15 +548,15 @@ int main(void)
     peutil_pe_context_t pe_ctx;
     peutil_bind(&pe_ctx, (const void*)this_module, kPe_Relocated);
     uintptr_t entry = peutil_entry_point(&pe_ctx);
-
-    dump_index(pdb_index_load_from_pdb_yml(), 0);
-
-    char_array_slice_t slice = pdb_index_symbol_name_for_address(71904);
-    slice = pdb_index_symbol_name_for_address(137950);
 */
+    //dump_index(pdb_index_load_from_pdb_yml(), 0);
+    pdb_index_load_from_pdb_yml();
+    char_array_slice_t slice = pdb_index_symbol_name_for_address(1878);
+    slice = pdb_index_symbol_name_for_address(46147);
 
-//test_io_file();
-    ui_test_loop();
+    //test_io_file();
+    //ui_test_loop();
+    test_line_editor();
 
     return 0;
 }

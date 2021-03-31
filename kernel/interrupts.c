@@ -73,12 +73,12 @@ static idt_entry_t  _idt[256];
 static idt_desc_t   _idt_desc = { .size = sizeof(_idt), .address = (uint64_t)&_idt};
 
 // interrupt handler nesting level
-static atomic_int _nesting_level = -1;
+static atomic_int_t _nesting_level;
 #define INC_NESTING_LEVEL()\
-    atomic_fetch_add(&_nesting_level,1)
+    ++_nesting_level.value
 
 #define DEC_NESTING_LEVEL()\
-    atomic_fetch_sub(&_nesting_level,1)
+    --nesting_level.value
 
 // handler stubs (from x84_64.asm)
 #define EXTERN_ISR_HANDLER(N)\
@@ -229,6 +229,9 @@ void interrupts_initialise_early(void) {
 
     // initialise PICs
     i8259a_initialise();
+
+    // start un-nested
+    _nesting_level.value = -1;
 
     // load IDT with reserved ISRs
 

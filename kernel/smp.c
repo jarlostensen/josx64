@@ -7,7 +7,7 @@
 #include <collections.h>
 #include <smp.h>
 #include <apic.h>
-
+#include <allocator.h>
 
 // in efi_main.c
 extern CEfiBootServices * g_boot_services;
@@ -76,6 +76,7 @@ typedef struct _xsdt_header {
 
 } _JOS_PACKED_ _xsdt_header_t;
 
+//TODO: per cpu
 const rsdp_descriptor20_t*  _rsdp_desc_20 = 0;
 const _xsdt_header_t*       _xsdt = 0;
 
@@ -119,7 +120,6 @@ jo_status_t    intitialise_acpi() {
 }
 
 // ==================================================================================================
-
 
 static void collect_this_cpu_information(processor_information_t* info) {
 
@@ -180,7 +180,7 @@ static void initialise_this_ap(void* arg) {
     _JOS_KTRACE_CHANNEL(kSmpChannel, "initialised ap %d, gs @ 0x%llx -> %d", proc_info->_id, proc_info_ptr, per_cpu_this_cpu_id());
 }
 
-jo_status_t    smp_initialise() {
+jo_status_t    smp_initialise(linear_allocator_t* allocator) {
 
     CEfiHandle handle_buffer[3];
     CEfiUSize handle_buffer_size = sizeof(handle_buffer);
@@ -216,7 +216,7 @@ jo_status_t    smp_initialise() {
 
             _JOS_KTRACE_CHANNEL(kSmpChannel, "BSP id is %d, %d processors present", _bsp_id, _num_processors);
 
-            _processors = (processor_information_t*)malloc(sizeof(processor_information_t) * _num_processors);
+            _processors = (processor_information_t*)allocator->alloc(sizeof(processor_information_t) * _num_processors);
             memset(_processors, 0, sizeof(processor_information_t) * _num_processors);
             _processors[_bsp_id]._id = _bsp_id;
             initialise_this_ap((void*)&_processors[_bsp_id]);
@@ -243,7 +243,7 @@ jo_status_t    smp_initialise() {
     {
         // uni processor
         _JOS_KTRACE_CHANNEL(kSmpChannel, "uni processor system, or no UEFI MP protocol handler available");
-        _processors = (processor_information_t*)malloc(sizeof(processor_information_t));
+        _processors = (processor_information_t*)allocator->alloc(sizeof(processor_information_t));
         _processors->_id = 0;
         initialise_this_ap(_processors);        
         _processors->_is_good = true;
@@ -283,72 +283,20 @@ bool smp_has_acpi_20() {
     return _xsdt != 0;
 }
 
-#if 0
-jo_status_t        smp_startup_aps(ap_worker_function_t ap_worker_function, void* per_ap_data_, size_t per_ap_data_stride) {
-
-    _JOS_ASSERT(_num_processors);
-
-    if(!g_boot_services) {
-        return _JO_STATUS_PERMISSION_DENIED;
-    }
-
-    if (!ap_worker_function || (per_ap_data_ && !per_ap_data_stride) || (!per_ap_data_ && per_ap_data_stride)) {
-        return _JO_STATUS_FAILED_PRECONDITION;
-    }
-
-    if ( _num_enabled_processors==1 ) {
-        return _JO_STATUS_RESOURCE_EXHAUSTED;
-    }
-
-    if ( _ap_event ) {
-        // can't do this twice, there's only one try
-        return _JO_STATUS_PERMISSION_DENIED;
-    }
-
-    CEfiStatus efi_status;
-    // efi_status = g_boot_services->create_event(C_EFI_EVT_RUNTIME,  C_EFI_TPL_APPLICATION, NULL, NULL, &_ap_event);
-    // if ( efi_status != C_EFI_SUCCESS ) {
-    //     return _JO_STATUS_INTERNAL;
-    // }
-
-    CEfiUSize this_id;
-    _mpp->who_am_i(_mpp, &this_id);
-    if ( this_id!=_bsp_id ) {
-        return _JO_STATUS_PERMISSION_DENIED;
-    }
-
-    uint8_t* per_ap_data = (uint8_t*)per_ap_data_;
-    for(size_t p = 0; p < _num_processors; ++p) {
-        if( p != _bsp_id ) {
-
-            // execute the information collect function on this processor
-            efi_status = _mpp->startup_this_ap(_mpp, ap_worker_function, p, NULL, 100, (void*)(per_ap_data), NULL);
-            if ( efi_status != C_EFI_SUCCESS ) {
-                return _JO_STATUS_CANCELLED;
-            }
-        }
-
-        per_ap_data += per_ap_data_stride;
-    }
-
-    return _JO_STATUS_SUCCESS;
-}
-#endif 
-
 // ====================================================================================
 // per CPU 
 
-per_cpu_ptr_t       per_cpu_create_ptr(void) {
+per_cpu_ptr_t       per_cpu_create_ptr(linear_allocator_t* allocator) {
     _JOS_ASSERT(_num_processors);
-    return (per_cpu_ptr_t)malloc(sizeof(uintptr_t)*_num_processors);
+    return (per_cpu_ptr_t)allocator->alloc(sizeof(uintptr_t)*_num_processors);
 }
 
-per_cpu_queue_t     per_cpu_create_queue(void) {
+per_cpu_queue_t     per_cpu_create_queue(linear_allocator_t* allocator) {
     _JOS_ASSERT(_num_processors);
-    return (per_cpu_ptr_t)malloc(sizeof(queue_t)*_num_processors);
+    return (per_cpu_ptr_t)allocator->alloc(sizeof(queue_t)*_num_processors);
 }
 
-per_cpu_qword_t     per_cpu_create_qword(void) {
+per_cpu_qword_t     per_cpu_create_qword(linear_allocator_t* allocator) {
     _JOS_ASSERT(_num_processors);
-    return (per_cpu_ptr_t)malloc(sizeof(uint64_t)*_num_processors);
+    return (per_cpu_ptr_t)allocator->alloc(sizeof(uint64_t)*_num_processors);
 }

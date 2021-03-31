@@ -32,7 +32,7 @@ char serial_getch(short port, int wait)
     //_JOS_ASSERT(port==kCom1 || port==kCom2);
     while(wait && !serial_data_ready(port))
     {
-        asm volatile ("pause");
+        __asm__ volatile ("pause");
     }
     return x86_64_inb(port);
 }
@@ -49,7 +49,7 @@ void serial_putch(short port, char data, int wait)
     // _JOS_ASSERT(port==kCom1 || port==kCom2);    
     while(wait && !serial_transmit_empty(port))
     {
-        asm volatile ("pause");
+        __asm__ volatile ("pause");
     }
     x86_64_outb(port, data);
 }
@@ -59,7 +59,7 @@ void serial_flush(short port)
     //_JOS_ASSERT(port==kCom1 || port==kCom2);    
     while(!serial_transmit_empty(port))
     {
-        asm volatile ("pause");
+        __asm__ volatile ("pause");
     }
 }
 

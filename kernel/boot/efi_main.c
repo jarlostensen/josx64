@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <wchar.h>
+#include <stddef.h>
 
 #include <jos.h>
 #include <kernel.h>
@@ -87,7 +88,19 @@ void image_protocol_info(CEfiHandle h, CEfiStatus (*_efi_main)(CEfiHandle, CEfiS
     }    
 }
 
+//zzz: ------------------------------------------------------------------
 
+static void* malloc_alloc(size_t size) {
+    return malloc(size);
+}
+
+static size_t malloc_available(void) {
+    return memory_get_total();
+}
+
+static linear_allocator_t _smp_allocator;
+
+//zzz: ------------------------------------------------------------------
 
 void pre_exit_boot_services() {
     wchar_t buf[256];
@@ -106,7 +119,10 @@ void pre_exit_boot_services() {
         halt_cpu();
     }
 
-    status = smp_initialise();
+    _smp_allocator.alloc = malloc_alloc;
+    _smp_allocator.available = malloc_available;
+    _smp_allocator.factory = 0;
+    status = smp_initialise(&_smp_allocator);
     if ( !_JO_SUCCEEDED(status) ) {
         swprintf(buf, bufcount, L"***FATAL ERROR: MP initialise returned 0x%x\n\r", status);
         _EFI_PRINT(buf);
