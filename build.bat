@@ -1,6 +1,8 @@
 @echo off
 setlocal ENABLEDELAYEDEXPANSION
 
+PATH=%CD%\external\cmake\bin;%CD%\external\LLVM\bin;%CD%\external;%PATH%
+
 external\ninja.exe -C build
 
 if %ERRORLEVEL% EQU 0 (

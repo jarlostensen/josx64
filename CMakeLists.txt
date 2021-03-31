@@ -14,7 +14,7 @@ message("CMAKE system name is \"${CMAKE_SYSTEM_NAME}\", target is \"${BUILD_TARG
 
 # https://wiki.osdev.org/UEFI_Bare_Bones#What_to_do_next.3F
 set(CMAKE_C_FLAGS 
-"${CMAKE_C_FLAGS} -D_JOS_KERNEL_BUILD -D_JO_BARE_METAL_BUILD -target ${BUILD_TARGET} -isystem="${CMAKE_SOURCE_DIR}/libc/include" -DGNU_EFI_USE_MS_ABI {$DEBUG_BUILD_FLAGS} -m64 -nostdinc -ffreestanding -mcmodel=small -fshort-wchar -S  -mam-verbose -masm-intel -mno-red-zone -fno-builtin-setjmp -fno-builtin-longjmp -fomit-frame-pointer -fno-delete-null-pointer-checks -fno-common -fno-zero-initialized-in-bss -fno-exceptions -fno-stack-protector -fno-stack-check -fno-strict-aliasing -fno-merge-all-constants --std=c11 -Wall -Wextra -Wdouble-promotion -Wpedantic ")
+"${CMAKE_C_FLAGS} -D_JOS_KERNEL_BUILD -D_JO_BARE_METAL_BUILD -target ${BUILD_TARGET} -isystem=${CMAKE_SOURCE_DIR}/libc/include -DGNU_EFI_USE_MS_ABI ${DEBUG_BUILD_FLAGS} -m64 -nostdinc -ffreestanding -mcmodel=small -fshort-wchar -S  -mno-red-zone -fno-builtin-setjmp -fno-builtin-longjmp -fomit-frame-pointer -fno-delete-null-pointer-checks -fno-common -fno-zero-initialized-in-bss -fno-exceptions -fno-stack-protector -fno-stack-check -fno-strict-aliasing -fno-merge-all-constants --std=c11 -Wall -Wextra -Wdouble-promotion -Wpedantic")
 
 # NOTE: it appears we need both nostdlib and nodefaultlibs to completly purge the spirit of Windows libriaries from the build
 # NOTE: DEBUG 
