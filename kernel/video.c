@@ -12,6 +12,7 @@
 #include "include/jos.h"
 #include "include/video.h"
 #include "../deps/stb/stb_image_resize.h"
+#include <module.h>
 
 #ifdef _JOS_KERNEL_BUILD
 // in efi_main.c
@@ -32,6 +33,8 @@ static size_t _blue_shift;
 // are copied to the framebuffer
 static uint8_t* _backbuffer = 0;
 
+static module_handle_t _video_module_handle = module_null_handle;
+
 #define _FONT_HEIGHT    8
 #define _FONT_WIDTH     8
 
@@ -45,7 +48,13 @@ static uint32_t* backbuffer_wptr(size_t top, size_t left) {
     return (uint32_t*)(_backbuffer)+top * _info.pixels_per_scan_line + left;
 }
 
-jo_status_t video_initialise(jos_allocator_t* allocator)
+static jo_status_t _video_initialise(module_handle_t assigned_handle, void* allocated_memory, size_t allocated_memory_size) {
+    _backbuffer = (uint8_t*)allocated_memory;
+    _video_module_handle = assigned_handle;
+    return _JO_STATUS_SUCCESS;
+}
+
+jo_status_t video_initialise(void)
 {
     jo_status_t status = _JO_STATUS_SUCCESS;
 
@@ -144,7 +153,11 @@ jo_status_t video_initialise(jos_allocator_t* allocator)
 #endif
 
     if (_JO_SUCCEEDED(status)) {
-        _backbuffer = (uint8_t*)allocator->_alloc(_info.pixels_per_scan_line * _info.vertical_resolution * 4);
+        status = module_register(&(module_registration_info_t){
+            .memory_required = _info.pixels_per_scan_line * _info.vertical_resolution * 4,
+            .name = "video",
+            .initialise = _video_initialise
+        });        
     }
 
     return status;

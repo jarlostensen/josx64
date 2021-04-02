@@ -10,21 +10,21 @@
 // ====================================================================================
 // fixed size pool allocator
 
-typedef struct
+typedef struct _fixed_allocator
 {
     uint8_t     _size_p2;   // power of two unit allocation size
     size_t      _count;
     uint32_t    _free;      // index of first free
 	uintptr_t	_end;		// upper memory bound for pool
-} vmem_fixed_t;
+} fixed_allocator_t;
 
-vmem_fixed_t*     vmem_fixed_create(void* mem, size_t size, size_t allocUnitPow2)
+_JO_INLINE_FUNC fixed_allocator_t*     fixed_allocator_create(void* mem, size_t size, size_t allocUnitPow2)
 {
     if(allocUnitPow2 < 3)
         return 0;
-    vmem_fixed_t* pool = (vmem_fixed_t*)mem;
+    fixed_allocator_t* pool = (fixed_allocator_t*)mem;
     pool->_size_p2 = (uint8_t)allocUnitPow2;
-    size -= sizeof(vmem_fixed_t);
+    size -= sizeof(fixed_allocator_t);
     pool->_count = size / (1<<allocUnitPow2);
     pool->_free = 0;
 	pool->_end = (uintptr_t)((uintptr_t)(pool+1) + pool->_count*(1<<pool->_size_p2));
@@ -39,7 +39,7 @@ vmem_fixed_t*     vmem_fixed_create(void* mem, size_t size, size_t allocUnitPow2
     return pool;
 }
 
-void* vmem_fixed_alloc(vmem_fixed_t* pool, size_t size)
+_JO_INLINE_FUNC void* fixed_allocator_alloc(fixed_allocator_t* pool, size_t size)
 {
     if((size_t)(1<<pool->_size_p2) < size || pool->_free == (uint32_t)~0)
     {
@@ -52,7 +52,7 @@ void* vmem_fixed_alloc(vmem_fixed_t* pool, size_t size)
     return block;
 }
 
-void vmem_fixed_free(vmem_fixed_t* pool, void* block)
+_JO_INLINE_FUNC void fixed_allocator_free(fixed_allocator_t* pool, void* block)
 {
     if(!pool || !block)
         return;	
@@ -63,13 +63,13 @@ void vmem_fixed_free(vmem_fixed_t* pool, void* block)
     *free = (uint32_t)((uintptr_t)fblock - (uintptr_t)(pool+1))/unit_size;
 }
 
-bool vmem_fixed_in_pool(vmem_fixed_t* pool, void* ptr)
+_JO_INLINE_FUNC bool fixed_allocator_in_pool(fixed_allocator_t* pool, void* ptr)
 {
 	const uintptr_t begin = (uintptr_t)(pool+1);
 	return (uintptr_t)ptr >= begin && (uintptr_t)ptr < pool->_end;
 }
 
-_JOS_INLINE_FUNC void vmem_fixed_clear(vmem_fixed_t* pool)
+_JOS_INLINE_FUNC void fixed_allocator_clear(fixed_allocator_t* pool)
 {
     pool->_free = 0;
     uint32_t* block = (uint32_t*)((uint8_t*)(pool+1));

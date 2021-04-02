@@ -6,7 +6,7 @@
 #endif
 #include <wchar.h>
 
-jo_status_t video_initialise(jos_allocator_t * allocator);
+jo_status_t video_initialise(void);
 
 uint32_t video_make_color(uint8_t r, uint8_t g, uint8_t b);
 void video_clear_screen(uint32_t colour);

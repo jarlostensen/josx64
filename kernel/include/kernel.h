@@ -4,7 +4,7 @@
 #include <atomic.h>
 #include <x86_64.h>
 
-__attribute__((__noreturn__)) void halt_cpu();
+_JOS_NORETURN void halt_cpu();
 
 typedef struct _lock {
     atomic_int_t  atomic_val;
@@ -27,6 +27,8 @@ static void lock_unlock(lock_t* lock) {
     atomic_store(&lock->atomic_val.value, 0);
 }
 
-
+jo_status_t kernel_uefi_init(void);
+jo_status_t kernel_runtime_init(void);
+_JOS_NORETURN void  kernel_runtime_start(void);
 
 #endif // _JOS_KERNEL_KERNEL_H

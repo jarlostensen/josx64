@@ -8,7 +8,6 @@
 #include <collections.h>
 #include <x86_64.h>
 #include <c-efi-protocol-multi-processor.h>
-#include <allocator.h>
 
 typedef struct _local_apic_information {
 
@@ -49,12 +48,9 @@ typedef queue_t*        per_cpu_queue_t;
 typedef uintptr_t*      per_cpu_ptr_t;
 typedef uint64_t*       per_cpu_qword_t;
 
-// invoked from processor initialisation code
-void per_cpu_initialise(void);
-
-per_cpu_ptr_t       per_cpu_create_ptr(linear_allocator_t* allocator);
-per_cpu_queue_t     per_cpu_create_queue(linear_allocator_t* allocator);
-per_cpu_qword_t     per_cpu_create_qword(linear_allocator_t* allocator);
+per_cpu_ptr_t       per_cpu_create_ptr(void);
+per_cpu_queue_t     per_cpu_create_queue(void);
+per_cpu_qword_t     per_cpu_create_qword(void);
 
 _JOS_INLINE_FUNC    size_t per_cpu_this_cpu_id(void) {
     uint64_t val;
@@ -77,7 +73,7 @@ _JOS_INLINE_FUNC    size_t per_cpu_this_cpu_id(void) {
 // ===============================================================================================
 
 //NOTE: called on the BSP *only*
-jo_status_t     smp_initialise(linear_allocator_t* allocator);
+jo_status_t     smp_initialise(void);
 
 size_t          smp_get_processor_count(void);
 size_t          smp_get_bsp_id();

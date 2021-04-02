@@ -7,7 +7,10 @@
 #include <collections.h>
 #include <smp.h>
 #include <apic.h>
-#include <allocator.h>
+#include <arena_allocator.h>
+#include <fixed_allocator.h>
+
+#include <module.h>
 
 // in efi_main.c
 extern CEfiBootServices * g_boot_services;
@@ -79,6 +82,8 @@ typedef struct _xsdt_header {
 //TODO: per cpu
 const rsdp_descriptor20_t*  _rsdp_desc_20 = 0;
 const _xsdt_header_t*       _xsdt = 0;
+
+fixed_allocator_t* _per_cpu_allocator;
 
 bool do_checksum(const uint8_t*ptr, size_t length) {
     uint8_t checksum = 0;
@@ -180,7 +185,17 @@ static void initialise_this_ap(void* arg) {
     _JOS_KTRACE_CHANNEL(kSmpChannel, "initialised ap %d, gs @ 0x%llx -> %d", proc_info->_id, proc_info_ptr, per_cpu_this_cpu_id());
 }
 
-jo_status_t    smp_initialise(linear_allocator_t* allocator) {
+static module_handle_t _smp_module_handle = 0;
+static vmem_arena_t* _smp_arena = NULL;
+
+// this callback is invoked by module.c::module_register
+static jo_status_t    _smp_initialise(module_handle_t assigned_handle, void* allocated_memory, size_t allocated_memory_size) {
+    _smp_module_handle = assigned_handle;
+    _smp_arena = vmem_arena_create(allocated_memory, allocated_memory_size);
+    return _JO_STATUS_SUCCESS;
+}
+
+jo_status_t    smp_initialise(void) {
 
     CEfiHandle handle_buffer[3];
     CEfiUSize handle_buffer_size = sizeof(handle_buffer);
@@ -214,9 +229,17 @@ jo_status_t    smp_initialise(linear_allocator_t* allocator) {
                 return _JO_STATUS_INTERNAL;
             }
 
+            // now we have the information we need to register this module
+            // we'll set aside one meg per core for misc             
+            module_register(&(module_registration_info_t){
+                .memory_required = 1024*1024*_num_enabled_processors,
+                .name = "smp",
+                .initialise = _smp_initialise
+            });
+
             _JOS_KTRACE_CHANNEL(kSmpChannel, "BSP id is %d, %d processors present", _bsp_id, _num_processors);
 
-            _processors = (processor_information_t*)allocator->alloc(sizeof(processor_information_t) * _num_processors);
+            _processors = (processor_information_t*)vmem_arena_alloc(_smp_arena, sizeof(processor_information_t) * _num_processors);
             memset(_processors, 0, sizeof(processor_information_t) * _num_processors);
             _processors[_bsp_id]._id = _bsp_id;
             initialise_this_ap((void*)&_processors[_bsp_id]);
@@ -242,8 +265,15 @@ jo_status_t    smp_initialise(linear_allocator_t* allocator) {
     else
     {
         // uni processor
+        module_register(&(module_registration_info_t){
+            // just one meg in total
+            .memory_required = 1024*1024,
+            .name = "smp",
+            .initialise = _smp_initialise
+        });
+
         _JOS_KTRACE_CHANNEL(kSmpChannel, "uni processor system, or no UEFI MP protocol handler available");
-        _processors = (processor_information_t*)allocator->alloc(sizeof(processor_information_t));
+        _processors = (processor_information_t*)vmem_arena_alloc(_smp_arena, sizeof(processor_information_t));
         _processors->_id = 0;
         initialise_this_ap(_processors);        
         _processors->_is_good = true;
@@ -286,17 +316,17 @@ bool smp_has_acpi_20() {
 // ====================================================================================
 // per CPU 
 
-per_cpu_ptr_t       per_cpu_create_ptr(linear_allocator_t* allocator) {
+per_cpu_ptr_t       per_cpu_create_ptr(void) {
     _JOS_ASSERT(_num_processors);
-    return (per_cpu_ptr_t)allocator->alloc(sizeof(uintptr_t)*_num_processors);
+    return (per_cpu_ptr_t)vmem_arena_alloc(_smp_arena, sizeof(uintptr_t)*_num_processors);
 }
 
-per_cpu_queue_t     per_cpu_create_queue(linear_allocator_t* allocator) {
+per_cpu_queue_t     per_cpu_create_queue(void) {
     _JOS_ASSERT(_num_processors);
-    return (per_cpu_ptr_t)allocator->alloc(sizeof(queue_t)*_num_processors);
+    return (per_cpu_ptr_t)vmem_arena_alloc(_smp_arena, sizeof(queue_t)*_num_processors);
 }
 
-per_cpu_qword_t     per_cpu_create_qword(linear_allocator_t* allocator) {
+per_cpu_qword_t     per_cpu_create_qword(void) {
     _JOS_ASSERT(_num_processors);
-    return (per_cpu_ptr_t)allocator->alloc(sizeof(uint64_t)*_num_processors);
+    return (per_cpu_ptr_t)vmem_arena_alloc(_smp_arena, sizeof(uint64_t)*_num_processors);
 }

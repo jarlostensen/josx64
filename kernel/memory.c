@@ -5,10 +5,10 @@
 #include <collections.h>
 #include <stdio.h>
 #include <string.h>
-
+#include <serial.h>
 #include <wchar.h>
-
-#include "memory.h"
+#include <linear_allocator.h>
+#include <memory.h>
 
 // in efi_main.c
 extern CEfiBootServices  * g_boot_services;
@@ -18,27 +18,25 @@ static CEfiMemoryDescriptor *_boot_service_memory_map = 0;
 static CEfiUSize            _boot_service_memory_map_size = 0;
 static CEfiUSize            _boot_service_memory_map_entries = 0;
 static CEfiUSize            _map_key = 0;
+static linear_allocator_t*  _main_allocator = 0;
 
-static size_t _total_initial_available_memory = 0;
-static vmem_arena_t* _bootstrap_arena = 0;
-static vector_t      _memory_map;
-
-// only valid immediately after memory_pre_exit_bootservices_initialise()
-static uint8_t*      _memory_bitmap = 0;
+static const char* kMemoryChannel = "memory";
 
 // 4Meg minimum
 #define MINIMUM_MEMORY_AVAILABLE_PAGES  1024
 
-jo_status_t memory_pre_exit_bootservices_initialise(void) 
+jo_status_t memory_uefi_init(linear_allocator_t** main_allocator) 
 {
     CEfiStatus status = C_EFI_SUCCESS;
     
-    CEfiUSize map_key, descriptor_size;
+    CEfiUSize descriptor_size;
     CEfiU32 descriptor_version;
 
     if ( !g_boot_services ) {
         return _JO_STATUS_PERMISSION_DENIED;
-    }    
+    }
+
+    _JOS_KTRACE_CHANNEL(kMemoryChannel, "uefi init");
 
     g_boot_services->get_memory_map(&_boot_service_memory_map_size, _boot_service_memory_map, 0, &descriptor_size, 0);
 
@@ -58,6 +56,9 @@ jo_status_t memory_pre_exit_bootservices_initialise(void)
     CEfiUSize max_conventional = 0;
     _boot_service_memory_map_entries = _boot_service_memory_map_size / descriptor_size;
     size_t available = 0;
+
+    _JOS_KTRACE_CHANNEL(kMemoryChannel, "%d memory descriptors found", _boot_service_memory_map_entries);
+
     for ( unsigned i = 0; i < _boot_service_memory_map_entries; ++i )
     {        
         if ( desc[i].type != C_EFI_RESERVED_MEMORY_TYPE 
@@ -93,31 +94,23 @@ jo_status_t memory_pre_exit_bootservices_initialise(void)
     //g_st->con_out->output_string(g_st->con_out, wbuffer);
 
     if ( available < MINIMUM_MEMORY_AVAILABLE_PAGES ) {
+        _JOS_KTRACE_CHANNEL(kMemoryChannel, "**** FATAL ERROR: not enough RAM");
         return _JO_STATUS_RESOURCE_EXHAUSTED;
     }
 
     available *= 0x1000;
-   
-    // set up our main allocation arena to bootstrap everything else
-    _bootstrap_arena = vmem_arena_create((void*)max_desc->physical_start, max_desc->number_of_pages * 0x1000);
-    if ( !_bootstrap_arena ) {
-        return _JO_STATUS_RESOURCE_EXHAUSTED;
-    }
-
-    // allocate a vector for our memory map
-    //vector_create(&_memory_map, _boot_service_memory_map_entries, sizeof(CEfiMemoryDescriptor));
-    // now build our own map
-    // desc = _boot_service_memory_map;
-    // for ( unsigned i = 0; i < _boot_service_memory_map_entries; ++i )
-    // {
-    //     //TODO:
-    // }
+    // set up our main allocator to bootstrap everything else
+    // TODO: this only uses the largest block of memory, ultimately we need to create a collection of 
+    // allocators for each block
+    *main_allocator =  _main_allocator = linear_allocator_create((void*)max_desc->physical_start, max_desc->number_of_pages * 0x1000);
+    
+    _JOS_KTRACE_CHANNEL(kMemoryChannel, "uefi init succeeded");
 
     return _JO_STATUS_SUCCESS;
 }
 
 size_t      memory_get_total(void) {
-    return _bootstrap_arena->_capacity;
+    return (size_t)_main_allocator->_end - (size_t)_main_allocator->_begin;
 }
 
 CEfiUSize memory_boot_service_get_mapkey(void) {
@@ -142,7 +135,6 @@ jo_status_t memory_refresh_boot_service_memory_map(void) {
     CEfiU32 descriptor_version;
 
     g_boot_services->get_memory_map(&_boot_service_memory_map_size, _boot_service_memory_map, 0, &descriptor_size, 0);
-    unsigned mem_desc_entries = _boot_service_memory_map_size / descriptor_size;
     
     _boot_service_memory_map_size += 2*descriptor_size;    
     if ( C_EFI_ERROR(g_boot_services->allocate_pool(C_EFI_LOADER_DATA, _boot_service_memory_map_size, (void**)&_boot_service_memory_map))) {
@@ -154,35 +146,16 @@ jo_status_t memory_refresh_boot_service_memory_map(void) {
     return _JO_STATUS_SUCCESS;
 }
 
-jo_status_t memory_post_exit_bootservices_initialise(void) {
-    
-    _memory_bitmap = vmem_arena_alloc(_bootstrap_arena, _boot_service_memory_map_entries);
-    if ( !_memory_bitmap )
-    {
-        return _JO_STATUS_RESOURCE_EXHAUSTED;
-    }
-    memset(_memory_bitmap, 0, _boot_service_memory_map_entries);
-
-    CEfiMemoryDescriptor* desc = _boot_service_memory_map;
-    CEfiMemoryDescriptor* max_desc = 0;
-    CEfiUSize max_conventional = 0;
-    size_t available = 0;
-    for ( unsigned i = 0; i < _boot_service_memory_map_entries; ++i )
-    {
-        _memory_bitmap[i] = desc[i].type;
-    }
+jo_status_t memory_runtime_init(void) {
+        
+    //TODO:
     
     return _JO_STATUS_SUCCESS;
 }
 
-const uint8_t* memory_get_memory_bitmap(size_t *out_dim) {
-    out_dim[0] = _boot_service_memory_map_entries;
-    return _memory_bitmap;
-}
-
 // ==============================================================
 // TODO: more pools and arenas?
-
+#if 0
 void* malloc(size_t size) {
     void* ptr = vmem_arena_alloc(_bootstrap_arena, size);
     _JOS_ASSERT(ptr);
@@ -217,3 +190,4 @@ void *realloc(void *ptr, size_t size)
         vmem_arena_free(_bootstrap_arena, ptr);
     return new_ptr;
 }
+#endif

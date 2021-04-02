@@ -14,6 +14,7 @@
 #include <debugger.h>
 #include <x86_64.h>
 #include <tasks.h>
+#include <fixed_allocator.h>
 
 #include <stdlib.h>
 #include <string.h>

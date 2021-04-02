@@ -24,6 +24,7 @@
 #include <pe.h>
 #include <tasks.h>
 #include <x86_64.h>
+#include <module.h>
 
 #include <programs/scroller.h>
 #include <font8x8/font8x8_basic.h>
@@ -88,58 +89,18 @@ void image_protocol_info(CEfiHandle h, CEfiStatus (*_efi_main)(CEfiHandle, CEfiS
     }    
 }
 
-//zzz: ------------------------------------------------------------------
-
-static void* malloc_alloc(size_t size) {
-    return malloc(size);
-}
-
-static size_t malloc_available(void) {
-    return memory_get_total();
-}
-
-static linear_allocator_t _smp_allocator;
-
-//zzz: ------------------------------------------------------------------
-
-void pre_exit_boot_services() {
-    wchar_t buf[256];
-    const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
-
+void uefi_init(void) {
+    
     uint64_t rflags = x86_64_get_rflags();
     kJosKernelCS = x86_64_get_cs();
 
-    serial_initialise();
-    _JOS_KTRACE_CHANNEL("efi_main","pre exit boot services");
-
-    jo_status_t status = memory_pre_exit_bootservices_initialise();
+    // initialise memory manager, serial comms, video, and any modules that require access 
+    // to uefi boot services
+    jo_status_t status = kernel_uefi_init();
     if ( _JO_FAILED(status) ) {
-        swprintf(buf, bufcount, L"***FATAL ERROR: memory initialise returned 0x%x\n\r", status);
-        _EFI_PRINT(buf);
         halt_cpu();
     }
 
-    _smp_allocator.alloc = malloc_alloc;
-    _smp_allocator.available = malloc_available;
-    _smp_allocator.factory = 0;
-    status = smp_initialise(&_smp_allocator);
-    if ( !_JO_SUCCEEDED(status) ) {
-        swprintf(buf, bufcount, L"***FATAL ERROR: MP initialise returned 0x%x\n\r", status);
-        _EFI_PRINT(buf);
-        halt_cpu();
-    }
-
-    status = video_initialise(&(jos_allocator_t){
-        ._alloc = malloc,
-        ._free = free,
-    });
-    if ( _JO_FAILED(status)  ) {
-
-        swprintf(buf, bufcount, L"***FATAL ERROR: video initialise returned 0x%x\n\r", status);
-        _EFI_PRINT(buf);
-        halt_cpu();
-    }
-    
     video_clear_screen(0x6495ed);
     output_console_initialise();
     output_console_set_font((const uint8_t*)font8x8_basic, 8,8);
@@ -148,7 +109,6 @@ void pre_exit_boot_services() {
 
     _JOS_KTRACE_CHANNEL("efi_main","CS = 0x%x, RFLAGS = 0x%x\n", kJosKernelCS, rflags);
     _JOS_KTRACE_CHANNEL("efi_main","kernel starting");
-
 }
 
 jo_status_t main_task(void* ptr) {
@@ -258,7 +218,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     g_st = st;
     g_boot_services = st->boot_services;
 
-    pre_exit_boot_services();
+    uefi_init();
     
     image_protocol_info(h, efi_main);
 
@@ -344,13 +304,11 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     _JOS_KTRACE_CHANNEL("efi_main","boot services exited");
 
     _JOS_KTRACE_CHANNEL("efi_main","kernel setup");
-    //ZZZ:
-    interrupts_initialise_early();
-    debugger_initialise();
-    clock_initialise();
-    keyboard_initialise();
-    
-    tasks_initialise();
+
+    // everything needed to run anything; interrupts, clocks, keyboard...etc...
+    kernel_runtime_init();
+
+    // ================================================================
 
     scroller_initialise(&(rect_t){
         .top = 250,
@@ -373,8 +331,8 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 
     output_console_output_string(L"starting idle task...\n");
 
-    // this never returns...
-    tasks_start_idle();
+    // this never actually returns...
+    kernel_runtime_start();
 
     return C_EFI_SUCCESS;
 }
