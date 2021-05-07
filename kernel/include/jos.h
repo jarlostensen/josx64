@@ -48,8 +48,8 @@ extern uint16_t kJosKernelCS;
 #define _JOS_UNREACHABLE() __builtin_unreachable()
 
 void trace(const char* channel, const char* msg,...);
-#define _JOS_KTRACE_CHANNEL(channel, msg,...) trace(channel, msg,##__VA_ARGS__)
-#define _JOS_KTRACE(msg,...)  trace(0, msg,##__VA_ARGS__)
+#define _JOS_KTRACE_CHANNEL(channel, msg, ...) trace(channel, msg, ##__VA_ARGS__)
+#define _JOS_KTRACE(msg, ...)  trace(0, msg, ##__VA_ARGS__)
 
 void trace_buf(const char* channel, const void* data, size_t length);
 #define _JOS_KTRACE_CHANNEL_BUF(channel, data,length) trace_buf(channel, data, length)

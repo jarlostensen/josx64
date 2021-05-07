@@ -3,7 +3,7 @@ setlocal ENABLEDELAYEDEXPANSION
 
 PATH=%CD%\external\cmake\bin;%CD%\external\LLVM\bin;%CD%\external;%PATH%
 
-external\ninja.exe -C build
+external\ninja.exe --verbose -C build
 
 if %ERRORLEVEL% EQU 0 (
     
