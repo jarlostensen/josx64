@@ -12,6 +12,8 @@ target_sources(c PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/math/exp2f_data.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/math/ceil.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/math/floor.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/math/fabs.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/math/fabsf.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/stdlib/rand.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/internal/_toupper.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/internal/_tolower.c"

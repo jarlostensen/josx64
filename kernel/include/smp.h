@@ -73,7 +73,7 @@ _JOS_INLINE_FUNC    size_t per_cpu_this_cpu_id(void) {
 // ===============================================================================================
 
 //NOTE: called on the BSP *only*
-jo_status_t     smp_initialise(void);
+jo_status_t     smp_initialise(jos_allocator_t* allocator);
 
 size_t          smp_get_processor_count(void);
 size_t          smp_get_bsp_id();

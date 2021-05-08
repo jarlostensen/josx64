@@ -23,10 +23,10 @@ typedef struct _task_create_args {
 
 } task_create_args_t;
 
-void            tasks_initialise(void);
+void            tasks_initialise(jos_allocator_t * allocator);
 // start the idle task on this CPU.
 // this function never returns
 void            tasks_start_idle(void);
-task_handle_t   tasks_create(task_create_args_t* args);
+task_handle_t   tasks_create(task_create_args_t* args, jos_allocator_t * allocator);
 void            tasks_yield(void);
 

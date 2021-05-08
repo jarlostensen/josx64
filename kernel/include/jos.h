@@ -11,8 +11,8 @@
 
 // all sub-systems are provided an implementation instance of this interface
 typedef struct _jos_allocator {
-    void*   (*_alloc)(size_t);
-    void    (*_free)(void*);
+    void*   (*alloc)(size_t);
+    void    (*free)(void*);
 
 } jos_allocator_t;
 
@@ -32,7 +32,6 @@ typedef struct _rect {
     size_t      bottom;
     size_t      right;
 } rect_t;
-
 
 #ifdef _JOS_KERNEL_BUILD
 

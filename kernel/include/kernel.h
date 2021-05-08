@@ -10,12 +10,12 @@ typedef struct _lock {
     atomic_int_t  atomic_val;
 } lock_t;
 
-static void lock_initialise(lock_t* lock) {
+_JO_INLINE_FUNC void lock_initialise(lock_t* lock) {
     lock->atomic_val.value = 0;
 }
 
 // a very basic spinlock implementation
-static void lock_spinlock(lock_t* lock) {
+_JO_INLINE_FUNC void lock_spinlock(lock_t* lock) {
     static int kZero = 0;
     // it can be weak, we expect to have to spin a few times
     while(!atomic_compare_exchange_weak(&lock->atomic_val.value, kZero, 1)) {
@@ -23,11 +23,19 @@ static void lock_spinlock(lock_t* lock) {
     }
 }
 
-static void lock_unlock(lock_t* lock) {
-    atomic_store(&lock->atomic_val.value, 0);
+_JO_INLINE_FUNC void lock_unlock(lock_t* lock) {
+    atomic_store(&lock->atomic_val, 0);
 }
 
-jo_status_t kernel_uefi_init(void);
+
+typedef struct _kernel_uefi_init_args {
+
+    size_t      application_memory_size_required;
+    void**      application_allocated_memory;
+
+} kernel_uefi_init_args_t;
+
+jo_status_t kernel_uefi_init(kernel_uefi_init_args_t* args);
 jo_status_t kernel_runtime_init(void);
 _JOS_NORETURN void  kernel_runtime_start(void);
 

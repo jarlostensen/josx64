@@ -15,7 +15,7 @@ static void write_local_apic_register(processor_information_t* info, local_apic_
 }
 
 // disable the local APIC and make sure it's in a known "0" state before we proceeed
-static void reset_local_apic(processor_information_t* info) {
+static _JOS_MAYBE_UNUSED void reset_local_apic(processor_information_t* info) {
 
     uint32_t val;
 

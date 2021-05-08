@@ -1,4 +1,5 @@
 [bits 64]
+[default rel] ;< needed to ensure RIP relative addressing is used
 
 section .text
 

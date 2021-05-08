@@ -12,6 +12,7 @@
 #include <kernel.h>
 #include <video.h>
 #include <output_console.h>
+#include <linear_allocator.h>
 #include <memory.h>
 #include <serial.h>
 #include <trace.h>
@@ -24,7 +25,6 @@
 #include <pe.h>
 #include <tasks.h>
 #include <x86_64.h>
-#include <module.h>
 
 #include <programs/scroller.h>
 #include <font8x8/font8x8_basic.h>
@@ -36,8 +36,6 @@ int _fltused = 0;
 CEfiSystemTable*    g_st = 0;
 // used from various startup modules (pre-ExitBootServices, after it will be set to 0 again)
 CEfiBootServices * g_boot_services = 0;
-
-static CEfiChar16*   kLoaderHeading = L"| jOSx64 ----------------------------\n\r";
 
 #define _EFI_PRINT(s)\
 g_st->con_out->output_string(g_st->con_out, s)
@@ -54,7 +52,7 @@ void exit_boot_services(CEfiHandle h) {
     }    
     g_boot_services = 0;    
 
-    jo_status_t k_stat = memory_post_exit_bootservices_initialise();
+    jo_status_t k_stat = memory_runtime_init();
     if ( _JO_FAILED(k_stat) ) {
         output_console_set_colour(video_make_color(0xff,0,0));        
         output_console_output_string(L"***FATAL ERROR: post memory exit failed. Halting.\n");
@@ -89,6 +87,15 @@ void image_protocol_info(CEfiHandle h, CEfiStatus (*_efi_main)(CEfiHandle, CEfiS
     }    
 }
 
+#define EFI_APP_MEMORY_POOL_SIZE 4*1024*1024
+static linear_allocator_t*  _efi_allocator = NULL;
+static void* efi_alloc(size_t size) {
+    void* ptr = linear_allocator_alloc(_efi_allocator, size);
+    _JOS_ASSERT(ptr);
+    return ptr;
+}
+
+
 void uefi_init(void) {
     
     uint64_t rflags = x86_64_get_rflags();
@@ -96,10 +103,18 @@ void uefi_init(void) {
 
     // initialise memory manager, serial comms, video, and any modules that require access 
     // to uefi boot services
-    jo_status_t status = kernel_uefi_init();
+    // here we also request a bit of memory for use by this efi application
+    void* efi_app_memory = NULL;
+    jo_status_t status = kernel_uefi_init(&(kernel_uefi_init_args_t){
+        .application_memory_size_required = EFI_APP_MEMORY_POOL_SIZE,
+        .application_allocated_memory = &efi_app_memory,
+    });
     if ( _JO_FAILED(status) ) {
         halt_cpu();
     }
+
+    // we'll use this allocator for various incidentals
+    _efi_allocator = linear_allocator_create(efi_app_memory, EFI_APP_MEMORY_POOL_SIZE);
 
     video_clear_screen(0x6495ed);
     output_console_initialise();
@@ -327,7 +342,11 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
         .func = main_task,
         .pri = kTaskPri_Normal,
         .name = "main_task"        
-    });
+    },
+    &(jos_allocator_t){
+        .alloc = efi_alloc
+    }
+    );
 
     output_console_output_string(L"starting idle task...\n");
 

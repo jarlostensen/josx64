@@ -173,7 +173,7 @@ _JOS_INLINE_FUNC void _vmem_arena_disconnect(vmem_arena_t* arena, vmem_block_hea
 
 // ============================== public API
 
-vmem_arena_t*   vmem_arena_create(void* mem, size_t size)
+_JOS_INLINE_FUNC vmem_arena_t*   vmem_arena_create(void* mem, size_t size)
 {
     if(!mem || size <= _JOS_VMEM_ARENA_MIN_SIZE)
     {
@@ -192,7 +192,7 @@ vmem_arena_t*   vmem_arena_create(void* mem, size_t size)
     return arena;
 }
 
-void* vmem_arena_alloc(vmem_arena_t* arena, size_t size)
+_JOS_INLINE_FUNC void* vmem_arena_alloc(vmem_arena_t* arena, size_t size)
 {
 	if(!size)
 	{		
@@ -254,7 +254,7 @@ void* vmem_arena_alloc(vmem_arena_t* arena, size_t size)
     return free;
 }
 
-void vmem_arena_free(vmem_arena_t* arena, void* block)
+_JOS_INLINE_FUNC void vmem_arena_free(vmem_arena_t* arena, void* block)
 {
     if(!arena || !block)
     {

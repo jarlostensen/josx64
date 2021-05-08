@@ -18,7 +18,7 @@ project(jOSx64 VERSION 1.0
 set(BUILD_TARGET "x86_64-unknown-windows")
 set(OPT_FLAGS -Og)
 set(DEBUG_FLAGS -g -D_DEBUG)
-set(COMPILER_CODEGEN_FLAGS  -mcmodel=small -fshort-wchar -mno-red-zone -fno-builtin-setjmp -fno-builtin-longjmp -fomit-frame-pointer -fno-delete-null-pointer-checks -fno-common -fno-zero-initialized-in-bss -fno-exceptions -fno-stack-protector -fno-stack-check -fno-strict-aliasing -fno-merge-all-constants --std=c11 -Wall)
+set(COMPILER_CODEGEN_FLAGS -m64 -mcmodel=large -fshort-wchar -mno-red-zone -fno-builtin-setjmp -fno-builtin-longjmp -fomit-frame-pointer -fno-delete-null-pointer-checks -fno-common -fno-zero-initialized-in-bss -fno-exceptions -fno-stack-protector -fno-stack-check -fno-strict-aliasing -fno-merge-all-constants --std=c11 -Wall)
 set(COMPILER_FLAGS -D_JOS_KERNEL_BUILD -D_JO_BARE_METAL_BUILD "${COMPILER_CODEGEN_FLAGS}" -target "${BUILD_TARGET}" -nostdinc -ffreestanding -isystem="${CMAKE_SOURCE_DIR}/libc/include" "${OPT_FLAGS}" "${DEBUG_FLAGS}")
 set(LINKER_FLAGS 
     LINKER:-nodefaultlib,

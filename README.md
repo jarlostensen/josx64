@@ -35,3 +35,34 @@ I recommend having the standard ready, there's a lot of important information to
 OSDEV is as always as invaluable source, for example; https://wiki.osdev.org/UEFI
 <br/>
 Configuration table GUIDs: https://blog.fpmurphy.com/2015/10/list-efi-configuration-table-entries.html 
+
+# Design Choices
+
+## Memory management
+Inspired by Ziglang and the principle that _no allocations shall happen outside of the user's control_, no systems allocate memory using _malloc_ but instead require an allocator to be provided as part of the call. Furthermore no systems greedily allocate memory speculatively up-front but instead only allocate what is known and needed, when it is needed.
+
+**NOTE** this also puts a burden on the caller to ensure the correct allocator is used if resources requires freeing up at a later point. Modules do not cache allocator pointers to do this themselves.
+
+The general kliche used throughout the code is:
+
+    module_initialise(jos_allocator_t* allocator) {
+        ...
+        // allocate as much as is KNOWN at this point, i.e. covering the needs 
+        // of the module's internal management of structures etc. 
+        // at this point the module should NOT be GREEDY
+        module_internal_allocator = allocator_type_create(allocator->alloc(MODULE_POOL_SIZE);
+        ...
+    }
+    ...
+    module_function_requiring_resource_allocation(jos_allocator_t* allocator, ...) {
+        ...
+        // allocate the amount needed for this operation, passing the cost to the caller
+        // NOTE: this means that each call to this function may use completely different allocators, it is entirely up to the caller to decide
+        as_needed = allocator->alloc(as_much_as_needed);
+    }
+    ...
+    module_function_freeing_resources(jos_allocator_t* allocator, ...) {
+        ...
+        allocator->free(as_needed);
+    }
+

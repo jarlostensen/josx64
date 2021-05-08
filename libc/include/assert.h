@@ -1,6 +1,8 @@
 #ifndef _JOS_KERNEL_ASSERT_H
 #define _JOS_KERNEL_ASSERT_H
 
+#include <joBase/joBase.h>
+
 #ifdef _JO_BARE_METAL_BUILD
 #undef assert
 
@@ -8,7 +10,7 @@
     #define assert(expression) ((void)0)
 #else
 
-static void _jo_assert(char const* _Message, char const* _File, unsigned _Line) {
+_JO_INLINE_FUNC void _jo_assert(char const* _Message, char const* _File, unsigned _Line) {
     //TODO: 
     (void)_Message;
     (void)_File;

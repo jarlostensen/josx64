@@ -4,49 +4,49 @@
 #include <jos.h>
 
 // read MSR
-static _JOS_ALWAYS_INLINE void x86_64_rdmsr(uint32_t msr, uint32_t* lo, uint32_t* hi)
+_JOS_INLINE_FUNC void x86_64_rdmsr(uint32_t msr, uint32_t* lo, uint32_t* hi)
 {
     __asm__ volatile("rdmsr" : "=a"(*lo), "=d"(*hi) : "c"(msr));
 }
 // write MSR
-static _JOS_ALWAYS_INLINE void x86_64_wrmsr(uint32_t msr, uint32_t lo, uint32_t hi)
+_JOS_INLINE_FUNC void x86_64_wrmsr(uint32_t msr, uint32_t lo, uint32_t hi)
 {
    __asm__ volatile("wrmsr" : : "a"(lo), "d"(hi), "c"(msr));
 }
 
-static _JOS_ALWAYS_INLINE void x86_64_load_idt(const void* dt) 
+_JOS_INLINE_FUNC void x86_64_load_idt(const void* dt) 
 {
     __asm__ volatile("lidt %0"::"m" (*dt));
 }
 
-static _JOS_ALWAYS_INLINE void x86_64_outb(unsigned short port, uint8_t byte) {
+_JOS_INLINE_FUNC void x86_64_outb(unsigned short port, uint8_t byte) {
     __asm__ volatile("outb %1, %0" : :  "dN" (port), "a" (byte));
 }
 
-static _JOS_ALWAYS_INLINE  uint8_t x86_64_inb(unsigned short port) {
+_JOS_INLINE_FUNC uint8_t x86_64_inb(unsigned short port) {
     uint8_t val;
     __asm__ volatile ("inb %1, %0" : "=a" (val) : "dN" (port));
     return val;
 }
 
-static _JOS_ALWAYS_INLINE void x86_64_read_gs(size_t offset, uint64_t * val) {
+_JOS_INLINE_FUNC void x86_64_read_gs(size_t offset, uint64_t * val) {
     __asm__ volatile("movq %%gs:(%1), %0" : "=r" (*val) : "r" (offset));
 }
 
-static _JOS_ALWAYS_INLINE void x86_64_write_gs(size_t offset, uint64_t * val) {
+_JOS_INLINE_FUNC void x86_64_write_gs(size_t offset, uint64_t * val) {
     __asm__ volatile("movq %0, %%gs:(%1)" : : "r" (*val), "r" (offset));
 }
 
 //TODO: this is the "hard" way, we need a softer way to do it as well (as what Linux does)
-static _JOS_ALWAYS_INLINE void x86_64_cli(void) {
+_JOS_INLINE_FUNC void x86_64_cli(void) {
     __asm__ volatile("cli" ::: "memory");
 }
 
-static _JOS_ALWAYS_INLINE void x86_64_sti(void) {
+_JOS_INLINE_FUNC void x86_64_sti(void) {
     __asm__ volatile("sti" ::: "memory");
 }
 
-static _JOS_ALWAYS_INLINE void x86_64_pause_cpu(void) {
+_JOS_INLINE_FUNC void x86_64_pause_cpu(void) {
     __asm__ volatile ("pause");
 }
 

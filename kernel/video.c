@@ -8,11 +8,17 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "include/arena_allocator.h"
+// working memory arena, used as a scratch area for certain operations
+static vmem_arena_t* _video_memory_arena = 0;
+
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "include/jos.h"
 #include "include/video.h"
+
+#define STBIR_MALLOC(size,context) vmem_arena_alloc(_video_memory_arena, (size))
+#define STBIR_FREE(ptr,context) vmem_arena_free(_video_memory_arena, (ptr))
 #include "../deps/stb/stb_image_resize.h"
-#include <module.h>
 
 #ifdef _JOS_KERNEL_BUILD
 // in efi_main.c
@@ -32,8 +38,7 @@ static size_t _blue_shift;
 // all rendering goes to the backbuffer until video_present is called when its contents 
 // are copied to the framebuffer
 static uint8_t* _backbuffer = 0;
-
-static module_handle_t _video_module_handle = module_null_handle;
+static size_t   _framebuffer_size = 0;
 
 #define _FONT_HEIGHT    8
 #define _FONT_WIDTH     8
@@ -48,13 +53,7 @@ static uint32_t* backbuffer_wptr(size_t top, size_t left) {
     return (uint32_t*)(_backbuffer)+top * _info.pixels_per_scan_line + left;
 }
 
-static jo_status_t _video_initialise(module_handle_t assigned_handle, void* allocated_memory, size_t allocated_memory_size) {
-    _backbuffer = (uint8_t*)allocated_memory;
-    _video_module_handle = assigned_handle;
-    return _JO_STATUS_SUCCESS;
-}
-
-jo_status_t video_initialise(void)
+jo_status_t video_initialise(jos_allocator_t* allocator)
 {
     jo_status_t status = _JO_STATUS_SUCCESS;
 
@@ -66,8 +65,6 @@ jo_status_t video_initialise(void)
     CEfiHandle handle_buffer[3];
     CEfiUSize handle_buffer_size = sizeof(handle_buffer);
     memset(handle_buffer, 0, sizeof(handle_buffer));
-
-    wchar_t wbuffer[128];
 
     CEfiStatus efi_status = g_boot_services->locate_handle(C_EFI_BY_PROTOCOL, &C_EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID, 0, &handle_buffer_size, handle_buffer);
     if (efi_status == C_EFI_SUCCESS) {
@@ -153,11 +150,11 @@ jo_status_t video_initialise(void)
 #endif
 
     if (_JO_SUCCEEDED(status)) {
-        status = module_register(&(module_registration_info_t){
-            .memory_required = _info.pixels_per_scan_line * _info.vertical_resolution * 4,
-            .name = "video",
-            .initialise = _video_initialise
-        });        
+        _framebuffer_size = (_info.pixels_per_scan_line * _info.vertical_resolution * 4);
+         _backbuffer = (uint8_t*)allocator->alloc(_framebuffer_size);
+         // we set aside an arena with some room
+         //TODO: this memory is only used by STB image functions like "scale" and should be managed more dynamically
+         _video_memory_arena = vmem_arena_create(allocator->alloc(_framebuffer_size), _framebuffer_size);
     }
 
     return status;
@@ -420,7 +417,8 @@ void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t sr
         }
         else {
             // generic re-size and filtering
-            stbir_resize_uint8_srgb(bitmap, src_width, src_height, src_stride<<2, backbuffer_wptr(dest_top, dest_left), dest_width, dest_height, _info.pixels_per_scan_line << 2, 4, STBIR_ALPHA_CHANNEL_NONE, 0);
+            stbir_resize_uint8_srgb((const unsigned char*)bitmap, src_width, src_height, src_stride<<2, (unsigned char*)backbuffer_wptr(dest_top, dest_left), 
+                dest_width, dest_height, _info.pixels_per_scan_line << 2, 4, STBIR_ALPHA_CHANNEL_NONE, 0);
         }
     }
 }
