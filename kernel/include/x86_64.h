@@ -56,5 +56,6 @@ _JOS_INLINE_FUNC void x86_64_pause_cpu(void) {
 extern uint16_t x86_64_get_cs(void);
 extern uint16_t x86_64_get_ss(void);
 extern uint64_t x86_64_get_rflags(void);
+extern uint64_t x86_64_get_pml4(void);
 
 #endif // _JOS_KERNEL_X86_64_H_

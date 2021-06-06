@@ -200,7 +200,6 @@ pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice
 
 static pdb_index_node_t     _pdb_index_root;
 static size_t               _pdb_index_num_symbols = 0;
-static const char* yml_file_path_name = "..\\build\\BOOTX64.PDB.YML";
 
 // stores packed symbol names as 0 terminated strings, 00 terminates the whole thing.
 // we allocate pages of 4K as we fill them up (which means there may be a few wasted bytes at the end of each page)
@@ -310,11 +309,11 @@ typedef enum _parse_state {
 
 } parse_state_t;
 
-const pdb_index_node_t* pdb_index_load_from_pdb_yml(void) {
+const pdb_index_node_t* pdb_index_load_from_pdb_yml(const char* pdb_yml_file_pathname) {
     
     pdb_index_node_initialise(&_pdb_index_root);
 
-    FILE * yml_file = fopen(yml_file_path_name, "r");
+    FILE * yml_file = fopen(pdb_yml_file_pathname, "r");
     if (yml_file) {
 
         // initialise string store.

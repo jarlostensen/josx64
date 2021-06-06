@@ -55,7 +55,7 @@ void trace_buf(const char* channel, const void* data, size_t length);
 #define _JOS_KTRACE_BUF(data,length) trace_buf(0, data, length)
 
 #define _JOS_BOCHS_DBGBREAK() asm volatile ("xchg %bx,%bx")
-#define _JOS_GDB_DBGBREAK() asm volatile ("int $03")
+#define _JOS_GDB_DBGBREAK() __asm__ volatile ("int $03")
 
 #define _JOS_BOCHS_DBGBREAK_TRACE()\
 trace(0, "break at %s:%d\n", __FILE__,__LINE__);\

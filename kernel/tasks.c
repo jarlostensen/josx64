@@ -139,6 +139,8 @@ static task_context_t*  _select_next_task_to_run(void) {
     return 0;
 }
 
+static void _task_wrapper(task_context_t* ctx);
+
 static void _yield_to_next_task(void) {
     cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     task_context_t* prev = cpu_ctx->_running_task;
@@ -146,12 +148,18 @@ static void _yield_to_next_task(void) {
     if( next_task ) {
         _JOS_KTRACE_CHANNEL(kTaskChannel, "switching from \"%s\" to \"%s\"", 
             prev ? prev->_name : "(0)", cpu_ctx->_running_task->_name);
+
+        interrupt_stack_t* to_stack = (interrupt_stack_t*)cpu_ctx->_running_task->_rsp;
+        _JOS_ASSERT(to_stack->rip==_task_wrapper);
+        
         x86_64_task_switch(prev ? (interrupt_stack_t*)prev->_rsp : 0, (interrupt_stack_t*)cpu_ctx->_running_task->_rsp);
     }
     // else we're now idling
-    _JOS_KTRACE_CHANNEL(kTaskChannel, "back to idling on cpu %d", per_cpu_this_cpu_id());
-    cpu_ctx->_running_task = cpu_ctx->_cpu_idle;
-    x86_64_task_switch(0, (interrupt_stack_t*)cpu_ctx->_cpu_idle->_rsp);
+    //NOISE: _JOS_KTRACE_CHANNEL(kTaskChannel, "back to idling on cpu %d", per_cpu_this_cpu_id());
+    if ( prev != cpu_ctx->_cpu_idle ) {
+        cpu_ctx->_running_task = cpu_ctx->_cpu_idle;
+        x86_64_task_switch(0, (interrupt_stack_t*)cpu_ctx->_cpu_idle->_rsp);
+    }
 }
 
 // the idle task is the task we fall back to when there is NO OTHER WORK TO DO on this CPU.
@@ -174,10 +182,9 @@ static jo_status_t _idle_task(void* ptr) {
 }
 
 static void _task_wrapper(task_context_t* ctx) {
-
+ 
     _JOS_KTRACE_CHANNEL(kTaskChannel, "task_wrapper starting \"%s\"(0x%llx [0x%llx])", 
-            ctx->_name, ctx->_func, ctx->_ptr);
-    // pre-amble
+             ctx->_name, ctx->_func, ctx->_ptr);
     
     // invoke
     jo_status_t status = ctx->_func(ctx->_ptr);
@@ -210,7 +217,10 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
     const size_t stack_top = ((size_t)ctx + TASK_STACK_SIZE) & ~0x0f;
     interrupt_stack_t* interrupt_frame = (interrupt_stack_t*)(stack_top - sizeof(interrupt_stack_t));
 
-    memset(interrupt_frame, 0, sizeof(interrupt_stack_t));
+
+    //TODO: SOMEWHERE THIS CREATES AN INVALID STACK FRAME
+
+    memset(interrupt_frame, 0xcd, sizeof(interrupt_stack_t));
     interrupt_frame->cs = x86_64_get_cs();
     interrupt_frame->ss = x86_64_get_ss();
 
@@ -271,6 +281,7 @@ void tasks_initialise(jos_allocator_t * allocator) {
 
         _JOS_KTRACE_CHANNEL(kTaskChannel, "initialising for ap %d", cpu);
         cpu_task_context_t* ctx = (cpu_task_context_t*)linear_allocator_alloc(_tasks_allocator, sizeof(cpu_task_context_t));
+        _JOS_ASSERT(ctx);
         cpu_context_initialise(ctx);        
         _JOS_PER_CPU_PTR(_per_cpu_ctx,cpu) = (uintptr_t)ctx;
     }

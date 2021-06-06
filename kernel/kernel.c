@@ -5,6 +5,7 @@
 #include <video.h>
 #include <serial.h>
 #include <linear_allocator.h>
+#include <pagetables.h>
 #include <x86_64.h>
 #include <interrupts.h>
 #include <debugger.h>
@@ -43,11 +44,12 @@ jo_status_t kernel_uefi_init(kernel_uefi_init_args_t* args) {
 
     _JOS_KTRACE_CHANNEL(kKernelChannel, "uefi init");
 
+    pagetables_initialise();    
+
     //STRICTLY assumes this doesn't need any memory, video, or SMP functionality
     serial_initialise();
 
-    linear_allocator_t* main_allocator;
-    jo_status_t status = memory_uefi_init(&main_allocator);
+    jo_status_t status = memory_uefi_init(&_kernel_allocator);
     if ( !_JO_SUCCEEDED(status) ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel, "***FATAL ERROR: memory initialise returned 0x%x", status);
         return status;

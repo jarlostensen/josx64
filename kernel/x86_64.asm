@@ -68,6 +68,8 @@ section .text
 
 %define STACK_REL(idx) [rsp+8*idx]
 
+%define DBG_BREAK int 3
+
 ; --------------------------------------------------------------------------
 ; task handlers
 
@@ -319,7 +321,12 @@ x86_64_get_ss:
     xor     rax, rax
     mov     ax, ss
     ret
-    
+
+global x86_64_get_pml4
+x86_64_get_pml4:
+    mov     rax, cr3
+    ret
+
 ; apparently one does not simply disable chkstk insertion on Clang, so this is the second best thing
 ; https://metricpanda.com/rival-fortress-update-45-dealing-with-__chkstk-__chkstk_ms-when-cross-compiling-for-windows/
 global __chkstk

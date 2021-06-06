@@ -40,6 +40,8 @@ CEfiBootServices * g_boot_services = 0;
 #define _EFI_PRINT(s)\
 g_st->con_out->output_string(g_st->con_out, s)
 
+
+
 // ==============================================================
 void exit_boot_services(CEfiHandle h) {
 
@@ -78,6 +80,8 @@ void image_protocol_info(CEfiHandle h, CEfiStatus (*_efi_main)(CEfiHandle, CEfiS
         swprintf(buf, bufcount, L"\nimage is %llu bytes, loaded at 0x%llx, efi_main @ 0x%llx, PE entry point @ 0x%llx\n", 
             _lip->image_size, _lip->image_base, _efi_main, peutil_entry_point(&pe_ctx));
         output_console_output_string(buf);
+        _JOS_KTRACE_CHANNEL("image_protocol", "image is %llu bytes, loaded at 0x%llx, efi_main @ 0x%llx, PE entry point @ 0x%llx", 
+            _lip->image_size, _lip->image_base, _efi_main, peutil_entry_point(&pe_ctx));
         hex_dump_mem((void*)_lip->image_base, 64, k8bitInt);
         output_console_line_break();
     }    
@@ -90,7 +94,7 @@ void image_protocol_info(CEfiHandle h, CEfiStatus (*_efi_main)(CEfiHandle, CEfiS
 #define EFI_APP_MEMORY_POOL_SIZE 4*1024*1024
 static linear_allocator_t*  _efi_allocator = NULL;
 static void* efi_alloc(size_t size) {
-    void* ptr = linear_allocator_alloc(_efi_allocator, size);
+    void* ptr = linear_allocator_alloc(_efi_allocator, size);    
     _JOS_ASSERT(ptr);
     return ptr;
 }
@@ -122,8 +126,7 @@ void uefi_init(void) {
     output_console_set_colour(0xffffffff);
     output_console_set_bg_colour(0x6495ed);
 
-    _JOS_KTRACE_CHANNEL("efi_main","CS = 0x%x, RFLAGS = 0x%x\n", kJosKernelCS, rflags);
-    _JOS_KTRACE_CHANNEL("efi_main","kernel starting");
+    _JOS_KTRACE_CHANNEL("efi_main", "kernel starting");
 }
 
 jo_status_t main_task(void* ptr) {
@@ -234,7 +237,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     g_boot_services = st->boot_services;
 
     uefi_init();
-    
+
     image_protocol_info(h, efi_main);
 
     wchar_t buf[256];
@@ -323,6 +326,12 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     // everything needed to run anything; interrupts, clocks, keyboard...etc...
     kernel_runtime_init();
 
+    // TEST
+    _JOS_KTRACE_CHANNEL("efi_main","0 pointer access check");
+    pagetables_enable_nullptr_gpf();
+    char* tmp = 0;
+    *tmp = 42;
+
     // ================================================================
 
     scroller_initialise(&(rect_t){
@@ -339,12 +348,12 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     _JOS_KTRACE_CHANNEL("efi_main", "port 0x80 wait took ~ %d cycles\n", elapsed);
         
     task_handle_t main_task_handle = tasks_create(&(task_create_args_t){
-        .func = main_task,
-        .pri = kTaskPri_Normal,
-        .name = "main_task"        
+         .func = main_task,
+         .pri = kTaskPri_Normal,
+         .name = "main_task"        
     },
     &(jos_allocator_t){
-        .alloc = efi_alloc
+         .alloc = efi_alloc
     }
     );
 

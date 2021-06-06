@@ -383,8 +383,8 @@ static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         GetDIBits(hdc_mem, bm, 0, _info.vertical_resolution, bits, (BITMAPINFO*)(&bm_info_header), DIB_RGB_COLORS);
 
         video_initialise(&(jos_allocator_t) {
-            ._alloc = malloc,
-                ._free = free
+            .alloc = malloc,
+                .free = free
         });
         output_console_initialise();
         output_console_set_colour(0xffffffff);
@@ -550,13 +550,26 @@ int main(void)
     uintptr_t entry = peutil_entry_point(&pe_ctx);
 */
     //dump_index(pdb_index_load_from_pdb_yml(), 0);
-    pdb_index_load_from_pdb_yml();
-    char_array_slice_t slice = pdb_index_symbol_name_for_address(1878);
-    slice = pdb_index_symbol_name_for_address(46147);
+    pdb_index_load_from_pdb_yml("..\\build\\BOOTX64.YML");
+    // RVA: offset from start of .text segment
+    // RVA(symbol) = VA(symbol) - VA(.text)
+    // VA(.text) = VA(module start) + RVA(.text)
+
+    // EXAMPLE:
+    // load address @ 0x81d32000
+    // .text offset = 0x1000
+    //  efi_main @ 0x81d338e0
+    // RVA(efi_main) = 0x81d338e0 - (0x81d32000 + 0x1000) = 2272 (correct)
+
+#define SYMBOL_RVA(symbol_va, text_offset, module_start)\
+    (symbol_va) - (module_start + text_offset)
+    
+    char_array_slice_t slice = pdb_index_symbol_name_for_address(SYMBOL_RVA(0x81d338e0, 0x1000, 0x81d32000));
+    slice = pdb_index_symbol_name_for_address(SYMBOL_RVA(0x81d34f70, 0x1000, 0x81d32000));
 
     //test_io_file();
     //ui_test_loop();
-    test_line_editor();
+    //test_line_editor();
 
     return 0;
 }
