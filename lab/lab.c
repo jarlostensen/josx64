@@ -23,6 +23,8 @@
 #include "../libc/include/extensions/slices.h"
 #include "../libc/include/extensions/pdb_index.h"
 #include "../deps/font8x8/font8x8.h"
+#include "../libc/internal/include/_file.h"
+#include "../libc/extensions/json.h"
 
 void slice_printf(char_array_slice_t* slice) {
     for (unsigned n = 0; n < slice->_length; ++n) {
@@ -123,82 +125,42 @@ void trace(const char* __restrict channel, const char* __restrict format, ...) {
 
 // =================================================================================================
 
-typedef struct _IO_FILE {
 
-    // a string, for example
-    struct {
-        uint8_t* _begin;
-        const uint8_t* _end;
-        const uint8_t* _rp;
-        uint8_t* _wp;
-        size_t              _size;
-    } _buffer;
-
-    size_t(*read)(struct _IO_FILE* file, unsigned char*, size_t);
-    size_t(*write)(struct _IO_FILE* file, const unsigned char*, size_t);
-
-
-} IO_FILE;
-
-#define _jo_fromstring(f, s)\
-((f)->_buffer._begin = (f)->_buffer._rp = (const uint8_t*)(s), (f)->_buffer._end = (const uint8_t*)-1, (f)->_buffer._size = 0)
-
-#define _jo_getch(f) ((f)->_buffer._rp!=(f)->_buffer._end ? *(f)->_buffer._rp++ : 0)
-#define _jo_ungetch(f) ((f)->_buffer._rp!=(f)->_buffer._begin ? (f)->_buffer._rp-- ; (void)0)
-
-#define _jo_tobuffer(f, buffer, length)\
-((f)->_buffer._rp = (void)0, (f)->_buffer._begin = (f)->_buffer._wp = (uint8_t*)(buffer), (f)->_buffer._end = ((f)->_buffer._wp + ((f)->_buffer._size = length)))
-
-int _jos_getc(IO_FILE* stream) {
-
-    if (stream->_buffer._rp == stream->_buffer._end) {
-        if (stream->_buffer._size) {
-            /*CHECK FOR ERROR*/ stream->read(stream, stream->_buffer._begin, 1);
-            stream->_buffer._end = stream->_buffer._begin + 1;
-            stream->_buffer._rp = stream->_buffer._begin;
-        }
-        else {
-            // a fixed size buffer, we're underflowing
-            return 0;
-        }
-    }
-    return (int)(*stream->_buffer._rp++);
-}
-
-int _jos_putc(int c, IO_FILE* stream) {
-
-    if (stream->_buffer._wp == stream->_buffer._end) {
-        if (stream->_buffer._size) {
-
-            stream->write(stream, stream->_buffer._begin, 1);
-            stream->_buffer._wp = stream->_buffer._begin;
-        }
-        else {
-            // a fixed size buffer, we're overflowing
-            return 0;
-        }
-    }
-}
 
 size_t _stdout_write(IO_FILE* file, const unsigned char* buffer, size_t len) {
+    (void)file;
     return fwrite(buffer, 1, len, stdout);
 }
 
 size_t _stdin_read(IO_FILE* file, unsigned char* buffer, size_t len) {
+    (void)file;
     return fread(buffer, 1, len, stdin);
 }
 
 static IO_FILE _jos_stdin = { .read = _stdin_read };
 #define jos_stdin &_jos_stdin
+static IO_FILE _jos_stdout = { .write = _stdout_write };
+#define jos_stdout &_jos_stdout
 
-void test_io_file(void) {
-    _jos_stdin._buffer._size = 32;
-    _jos_stdin._buffer._begin = malloc(32);
-    _jos_stdin._buffer._end = _jos_stdin._buffer._begin + 1;
-    _jos_stdin._buffer._rp = _jos_stdin._buffer._end;
+void test_fstream_io(void) {
 
-    int c = _jos_getc(jos_stdin);
-    printf("%c\n", c);
+    char buffer[1024];
+    const char* data = "hello world";
+    IO_FILE out_file = { ._buffer._begin = buffer };
+    out_file._buffer._end = out_file._buffer._begin + sizeof(buffer);
+    out_file._buffer._wp = out_file._buffer._begin;
+    out_file._buffer._rp = out_file._buffer._begin;
+    out_file._buffer._size = sizeof(buffer);
+    int written = _fwrite(data, 1, strlen(data) + 1, &out_file);
+    
+	IO_FILE in_file = { ._buffer._begin = buffer };
+	out_file._buffer._end = out_file._buffer._begin + sizeof(buffer);
+	out_file._buffer._wp = out_file._buffer._begin;
+	out_file._buffer._rp = out_file._buffer._begin;
+	out_file._buffer._size = 8;
+    char out_buffer[128];
+    int read = _fread(out_buffer, 1, strlen(data) + 1, &out_file);
+    _stdout_write(0, out_buffer, read);
 }
 
 static int _jos_stdin_getch(void) {
@@ -223,6 +185,36 @@ int _lab_getch(void) {
     return c;
 }
 
+// ==============================================================================
+// JSON stuff
+
+static void test_json(void) {
+
+    json_writer_context_t ctx;
+	json_initialise_writer(&ctx, stdout);
+
+    json_write_object_start(&ctx);
+        json_write_key(&ctx, "version");
+		json_write_object_start(&ctx);
+		    json_write_key(&ctx, "major");
+		    json_write_number(&ctx, 0);
+			json_write_key(&ctx, "minor");
+			json_write_number(&ctx, 1);
+			json_write_key(&ctx, "patch");
+			json_write_number(&ctx, 0);
+		json_write_object_end(&ctx);
+        json_write_key(&ctx, "image_info");
+        json_write_object_start(&ctx);
+            json_write_key(&ctx, "base");
+            json_write_number(&ctx, 0x12345678abcdef00);
+        json_write_object_end(&ctx);
+        json_write_key(&ctx, "foo");
+        json_write_string(&ctx, "bar");
+    json_write_object_end(&ctx);    
+}
+
+// ==============================================================================
+
 typedef struct _console_interface {
     
     size_t  (*cursor_left)(void);
@@ -231,7 +223,7 @@ typedef struct _console_interface {
     void    (*clear_from_cursor)(void);
 } console_interface_t;
 
-// ==============================================================================
+
 // Windows Console stuff
 static HANDLE _std_in, _std_out;
 static CONSOLE_SCREEN_BUFFER_INFO _std_out_info;
@@ -512,6 +504,9 @@ static void ui_test_loop(void) {
 }
 
 
+
+
+
 // ==============================================================================================================
 
 int main(void)
@@ -549,6 +544,9 @@ int main(void)
     peutil_bind(&pe_ctx, (const void*)this_module, kPe_Relocated);
     uintptr_t entry = peutil_entry_point(&pe_ctx);
 */
+        
+    test_json();
+
     //dump_index(pdb_index_load_from_pdb_yml(), 0);
     pdb_index_load_from_pdb_yml("..\\build\\BOOTX64.YML");
     // RVA: offset from start of .text segment

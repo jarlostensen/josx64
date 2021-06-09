@@ -157,8 +157,10 @@
     <ClInclude Include="..\kernel\include\output_console.h" />
     <ClInclude Include="..\kernel\include\video.h" />
     <ClInclude Include="..\kernel\programs\scroller.h" />
+    <ClInclude Include="..\libc\extensions\json.h" />
     <ClInclude Include="..\libc\include\extensions\pdb_index.h" />
     <ClInclude Include="..\libc\include\extensions\slices.h" />
+    <ClInclude Include="..\libc\internal\include\_file.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

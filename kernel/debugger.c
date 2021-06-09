@@ -5,6 +5,7 @@
 #include <hex_dump.h>
 #include <kernel.h>
 #include <debugger.h>
+#include <serial.h>
 
 #include <Zydis/Zydis.h>
 
@@ -12,12 +13,9 @@
 #include <stdio.h>
 #include <output_console.h>
 
-#define FLAGS_TRAP_FLAG 0x100
-static bool _trapping = false;
+static bool _debugger_connected = false;
 
-static void re_set_trap_flag(void) {
-    
-}
+#define FLAGS_TRAP_FLAG 0x100
 
 void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length) {
     
@@ -130,3 +128,29 @@ void debugger_initialise(void) {
     interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=0x3, ._handler=_int_3_handler });
     output_console_output_string(L"debug handler initialised\n");
 }
+
+void debugger_wait_for_connection(void) {
+    
+    static const char dbg_conn_id[4] = {'j','o','s','x'};
+    int conn_id_pos = 0;
+    char in_char = serial_getch(kCom1, 1);
+    while(true) {
+        if ( in_char == dbg_conn_id[conn_id_pos] ) {
+            ++conn_id_pos;
+            if ( conn_id_pos == 4 ) {
+                break;
+            }
+        }
+        else {
+            conn_id_pos = 0;
+        }
+        in_char = serial_getch(kCom1, 1);
+    }
+    
+    _debugger_connected = true;
+}
+
+bool debugger_is_connected(void) {
+    return _debugger_connected;
+}
+

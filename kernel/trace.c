@@ -2,6 +2,7 @@
 #include <jos.h>
 #include <serial.h>
 #include <trace.h>
+#include <debugger.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -25,7 +26,12 @@ void trace_buf(const char* __restrict channel, const void* __restrict data, size
     buffer[written+1] = '\n';
     buffer[written+2] = 0;
 
-    serial_write(kCom1, buffer, written+length+3);
+    if (!debugger_is_connected()) {
+        serial_write(kCom1, buffer, written+length+3);
+    }
+    else {
+        //TODO: send the data as a packet instead of as raw text
+    }
 }
 
 void trace(const char* __restrict channel, const char* __restrict format,...) {
@@ -48,5 +54,10 @@ void trace(const char* __restrict channel, const char* __restrict format,...) {
     buffer[written+1] = '\n';
     buffer[written+2] = 0;
 
-    serial_write(kCom1, buffer, written+3);
+    if (!debugger_is_connected()) {
+        serial_write(kCom1, buffer, written+3);
+    }
+    else {
+        //TODO: send the data as a packet instead of as raw text
+    }
 }

@@ -36,17 +36,13 @@ void    pagetables_initialise(void) {
     _JOS_KTRACE_CHANNEL(kPageTablesChannel, "pml4 @ 0x%x", _pml4);
 }
 
-uint64_t    pagetables_entry_for_virt(uint64_t virt) {
-
-}
-
 void    pagetables_enable_nullptr_gpf(void) {
     // make sure we pagefault on nullptr access:
     mapping_table_t* pdp = (mapping_table_t*)(_pml4->entries[0] & PAGE_ADDR_MASK);
     mapping_table_t* pd = (mapping_table_t*)(pdp->entries[0] & PAGE_ADDR_MASK);
     _JOS_KTRACE_CHANNEL(kPageTablesChannel, "pd[0] is 0x%x", pdp->entries[0]);
     void* frame = (void*)(pd->entries[0] & PAGE_ADDR_MASK);
-    uint16_t frame_flags = (uint64_t)(pd->entries[0] & PAGE_FLAGS_MASK);
+    //uint16_t frame_flags = (uint64_t)(pd->entries[0] & PAGE_FLAGS_MASK);
     // mark 0th frame as not present, not writable
     _JOS_KTRACE_CHANNEL(kPageTablesChannel, "marking frame %x as non-writable, non accessible", frame);
     pd->entries[0] = 0;

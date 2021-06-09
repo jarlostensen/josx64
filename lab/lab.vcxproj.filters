@@ -31,6 +31,15 @@
     <Filter Include="Zydis">
       <UniqueIdentifier>{bf5068da-20ba-4314-915f-3ba3a3af1231}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\libc">
+      <UniqueIdentifier>{a843abfd-aff6-400f-9b7e-9a6e492a058b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\libc\extensions">
+      <UniqueIdentifier>{a13f53f1-711e-44e4-bb78-7482a237bd8a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\libc\internal">
+      <UniqueIdentifier>{e266c356-a767-4459-a99c-578cfbe14167}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="lab.c">
@@ -65,9 +74,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\libc\include\extensions\slices.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\libc\include\extensions\pdb_index.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -79,6 +85,15 @@
     </ClInclude>
     <ClInclude Include="..\kernel\programs\scroller.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libc\include\extensions\slices.h">
+      <Filter>Header Files\libc\extensions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libc\internal\include\_file.h">
+      <Filter>Header Files\libc\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libc\extensions\json.h">
+      <Filter>Header Files\libc\extensions</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
