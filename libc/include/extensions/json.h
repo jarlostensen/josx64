@@ -61,13 +61,15 @@ _JOS_INLINE_FUNC void json_write_key(json_writer_context_t* writer_ctx, const ch
 	}
 	writer_ctx->_obj_has_key = true;
 	++writer_ctx->_keys_added;
+	fwrite("\"", 1, 1, writer_ctx->_stream);
 	fwrite(key_name, 1, strlen(key_name), writer_ctx->_stream);
+	fwrite("\"", 1, 1, writer_ctx->_stream);
 	fwrite(" : ", 1, 3, writer_ctx->_stream);
 }
 
 _JOS_INLINE_FUNC void json_write_number(json_writer_context_t* writer_ctx, long long number) {
 	char buffer[32];
-	int written = sprintf(buffer, "%lld", number);
+	int written = snprintf(buffer, sizeof(buffer), "%lld", number);
 	fwrite(buffer, 1, written, writer_ctx->_stream);
 }
 
