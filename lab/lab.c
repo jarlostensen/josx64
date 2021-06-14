@@ -13,6 +13,9 @@
 
 #include <windows.h>
 
+
+#define _JOS_IMPLEMENT_CONTAINERS
+
 #include "../libc/internal/include/libc_internal.h"
 #include "../kernel/include/hex_dump.h"
 #include "../kernel/include/pe.h"
@@ -24,7 +27,10 @@
 #include "../libc/include/extensions/pdb_index.h"
 #include "../deps/font8x8/font8x8.h"
 #include "../libc/internal/include/_file.h"
-#include "../libc/extensions/json.h"
+#include "../libc/include/extensions/json.h"
+
+void test_fixed_allocator(void);
+void test_linear_allocator(void);
 
 void slice_printf(char_array_slice_t* slice) {
     for (unsigned n = 0; n < slice->_length; ++n) {
@@ -191,18 +197,18 @@ int _lab_getch(void) {
 static void test_json(void) {
 
     json_writer_context_t ctx;
-	json_initialise_writer(&ctx, stdout);
+    json_initialise_writer(&ctx, stdout);
 
     json_write_object_start(&ctx);
         json_write_key(&ctx, "version");
-		json_write_object_start(&ctx);
-		    json_write_key(&ctx, "major");
-		    json_write_number(&ctx, 0);
-			json_write_key(&ctx, "minor");
-			json_write_number(&ctx, 1);
-			json_write_key(&ctx, "patch");
-			json_write_number(&ctx, 0);
-		json_write_object_end(&ctx);
+        json_write_object_start(&ctx);
+            json_write_key(&ctx, "major");
+            json_write_number(&ctx, 0);
+            json_write_key(&ctx, "minor");
+            json_write_number(&ctx, 1);
+            json_write_key(&ctx, "patch");
+            json_write_number(&ctx, 0);
+        json_write_object_end(&ctx);
         json_write_key(&ctx, "image_info");
         json_write_object_start(&ctx);
             json_write_key(&ctx, "base");
@@ -210,7 +216,31 @@ static void test_json(void) {
         json_write_object_end(&ctx);
         json_write_key(&ctx, "foo");
         json_write_string(&ctx, "bar");
-    json_write_object_end(&ctx);    
+    json_write_object_end(&ctx);
+    
+    printf("\n");
+
+    FILE* ifstream;
+    fopen_s(&ifstream, "json_data.json", "r");
+    char buffer[1024];
+    memset(buffer, 0, sizeof(buffer));
+    fread(buffer, 1, sizeof(buffer), ifstream);
+    
+    char_array_slice_t json_slice;
+    char_array_slice_create(&json_slice, buffer, 0, strlen(buffer));
+    vector_t tokens;
+    vector_create(&tokens, 12, sizeof(_json_parse_token_t));
+    _json_parse_token_t* root = _json_tokenise(&tokens, json_slice);
+    assert(root->_type == kJsonParse_Token_Object);
+    _json_tokenise(&tokens, root->_slice);
+    _json_parse_token_t version = json_value(&tokens, "\"version\"");
+    assert(version._type == kJsonParse_Token_Object);
+    vector_clear(&tokens);
+     _json_tokenise(&tokens, version._slice);
+    _json_parse_token_t major = json_value(&tokens, "\"major\"");
+    long long major_version = strtoll(major._slice._ptr, NULL, 10);
+
+    printf("found match %d, at %s\n", major_version, major._slice._ptr);
 }
 
 // ==============================================================================
@@ -545,6 +575,9 @@ int main(void)
     uintptr_t entry = peutil_entry_point(&pe_ctx);
 */
         
+    test_fixed_allocator();
+    test_linear_allocator();
+
     test_json();
 
     //dump_index(pdb_index_load_from_pdb_yml(), 0);

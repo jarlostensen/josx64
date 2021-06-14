@@ -224,7 +224,8 @@ jo_status_t    smp_initialise(jos_allocator_t* allocator) {
 
             // now we have the information we need to register this module
             // we'll set aside one meg per core for misc
-            _smp_arena = vmem_arena_create(allocator->alloc(kSMP_PER_CPU_MEMORY_ARENA_SIZE*_num_enabled_processors), kSMP_PER_CPU_MEMORY_ARENA_SIZE*_num_enabled_processors);
+            _smp_arena = vmem_arena_create(allocator->alloc(allocator, kSMP_PER_CPU_MEMORY_ARENA_SIZE*_num_enabled_processors), 
+                            kSMP_PER_CPU_MEMORY_ARENA_SIZE*_num_enabled_processors);
 
             _processors = (processor_information_t*)vmem_arena_alloc(_smp_arena, sizeof(processor_information_t) * _num_processors);
             memset(_processors, 0, sizeof(processor_information_t) * _num_processors);
@@ -252,7 +253,7 @@ jo_status_t    smp_initialise(jos_allocator_t* allocator) {
     else
     {
         // uni processor
-        _smp_arena = vmem_arena_create(allocator->alloc(kSMP_PER_CPU_MEMORY_ARENA_SIZE), kSMP_PER_CPU_MEMORY_ARENA_SIZE);
+        _smp_arena = vmem_arena_create(allocator->alloc(allocator, kSMP_PER_CPU_MEMORY_ARENA_SIZE), kSMP_PER_CPU_MEMORY_ARENA_SIZE);
         _JOS_KTRACE_CHANNEL(kSmpChannel, "uni processor system, or no UEFI MP protocol handler available");
         _processors = (processor_information_t*)vmem_arena_alloc(_smp_arena, sizeof(processor_information_t));
         _processors->_id = 0;

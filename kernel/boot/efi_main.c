@@ -24,7 +24,10 @@
 #include <keyboard.h>
 #include <pe.h>
 #include <tasks.h>
+#include <pagetables.h>
 #include <x86_64.h>
+
+#include <extensions/json.h>
 
 #include <programs/scroller.h>
 #include <font8x8/font8x8_basic.h>
@@ -36,11 +39,63 @@ int _fltused = 0;
 CEfiSystemTable*    g_st = 0;
 // used from various startup modules (pre-ExitBootServices, after it will be set to 0 again)
 CEfiBootServices * g_boot_services = 0;
+//TODO: kernel variables that could be dynamic like this should live somewhere else, a basic key-value store somewhere perhaps?
+uint16_t kJosKernelCS;
+CEfiLoadedImageProtocol * _lip = 0;
+peutil_pe_context_t _pe_ctx;
 
 #define _EFI_PRINT(s)\
 g_st->con_out->output_string(g_st->con_out, s)
 
+struct _debugger_serial_packet {
+    
+    uint32_t        _id;
+    uint32_t        _length;
 
+} JOS_PACKED;
+typedef struct _debugger_serial_packet debugger_serial_packet_t;
+
+static void test_send_back_some_data_to_debugger(void) {    
+    //TEST send some data back to the debugger
+    uint8_t buffer[2*sizeof(uint32_t)+sizeof(uintptr_t)];
+    debugger_serial_packet_t* packet = (debugger_serial_packet_t*)buffer;
+    packet->_id = 0x12345678;
+    packet->_length = sizeof(uintptr_t);
+    *(uintptr_t*)(packet+1) = (uintptr_t)_lip->image_base;
+    serial_write(kCom1, (const char*)buffer, sizeof(buffer));
+
+    char json_buffer[1024];
+    IO_FILE stream;
+    memset(&stream,0,sizeof(FILE));
+    _io_file_from_buffer(&stream, json_buffer, sizeof(json_buffer));
+
+    json_writer_context_t ctx;
+    json_initialise_writer(&ctx, &stream);
+
+    json_write_object_start(&ctx);
+        json_write_key(&ctx, "version");
+        json_write_object_start(&ctx);
+            json_write_key(&ctx, "major");
+            json_write_number(&ctx, 0);
+            json_write_key(&ctx, "minor");
+            json_write_number(&ctx, 1);
+            json_write_key(&ctx, "patch");
+            json_write_number(&ctx, 0);
+        json_write_object_end(&ctx);
+        json_write_key(&ctx, "image_info");
+        json_write_object_start(&ctx);
+            json_write_key(&ctx, "base");
+            json_write_number(&ctx, (long long)_lip->image_base);
+        json_write_object_end(&ctx);
+        json_write_key(&ctx, "foo");
+        json_write_string(&ctx, "bar");
+    json_write_object_end(&ctx);
+
+    packet->_id = 42;
+    packet->_length = ftell(&stream);
+    serial_write(kCom1, (const char*)buffer, 2*sizeof(uint32_t));
+    serial_write(kCom1, json_buffer, packet->_length);
+}
 
 // ==============================================================
 void exit_boot_services(CEfiHandle h) {
@@ -62,48 +117,35 @@ void exit_boot_services(CEfiHandle h) {
     }
 }
 
-//TODO: kernel variables that could be dynamic like this should live somewhere else, a basic key-value store somewhere perhaps?
-uint16_t kJosKernelCS;
-
-CEfiLoadedImageProtocol * _lip = 0;
-void image_protocol_info(CEfiHandle h, CEfiStatus (*_efi_main)(CEfiHandle, CEfiSystemTable *)) {
-
-    _JOS_KTRACE_CHANNEL("image_protocol","opening image protocol...");
-    CEfiStatus efi_status = g_boot_services->handle_protocol(h, &C_EFI_LOADED_IMAGE_PROTOCOL_GUID, (void**)&_lip);
-    if ( efi_status==C_EFI_SUCCESS ) {
-
-        peutil_pe_context_t pe_ctx;
-        peutil_bind(&pe_ctx, (const void*)_lip->image_base, kPe_Relocated);
-        
+static void dump_image_info(CEfiStatus (*_efi_main)(CEfiHandle, CEfiSystemTable *)) {
+    if ( _lip!=0 ) {
         wchar_t buf[256];
         const size_t bufcount = sizeof(buf)/sizeof(wchar_t);        
         swprintf(buf, bufcount, L"\nimage is %llu bytes, loaded at 0x%llx, efi_main @ 0x%llx, PE entry point @ 0x%llx\n", 
-            _lip->image_size, _lip->image_base, _efi_main, peutil_entry_point(&pe_ctx));
+            _lip->image_size, _lip->image_base, _efi_main, peutil_entry_point(&_pe_ctx));
         output_console_output_string(buf);
         _JOS_KTRACE_CHANNEL("image_protocol", "image is %llu bytes, loaded at 0x%llx, efi_main @ 0x%llx, PE entry point @ 0x%llx", 
-            _lip->image_size, _lip->image_base, _efi_main, peutil_entry_point(&pe_ctx));
+            _lip->image_size, _lip->image_base, _efi_main, peutil_entry_point(&_pe_ctx));
         hex_dump_mem((void*)_lip->image_base, 64, k8bitInt);
         output_console_line_break();
-    }    
-
-    if (!_lip) {
-        _JOS_KTRACE_CHANNEL("image protocol", "not found");
-    }    
+    }
 }
 
 #define EFI_APP_MEMORY_POOL_SIZE 4*1024*1024
 static linear_allocator_t*  _efi_allocator = NULL;
-static void* efi_alloc(size_t size) {
-    void* ptr = linear_allocator_alloc(_efi_allocator, size);    
-    _JOS_ASSERT(ptr);
-    return ptr;
-}
 
-
-void uefi_init(void) {
+void uefi_init(CEfiHandle h) {
     
-    uint64_t rflags = x86_64_get_rflags();
     kJosKernelCS = x86_64_get_cs();
+
+     _JOS_KTRACE_CHANNEL("image_protocol","opening image protocol...");
+    CEfiStatus efi_status = g_boot_services->handle_protocol(h, &C_EFI_LOADED_IMAGE_PROTOCOL_GUID, (void**)&_lip);
+    if ( efi_status==C_EFI_SUCCESS ) {
+        peutil_bind(&_pe_ctx, (const void*)_lip->image_base, kPe_Relocated); 
+    }
+    else {
+        _JOS_KTRACE_CHANNEL("image protocol", "not found");
+    }
 
     // initialise memory manager, serial comms, video, and any modules that require access 
     // to uefi boot services
@@ -116,6 +158,10 @@ void uefi_init(void) {
     if ( _JO_FAILED(status) ) {
         halt_cpu();
     }
+
+//TESTING:
+    debugger_wait_for_connection();
+    test_send_back_some_data_to_debugger();
 
     // we'll use this allocator for various incidentals
     _efi_allocator = linear_allocator_create(efi_app_memory, EFI_APP_MEMORY_POOL_SIZE);
@@ -232,16 +278,13 @@ jo_status_t main_task(void* ptr) {
 
 CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 {    
-    CEfiStatus efi_status;
     g_st = st;
     g_boot_services = st->boot_services;
 
-    uefi_init();
-
-    image_protocol_info(h, efi_main);
+    uefi_init(h);
+    dump_image_info(efi_main);
 
     wchar_t buf[256];
-    const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
     size_t bsp_id = smp_get_bsp_id();
     swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", smp_get_processor_count(), bsp_id);    
     output_console_output_string(buf);    
@@ -347,15 +390,12 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 
     _JOS_KTRACE_CHANNEL("efi_main", "port 0x80 wait took ~ %d cycles\n", elapsed);
         
-    task_handle_t main_task_handle = tasks_create(&(task_create_args_t){
+    tasks_create(&(task_create_args_t){
          .func = main_task,
          .pri = kTaskPri_Normal,
          .name = "main_task"        
     },
-    &(jos_allocator_t){
-         .alloc = efi_alloc
-    }
-    );
+    (jos_allocator_t*)_efi_allocator);
 
     output_console_output_string(L"starting idle task...\n");
 

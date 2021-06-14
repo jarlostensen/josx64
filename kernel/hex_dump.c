@@ -30,7 +30,7 @@ static void _hex_dump_line_init(line_ctx_t* ctx, void* mem)
 	ctx->_mem = mem;
 	ctx->_chars_left = CHARS_IN_BUFFER(ctx->_line);
 	// address prefix
-	size_t n = swprintf(ctx->_wp, ctx->_chars_left,L"%016x ", (uintptr_t)mem);
+	size_t n = swprintf(ctx->_wp, ctx->_chars_left,L"%016llx ", (uintptr_t)mem);
 	ctx->_wp += n;
 	ctx->_chars_left -= n;
 }

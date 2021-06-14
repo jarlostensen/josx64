@@ -29,16 +29,6 @@ _JOS_NORETURN void halt_cpu() {
 // NOTE: this memory is never freed, each module is expected to deal with the details of memory resource 
 // management themselves
 static linear_allocator_t*  _kernel_allocator = 0;
-static void* _kernel_alloc(size_t size) {
-    void* ptr = linear_allocator_alloc(_kernel_allocator, size);
-    _JOS_ASSERT(ptr);
-    return ptr;
-}
-static void _kernel_free(void* ptr) {
-    _JOS_KTRACE_CHANNEL(kKernelChannel, "WARNING: kernel free called on 0x%x", ptr);
-}
-
-static jos_allocator_t  _kernel_allocator_interface = { _kernel_alloc, _kernel_free };
 
 jo_status_t kernel_uefi_init(kernel_uefi_init_args_t* args) {
 
@@ -55,7 +45,7 @@ jo_status_t kernel_uefi_init(kernel_uefi_init_args_t* args) {
         return status;
     }
 
-    status = smp_initialise(&_kernel_allocator_interface);
+    status = smp_initialise(_kernel_allocator);
     if ( !_JO_SUCCEEDED(status) ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel, "***FATAL ERROR: SMP initialise returned 0x%x", status);
         return status;
@@ -63,7 +53,7 @@ jo_status_t kernel_uefi_init(kernel_uefi_init_args_t* args) {
 
     //TODO: video needs an allocator for the backbuffer (at least)
     // port it to use module register
-    status = video_initialise(&_kernel_allocator_interface);
+    status = video_initialise(_kernel_allocator);
     if ( _JO_FAILED(status)  ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel,"***FATAL ERROR: video initialise returned 0x%x", status);
         return status;
@@ -71,7 +61,7 @@ jo_status_t kernel_uefi_init(kernel_uefi_init_args_t* args) {
 
     // provide memory to the caller, i.e. the outer UEFI application, if it requires it
     if (args->application_memory_size_required) {
-        *args->application_allocated_memory = _kernel_alloc(args->application_memory_size_required);
+        *args->application_allocated_memory = _kernel_allocator->_super.alloc(_kernel_allocator,args->application_memory_size_required);
     }
 
     // =====================================================================
@@ -85,10 +75,7 @@ jo_status_t kernel_runtime_init(void) {
     debugger_initialise();
     clock_initialise();
     keyboard_initialise();    
-    tasks_initialise(&(jos_allocator_t){
-        .alloc = _kernel_alloc,
-        .free = _kernel_free
-    });
+    tasks_initialise(_kernel_allocator);
     return _JO_STATUS_SUCCESS;
 }
 

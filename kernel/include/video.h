@@ -30,7 +30,7 @@ typedef struct _video_mode_info {
 
 } video_mode_info_t;
 
-video_mode_info_t video_get_video_mode_info();
+video_mode_info_t video_get_video_mode_info(void);
 
 typedef struct _draw_text_segment_args {
     size_t      left;

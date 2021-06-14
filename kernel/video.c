@@ -151,10 +151,10 @@ jo_status_t video_initialise(jos_allocator_t* allocator)
 
     if (_JO_SUCCEEDED(status)) {
         _framebuffer_size = (_info.pixels_per_scan_line * _info.vertical_resolution * 4);
-         _backbuffer = (uint8_t*)allocator->alloc(_framebuffer_size);
+         _backbuffer = (uint8_t*)allocator->alloc(allocator, _framebuffer_size);
          // we set aside an arena with some room
          //TODO: this memory is only used by STB image functions like "scale" and should be managed more dynamically
-         _video_memory_arena = vmem_arena_create(allocator->alloc(_framebuffer_size), _framebuffer_size);
+         _video_memory_arena = vmem_arena_create(allocator->alloc(allocator, _framebuffer_size), _framebuffer_size);
     }
 
     return status;
@@ -417,7 +417,7 @@ void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t sr
         }
         else {
             // generic re-size and filtering
-            stbir_resize_uint8_srgb((const unsigned char*)bitmap, src_width, src_height, src_stride<<2, (unsigned char*)backbuffer_wptr(dest_top, dest_left), 
+            stbir_resize_uint8_srgb((const unsigned char*)bitmap, (int)src_width, (int)src_height, (int)src_stride<<2, (unsigned char*)backbuffer_wptr(dest_top, dest_left),
                 dest_width, dest_height, _info.pixels_per_scan_line << 2, 4, STBIR_ALPHA_CHANNEL_NONE, 0);
         }
     }

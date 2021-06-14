@@ -9,10 +9,15 @@
 #define _JOS_KERNEL_BUILD
 #endif
 
-// all sub-systems are provided an implementation instance of this interface
+// All sub-systems are provided an implementation instance of this interface
+// All allocators implement this (using this structure as a basic vtable entry)
+struct _jos_allocator;
+typedef void* (*jos_allocator_alloc_func_t)(struct _jos_allocator*, size_t);
+typedef void  (*jos_allocator_free_func_t)(struct _jos_allocator*, void*);
+
 typedef struct _jos_allocator {
-    void*   (*alloc)(size_t);
-    void    (*free)(void*);
+    jos_allocator_alloc_func_t      alloc;
+    jos_allocator_free_func_t       free;
 
 } jos_allocator_t;
 
@@ -40,7 +45,7 @@ extern uint16_t kJosKernelCS;
 
 #define _JOS_MAYBE_UNUSED __attribute__((unused))
 #define _JOS_INLINE_FUNC __attribute__((unused)) static
-
+#define _JOS_API_FUNC extern
 #define _JOS_ALWAYS_INLINE __attribute__((always_inline))
 
 #define _JOS_PACKED_ __attribute((packed))
@@ -82,6 +87,7 @@ if(!(cond))\
 #define _JOS_UNREACHABLE()
 #define _JOS_MAYBE_UNUSED
 #define _JOS_INLINE_FUNC static
+#define _JOS_API_FUNC extern
 #define _JOS_BOCHS_DBGBREAK() __debugbreak()
 
 #define _JOS_KTRACE_CHANNEL(channel, msg,...)

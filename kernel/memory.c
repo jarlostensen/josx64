@@ -1,5 +1,7 @@
 #include <c-efi.h>
 
+#define _JOS_IMPLEMENT_ALLOCATORS
+
 #include <arena_allocator.h>
 #include <fixed_allocator.h>
 #include <collections.h>

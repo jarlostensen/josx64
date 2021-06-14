@@ -20,7 +20,7 @@ target_sources(c PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/internal/_isupper.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/internal/_islower.c"
 )
-target_include_directories(c PUBLIC 
+target_include_directories(c PRIVATE 
 "${CMAKE_CURRENT_SOURCE_DIR}/include"
 "${CMAKE_CURRENT_SOURCE_DIR}/internal/include"
 )

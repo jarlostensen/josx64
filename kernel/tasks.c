@@ -150,7 +150,7 @@ static void _yield_to_next_task(void) {
             prev ? prev->_name : "(0)", cpu_ctx->_running_task->_name);
 
         interrupt_stack_t* to_stack = (interrupt_stack_t*)cpu_ctx->_running_task->_rsp;
-        _JOS_ASSERT(to_stack->rip==_task_wrapper);
+        _JOS_ASSERT((uintptr_t)to_stack->rip==(uintptr_t)_task_wrapper);
         
         x86_64_task_switch(prev ? (interrupt_stack_t*)prev->_rsp : 0, (interrupt_stack_t*)cpu_ctx->_running_task->_rsp);
     }
@@ -207,7 +207,7 @@ static void _task_wrapper(task_context_t* ctx) {
 static task_context_t* _create_task_context(task_func_t func, void* ptr, const char* name, jos_allocator_t * allocator) {
 
     // allocate memory for the stack and the task context object
-    task_context_t* ctx = (task_context_t*)allocator->alloc(TASK_STACK_CONTEXT_SIZE);
+    task_context_t* ctx = (task_context_t*)allocator->alloc(allocator, TASK_STACK_CONTEXT_SIZE);
     _JOS_ASSERT(ctx);
     ctx->_func = func;
     ctx->_ptr = ptr ? ptr : (void*)ctx;    //< we can also pass in "self"...
@@ -275,7 +275,7 @@ void tasks_initialise(jos_allocator_t * allocator) {
 
     // fixed pool of memory for the per-cpu IDLE tasks, this is all we allocate up front    
     const size_t idle_task_pool_size = sizeof(linear_allocator_t) + smp_get_processor_count() * (sizeof(cpu_task_context_t) + TASK_STACK_CONTEXT_SIZE);
-    _tasks_allocator = linear_allocator_create(allocator->alloc(idle_task_pool_size), idle_task_pool_size);
+    _tasks_allocator = linear_allocator_create(allocator->alloc(allocator, idle_task_pool_size), idle_task_pool_size);
 
     for(size_t cpu = 0; cpu < smp_get_processor_count(); ++cpu ) {
 

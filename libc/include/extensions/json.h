@@ -30,6 +30,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <jos.h>
+#include <extensions/slices.h>
+#include <collections.h>
 
 typedef struct _json_context {
 
@@ -77,4 +79,226 @@ _JOS_INLINE_FUNC void json_write_string(json_writer_context_t* writer_ctx, const
 	fwrite("\"", 1, 1, writer_ctx->_stream);
 	fwrite(str, 1, strlen(str), writer_ctx->_stream);
 	fwrite("\"", 1, 1, writer_ctx->_stream);
+}
+
+
+// ====================================================================
+
+typedef enum _json_parse_token_type {
+
+	kJsonParse_Token_Null,
+	kJsonParse_Token_Object,
+	kJsonParse_Token_String,
+	kJsonParse_Token_Number,
+	kJsonParse_Token_KeyValueSeparator,
+
+} _json_parse_token_type_t;
+
+typedef enum _json_parse_state {
+
+	kJsonParse_Skip_Whitespace,
+	kJsonParse_Identify_Next,
+	kJsonParse_Parse_String,
+	kJsonParse_Parse_Object,
+	kJsonParse_Parse_Number,
+
+} _json_parse_state_t;
+
+typedef struct _json_parse_token {
+	_json_parse_token_type_t _type;
+	char_array_slice_t	_slice;
+} _json_parse_token_t;
+
+_JOS_INLINE_FUNC _json_parse_token_t* _json_tokenise(vector_t* in_out_token_slices, char_array_slice_t in_json) {
+	if (!in_json._length || !in_json._ptr)
+		return 0;
+
+	const char* rp = in_json._ptr;
+	const char* end = in_json._ptr + in_json._length;
+
+	_json_parse_state_t state = kJsonParse_Skip_Whitespace;
+	_json_parse_state_t next_state = kJsonParse_Identify_Next;
+
+	// we may be adding tokens to an existing list, so mark which one is "our" first one
+	const size_t first_token = vector_size(in_out_token_slices);
+	const char* start = rp;
+
+	//TODO: error handling
+
+	while (rp != end) {
+
+		switch (state)
+		{
+		case kJsonParse_Skip_Whitespace:
+		{
+			while (rp!=end && (*rp == ' ' || *rp == '\t' || *rp == '\n')) ++rp;
+			if (rp == end)
+				break;
+			state = next_state;
+		}
+		break;
+		case kJsonParse_Identify_Next:
+		{
+			switch (*rp) {
+			case ':':
+			{
+				// we only add this here to be able to validate the JSON, otherwise it's not really used
+				_json_parse_token_t token;
+				token._type = kJsonParse_Token_KeyValueSeparator;
+				token._slice = kEmptySlice;
+				vector_push_back(in_out_token_slices, &token);
+				state = kJsonParse_Skip_Whitespace;
+				next_state = kJsonParse_Identify_Next;
+				// skip :
+				++rp;
+			}
+			break;
+			case '\"':
+				state = kJsonParse_Parse_String;
+				start = rp++;
+				break;
+			case '{':
+				state = kJsonParse_Parse_Object;
+				start = rp;
+				break;
+			case ',':
+			{
+				state = kJsonParse_Skip_Whitespace;
+				next_state = kJsonParse_Identify_Next;
+				// skip ,
+				++rp;
+			}
+			break;
+			default: 
+			{
+				if (*rp >= '0' && *rp <= '9') {
+					state = kJsonParse_Parse_Number;
+					start = rp; //< NO increment here
+				}
+				// TODO: ELSE ERROR
+			}
+			break;
+			}			
+		}
+		break;
+		case kJsonParse_Parse_Number:
+		{
+			while (rp!=end && *rp >= '0' && *rp <= '9') ++rp;
+			if (rp == end)
+				break;
+			_json_parse_token_t token;
+			char_array_slice_create(&token._slice, start, 0, rp - start);
+			token._type = kJsonParse_Token_Number;
+			vector_push_back(in_out_token_slices, &token);
+			state = kJsonParse_Skip_Whitespace;
+			next_state = kJsonParse_Identify_Next;
+		}
+		break;
+		case kJsonParse_Parse_String:
+		{
+			while (rp != end && *rp != '\"') ++rp;
+			if (rp == end)
+				break;
+			// we include the " in the token
+			++rp;
+			_json_parse_token_t token;
+			char_array_slice_create(&token._slice, start, 0, rp - start);
+			token._type = kJsonParse_Token_String;
+			vector_push_back(in_out_token_slices, &token);
+			state = kJsonParse_Skip_Whitespace;
+			next_state = kJsonParse_Identify_Next;
+		}
+		break;
+		case kJsonParse_Parse_Object:
+		{
+			int obj_level = 0;
+			while (rp != end) {
+				if (*rp == '{') {
+					++obj_level;
+				}
+				if (*rp == '}') {
+					if (--obj_level == 0) {
+						// end of outermost object
+						_json_parse_token_t token;
+						//NOTE: the slice is *inside* the object so that we can parse it recursively
+						char_array_slice_create(&token._slice, start, 1, rp - start - 1);
+						//TODO: if slice is empty...
+						token._type = kJsonParse_Token_Object;
+						vector_push_back(in_out_token_slices, &token);
+						state = kJsonParse_Skip_Whitespace;
+						next_state = kJsonParse_Identify_Next;
+						// skip }
+						++rp;
+						break;
+					}
+				}
+				++rp;
+			}
+		}
+		break;
+		default:;
+		}
+	}
+
+	return ((_json_parse_token_t*)vector_at(in_out_token_slices, first_token));
+}
+
+_JOS_INLINE_FUNC _json_parse_token_t json_value(vector_t* tokens, const char* key) {
+
+	int is_key = 1;
+	bool found_key = false;
+	_json_parse_token_t* obj_tokens = (_json_parse_token_t*)vector_data(tokens);
+	_json_parse_token_t value = {._slice = kEmptySlice, ._type = kJsonParse_Token_Null };
+
+	for (size_t i = 0; i < vector_size(tokens); ++i) {
+		switch (obj_tokens[i]._type)
+		{
+		case kJsonParse_Token_Number:
+		{
+			if (found_key) {
+				value._type = kJsonParse_Token_Number;
+				value._slice = obj_tokens[i]._slice;
+				return value;
+			}
+			is_key = 1;
+		}
+		break;
+		case kJsonParse_Token_Object:
+		{
+			if (found_key) {
+				value._type = kJsonParse_Token_Object;
+				value._slice = obj_tokens[i]._slice;
+				return value;
+			}
+			is_key = 1;
+		}
+		break;
+		case kJsonParse_Token_String:
+		{
+			if (is_key) {
+				if (char_array_slice_match_str(&obj_tokens[i]._slice, key)) {
+					found_key = true;
+				}
+			}
+			else {
+				if (found_key) {
+					value._type = kJsonParse_Token_String;
+					value._slice = obj_tokens[i]._slice;
+					return value;
+				}
+			}
+
+			is_key ^= 1;
+		}
+		break;
+		case kJsonParse_Token_KeyValueSeparator:
+		{
+			is_key = 0;
+		}
+		break;
+		default:;
+		}
+	}
+
+	return value;
 }

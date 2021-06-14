@@ -156,7 +156,6 @@ void clock_initialise(void) {
         x86_64_io_wait();
     }
     uint64_t delta = __rdtsc() - tsc_start;
-    uint64_t cpu_hz = 100*delta;
     _micro_epsilon = delta/10000;
 
     swprintf(buf,128,L"clock: bsp freq estimated ~ %llu MHz, 1ue = %llu, %llu 1KHz ticks measured\n", bsp_freq/1000000, _micro_epsilon, _1khz_counter);

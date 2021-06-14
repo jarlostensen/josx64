@@ -63,10 +63,20 @@ typedef struct vmem_block_tail_struct
 
 typedef struct vmem_arena_struct
 {
+	//NOTE: this must be the first entry in this struct as it is used as a super class
+	jos_allocator_t _super;
+
     size_t                  _size;
     size_t                  _capacity;
     vmem_block_head_t*     _free_head;
 } vmem_arena_t;
+
+_JOS_API_FUNC vmem_arena_t* vmem_arena_create(void* mem, size_t size);
+_JOS_API_FUNC void* vmem_arena_alloc(vmem_arena_t* arena, size_t size);
+_JOS_API_FUNC void vmem_arena_free(vmem_arena_t* arena, void* block);
+
+#if defined(_JOS_IMPLEMENT_ALLOCATORS) && !defined(_JOS_ARENA_ALLOCATOR_IMPLEMENTED)
+#define _JOS_ARENA_ALLOCATOR_IMPLEMENTED
 
 #define _JOS_VMEM_ARENA_ALLOC_OVERHEAD (sizeof(vmem_block_head_t)+sizeof(vmem_block_tail_t))
 #define _JOS_VMEM_ABS_BLOCK_SIZE(size) ((size) & ~kVmemBlockFree)
@@ -173,7 +183,7 @@ _JOS_INLINE_FUNC void _vmem_arena_disconnect(vmem_arena_t* arena, vmem_block_hea
 
 // ============================== public API
 
-_JOS_INLINE_FUNC vmem_arena_t*   vmem_arena_create(void* mem, size_t size)
+_JOS_API_FUNC vmem_arena_t*   vmem_arena_create(void* mem, size_t size)
 {
     if(!mem || size <= _JOS_VMEM_ARENA_MIN_SIZE)
     {
@@ -189,10 +199,13 @@ _JOS_INLINE_FUNC vmem_arena_t*   vmem_arena_create(void* mem, size_t size)
 	vmem_block_tail_t* tail = _vmem_tail_from_head(arena->_free_head);
 	tail->_size = _vmem_tail_free_size(arena->_free_head);
 
+	arena->_super.alloc = (jos_allocator_alloc_func_t)vmem_arena_alloc;
+	arena->_super.free = (jos_allocator_free_func_t)vmem_arena_free;
+
     return arena;
 }
 
-_JOS_INLINE_FUNC void* vmem_arena_alloc(vmem_arena_t* arena, size_t size)
+_JOS_API_FUNC void* vmem_arena_alloc(vmem_arena_t* arena, size_t size)
 {
 	if(!size)
 	{		
@@ -250,11 +263,11 @@ _JOS_INLINE_FUNC void* vmem_arena_alloc(vmem_arena_t* arena, size_t size)
 		// return pointer to area betyond header
 		++free;
     }
-	
+
     return free;
 }
 
-_JOS_INLINE_FUNC void vmem_arena_free(vmem_arena_t* arena, void* block)
+_JOS_API_FUNC void vmem_arena_free(vmem_arena_t* arena, void* block)
 {
     if(!arena || !block)
     {
@@ -304,5 +317,6 @@ _JOS_INLINE_FUNC void vmem_arena_free(vmem_arena_t* arena, void* block)
     _vmem_arena_block_insert_as_free(arena, head);	
 }
 
+#endif // _JOS_ARENA_ALLOCATOR_IMPLEMENTED
 
 #endif // _JOS_ARENA_ALLOCATOR_H

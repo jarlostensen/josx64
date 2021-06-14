@@ -97,5 +97,6 @@ _JOS_INLINE_FUNC size_t _ftell(IO_FILE* stream) {
 #define fread _fread
 #define fwrite _fwrite
 #define fflush _fflush
+#define ftell _ftell
 #endif
 

@@ -72,6 +72,9 @@
     <ClCompile Include="..\kernel\programs\scroller.c">
       <Filter>kernel\programs</Filter>
     </ClCompile>
+    <ClCompile Include="test_allocators.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\libc\include\extensions\pdb_index.h">
@@ -92,8 +95,28 @@
     <ClInclude Include="..\libc\internal\include\_file.h">
       <Filter>Header Files\libc\internal</Filter>
     </ClInclude>
-    <ClInclude Include="..\libc\extensions\json.h">
+    <ClInclude Include="..\libc\include\extensions\json.h">
       <Filter>Header Files\libc\extensions</Filter>
     </ClInclude>
+    <ClInclude Include="..\kernel\include\jos.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\kernel\include\collections.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\kernel\include\arena_allocator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\kernel\include\fixed_allocator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\kernel\include\linear_allocator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="json_data.json">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

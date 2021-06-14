@@ -12,13 +12,29 @@
 
 typedef struct _fixed_allocator
 {
+    //NOTE: this must be the first entry in this struct as it is used as a super class
+    jos_allocator_t _super;
+
     uint8_t     _size_p2;   // power of two unit allocation size
     size_t      _count;
     uint32_t    _free;      // index of first free
 	uintptr_t	_end;		// upper memory bound for pool
 } fixed_allocator_t;
 
-_JO_INLINE_FUNC fixed_allocator_t*     fixed_allocator_create(void* mem, size_t size, size_t allocUnitPow2)
+_JOS_API_FUNC fixed_allocator_t* fixed_allocator_create(void* mem, size_t size, size_t allocUnitPow2);
+_JOS_API_FUNC void* fixed_allocator_alloc(fixed_allocator_t* pool, size_t size);
+_JOS_API_FUNC void fixed_allocator_free(fixed_allocator_t* pool, void* block);
+_JOS_API_FUNC void fixed_allocator_clear(fixed_allocator_t* pool);
+_JO_INLINE_FUNC bool fixed_allocator_in_pool(fixed_allocator_t* pool, void* ptr)
+{
+	const uintptr_t begin = (uintptr_t)(pool + 1);
+	return (uintptr_t)ptr >= begin && (uintptr_t)ptr < pool->_end;
+}
+
+#if defined(_JOS_IMPLEMENT_ALLOCATORS) && !defined(_JOS_FIXED_ALLOCATOR_IMPLEMENTED)
+#define _JOS_FIXED_ALLOCATOR_IMPLEMENTED
+
+_JOS_API_FUNC fixed_allocator_t* fixed_allocator_create(void* mem, size_t size, size_t allocUnitPow2)
 {
     if(allocUnitPow2 < 3)
         return 0;
@@ -36,10 +52,14 @@ _JO_INLINE_FUNC fixed_allocator_t*     fixed_allocator_create(void* mem, size_t 
         block += (unit_size >> 2);
     }
     *block = ~0;
+
+    pool->_super.alloc = (jos_allocator_alloc_func_t)fixed_allocator_alloc;
+    pool->_super.free = (jos_allocator_free_func_t)fixed_allocator_free;
+
     return pool;
 }
 
-_JO_INLINE_FUNC void* fixed_allocator_alloc(fixed_allocator_t* pool, size_t size)
+_JOS_API_FUNC void* fixed_allocator_alloc(fixed_allocator_t* pool, size_t size)
 {
     if((size_t)(1<<pool->_size_p2) < size || pool->_free == (uint32_t)~0)
     {
@@ -52,7 +72,7 @@ _JO_INLINE_FUNC void* fixed_allocator_alloc(fixed_allocator_t* pool, size_t size
     return block;
 }
 
-_JO_INLINE_FUNC void fixed_allocator_free(fixed_allocator_t* pool, void* block)
+_JOS_API_FUNC void fixed_allocator_free(fixed_allocator_t* pool, void* block)
 {
     if(!pool || !block)
         return;	
@@ -63,13 +83,7 @@ _JO_INLINE_FUNC void fixed_allocator_free(fixed_allocator_t* pool, void* block)
     *free = (uint32_t)((uintptr_t)fblock - (uintptr_t)(pool+1))/unit_size;
 }
 
-_JO_INLINE_FUNC bool fixed_allocator_in_pool(fixed_allocator_t* pool, void* ptr)
-{
-	const uintptr_t begin = (uintptr_t)(pool+1);
-	return (uintptr_t)ptr >= begin && (uintptr_t)ptr < pool->_end;
-}
-
-_JOS_INLINE_FUNC void fixed_allocator_clear(fixed_allocator_t* pool)
+_JOS_API_FUNC void fixed_allocator_clear(fixed_allocator_t* pool)
 {
     pool->_free = 0;
     uint32_t* block = (uint32_t*)((uint8_t*)(pool+1));
@@ -82,5 +96,7 @@ _JOS_INLINE_FUNC void fixed_allocator_clear(fixed_allocator_t* pool)
     *block = ~0;
 }
 
+
+#endif // _JOS_FIXED_ALLOCATOR_IMPLEMENTED
 
 #endif // _JOS_FIXED_ALLOCATOR_H
