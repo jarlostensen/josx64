@@ -1,5 +1,5 @@
-#ifndef _JOS_ARENA_ALLOCATOR_H
-#define _JOS_ARENA_ALLOCATOR_H
+#ifndef _JOS_arena_allocator_ALLOCATOR_H
+#define _JOS_arena_allocator_ALLOCATOR_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -61,7 +61,7 @@ typedef struct vmem_block_tail_struct
     size_t      _size;
 } vmem_block_tail_t;
 
-typedef struct vmem_arena_struct
+typedef struct arena_allocator_struct
 {
 	//NOTE: this must be the first entry in this struct as it is used as a super class
 	jos_allocator_t _super;
@@ -69,23 +69,24 @@ typedef struct vmem_arena_struct
     size_t                  _size;
     size_t                  _capacity;
     vmem_block_head_t*     _free_head;
-} vmem_arena_t;
+} arena_allocator_t;
 
-_JOS_API_FUNC vmem_arena_t* vmem_arena_create(void* mem, size_t size);
-_JOS_API_FUNC void* vmem_arena_alloc(vmem_arena_t* arena, size_t size);
-_JOS_API_FUNC void vmem_arena_free(vmem_arena_t* arena, void* block);
+_JOS_API_FUNC arena_allocator_t* arena_allocator_create(void* mem, size_t size);
+_JOS_API_FUNC void* arena_allocator_alloc(arena_allocator_t* arena, size_t size);
+_JOS_API_FUNC void arena_allocator_free(arena_allocator_t* arena, void* block);
+_JOS_API_FUNC void* arena_allocator_realloc(arena_allocator_t* arena, void* block, size_t size);
 
-#if defined(_JOS_IMPLEMENT_ALLOCATORS) && !defined(_JOS_ARENA_ALLOCATOR_IMPLEMENTED)
-#define _JOS_ARENA_ALLOCATOR_IMPLEMENTED
+#if defined(_JOS_IMPLEMENT_ALLOCATORS) && !defined(_JOS_arena_allocator_ALLOCATOR_IMPLEMENTED)
+#define _JOS_arena_allocator_ALLOCATOR_IMPLEMENTED
 
-#define _JOS_VMEM_ARENA_ALLOC_OVERHEAD (sizeof(vmem_block_head_t)+sizeof(vmem_block_tail_t))
+#define _JOS_arena_allocator_ALLOC_OVERHEAD (sizeof(vmem_block_head_t)+sizeof(vmem_block_tail_t))
 #define _JOS_VMEM_ABS_BLOCK_SIZE(size) ((size) & ~kVmemBlockFree)
-#define _JOS_VMEM_BLOCK_MIN_SIZE _JOS_VMEM_ARENA_ALLOC_OVERHEAD+16
-#define _JOS_VMEM_ARENA_MIN_SIZE (sizeof(vmem_arena_t)+_JOS_VMEM_ARENA_ALLOC_OVERHEAD)
+#define _JOS_VMEM_BLOCK_MIN_SIZE _JOS_arena_allocator_ALLOC_OVERHEAD+16
+#define _JOS_arena_allocator_MIN_SIZE (sizeof(arena_allocator_t)+_JOS_arena_allocator_ALLOC_OVERHEAD)
 
 _JOS_INLINE_FUNC vmem_block_tail_t* _vmem_tail_from_head(const vmem_block_head_t* head)
 {	
-	return (vmem_block_tail_t*)((char*)(head+1) + (_JOS_VMEM_ABS_BLOCK_SIZE(head->_size)) - (_JOS_VMEM_ARENA_ALLOC_OVERHEAD));
+	return (vmem_block_tail_t*)((char*)(head+1) + (_JOS_VMEM_ABS_BLOCK_SIZE(head->_size)) - (_JOS_arena_allocator_ALLOC_OVERHEAD));
 }
 
 _JOS_INLINE_FUNC vmem_block_head_t* _vmem_head_from_tail(const vmem_block_tail_t* tail)
@@ -100,15 +101,15 @@ _JOS_INLINE_FUNC bool _vmem_block_is_free(size_t blockSize)
 
 _JOS_INLINE_FUNC size_t _vmem_tail_size(const vmem_block_head_t* head)
 {
-	return ((head->_size - (_JOS_VMEM_ARENA_ALLOC_OVERHEAD)));
+	return ((head->_size - (_JOS_arena_allocator_ALLOC_OVERHEAD)));
 }
 
 _JOS_INLINE_FUNC size_t _vmem_tail_free_size(const vmem_block_head_t* head)
 {
-	return ((head->_size - (_JOS_VMEM_ARENA_ALLOC_OVERHEAD)) | kVmemBlockFree);
+	return ((head->_size - (_JOS_arena_allocator_ALLOC_OVERHEAD)) | kVmemBlockFree);
 }
 
-_JOS_INLINE_FUNC void _vmem_arena_block_insert_as_free(vmem_arena_t* arena, vmem_block_head_t* new_block)
+_JOS_INLINE_FUNC void _arena_allocator_block_insert_as_free(arena_allocator_t* arena, vmem_block_head_t* new_block)
 {
     if(!arena || !new_block || arena->_free_head==new_block)
         return;
@@ -160,7 +161,7 @@ _JOS_INLINE_FUNC void _vmem_arena_block_insert_as_free(vmem_arena_t* arena, vmem
 	}
 }
 
-_JOS_INLINE_FUNC void _vmem_arena_disconnect(vmem_arena_t* arena, vmem_block_head_t* block)
+_JOS_INLINE_FUNC void _arena_allocator_disconnect(arena_allocator_t* arena, vmem_block_head_t* block)
 {
 	if(!arena || !block || (block->_size & kVmemBlockFree)!=kVmemBlockFree)
 		return;
@@ -183,15 +184,15 @@ _JOS_INLINE_FUNC void _vmem_arena_disconnect(vmem_arena_t* arena, vmem_block_hea
 
 // ============================== public API
 
-_JOS_API_FUNC vmem_arena_t*   vmem_arena_create(void* mem, size_t size)
+_JOS_API_FUNC arena_allocator_t*   arena_allocator_create(void* mem, size_t size)
 {
-    if(!mem || size <= _JOS_VMEM_ARENA_MIN_SIZE)
+    if(!mem || size <= _JOS_arena_allocator_MIN_SIZE)
     {
         return 0;
     }	
 
-	vmem_arena_t*   arena = (vmem_arena_t*)mem;
-    arena->_size = arena->_capacity = size - sizeof(vmem_arena_t);
+	arena_allocator_t*   arena = (arena_allocator_t*)mem;
+    arena->_size = arena->_capacity = size - sizeof(arena_allocator_t);
     arena->_free_head = (vmem_block_head_t*)(arena+1);
     arena->_free_head->_size = arena->_size | kVmemBlockFree;
     arena->_free_head->_links[0] = 0;
@@ -199,13 +200,14 @@ _JOS_API_FUNC vmem_arena_t*   vmem_arena_create(void* mem, size_t size)
 	vmem_block_tail_t* tail = _vmem_tail_from_head(arena->_free_head);
 	tail->_size = _vmem_tail_free_size(arena->_free_head);
 
-	arena->_super.alloc = (jos_allocator_alloc_func_t)vmem_arena_alloc;
-	arena->_super.free = (jos_allocator_free_func_t)vmem_arena_free;
+	arena->_super.alloc = (jos_allocator_alloc_func_t)arena_allocator_alloc;
+	arena->_super.free = (jos_allocator_free_func_t)arena_allocator_free;
+	arena->_super.realloc = (jos_allocator_realloc_func_t)arena_allocator_realloc;
 
     return arena;
 }
 
-_JOS_API_FUNC void* vmem_arena_alloc(vmem_arena_t* arena, size_t size)
+_JOS_API_FUNC void* arena_allocator_alloc(arena_allocator_t* arena, size_t size)
 {
 	if(!size)
 	{		
@@ -215,7 +217,7 @@ _JOS_API_FUNC void* vmem_arena_alloc(vmem_arena_t* arena, size_t size)
 	// cap to minimum size or align to 4 bytes
 	size = (size < _JOS_VMEM_BLOCK_MIN_SIZE) ? _JOS_VMEM_BLOCK_MIN_SIZE : (size+3)&~3;
 
-	if(!arena || arena->_size<size+_JOS_VMEM_ARENA_ALLOC_OVERHEAD )
+	if(!arena || arena->_size<size+_JOS_arena_allocator_ALLOC_OVERHEAD )
 	{
         return 0;
 	}
@@ -223,7 +225,7 @@ _JOS_API_FUNC void* vmem_arena_alloc(vmem_arena_t* arena, size_t size)
     vmem_block_head_t* free = arena->_free_head;
     while(free)
     {
-        if(_JOS_VMEM_ABS_BLOCK_SIZE(free->_size) >= (size+_JOS_VMEM_ARENA_ALLOC_OVERHEAD) )
+        if(_JOS_VMEM_ABS_BLOCK_SIZE(free->_size) >= (size+_JOS_arena_allocator_ALLOC_OVERHEAD) )
             break;
         free = free->_links[1];
     }
@@ -233,10 +235,10 @@ _JOS_API_FUNC void* vmem_arena_alloc(vmem_arena_t* arena, size_t size)
 		//DEBUG:printf("free was 0x%x; prev = 0x%x, next = 0x%x\n", free, free->_links[0], free->_links[1]);
 
         // unlink this free block (we'll insert a new one below if we split)		
-		_vmem_arena_disconnect(arena, free);
+		_arena_allocator_disconnect(arena, free);
 		
         size_t org_size = _JOS_VMEM_ABS_BLOCK_SIZE(free->_size);		
-        free->_size = (size+_JOS_VMEM_ARENA_ALLOC_OVERHEAD);
+        free->_size = (size+_JOS_arena_allocator_ALLOC_OVERHEAD);
 		if(org_size - free->_size < _JOS_VMEM_BLOCK_MIN_SIZE)
 		{
 			// just absorb the whole free chunk to avoid small fragments
@@ -254,7 +256,7 @@ _JOS_API_FUNC void* vmem_arena_alloc(vmem_arena_t* arena, size_t size)
             new_tail = _vmem_tail_from_head(new_head);            
             new_tail->_size = _vmem_tail_free_size(new_head);
 			new_head->_size |= kVmemBlockFree;
-			_vmem_arena_block_insert_as_free(arena, new_head);
+			_arena_allocator_block_insert_as_free(arena, new_head);
 
 			//DEBUG:printf("new free is 0x%x\n", arena->_free_head);
         }
@@ -267,7 +269,37 @@ _JOS_API_FUNC void* vmem_arena_alloc(vmem_arena_t* arena, size_t size)
     return free;
 }
 
-_JOS_API_FUNC void vmem_arena_free(vmem_arena_t* arena, void* block)
+_JOS_API_FUNC void* arena_allocator_realloc(arena_allocator_t* arena, void* block, size_t size) {
+	//TODO: there may be a cleverer way of doing this, for example by coalescing 
+	//		a free block before or after this one, if possible, etc.
+
+	if (size == 0 && block == 0) {
+		return 0;
+	}
+
+	if (size == 0) {
+		arena->_super.free((jos_allocator_t*)arena, block);
+		return 0;
+	}
+	if (block == 0) {
+		return arena->_super.alloc((jos_allocator_t*)arena, size);
+	}
+
+	vmem_block_head_t* head = (vmem_block_head_t*)block - 1;
+	if (_JOS_VMEM_ABS_BLOCK_SIZE(head->_size) >= size) {
+		//TODO: if needed; shrink the block
+		return block;
+	}
+
+	void* new_block = arena->_super.alloc((jos_allocator_t*)arena, size);
+	if (new_block) {
+		memcpy(new_block, block, _JOS_VMEM_ABS_BLOCK_SIZE(head->_size));
+	}
+
+	return new_block;
+}
+
+_JOS_API_FUNC void arena_allocator_free(arena_allocator_t* arena, void* block)
 {
     if(!arena || !block)
     {
@@ -289,7 +321,7 @@ _JOS_API_FUNC void vmem_arena_free(vmem_arena_t* arena, void* block)
 
 	arena->_size += head->_size;
     // if there's a block before this and it's free we need to combine
-    if((uintptr_t)prev_tail > (uintptr_t)arena + sizeof(vmem_arena_t) && _vmem_block_is_free(prev_tail->_size))
+    if((uintptr_t)prev_tail > (uintptr_t)arena + sizeof(arena_allocator_t) && _vmem_block_is_free(prev_tail->_size))
     {
         vmem_block_head_t* prev_head = _vmem_head_from_tail(prev_tail);
         // absorb previous tail and head sizes (we'll set the free-flag later)
@@ -297,26 +329,26 @@ _JOS_API_FUNC void vmem_arena_free(vmem_arena_t* arena, void* block)
 		head = prev_head;
 		tail->_size = _vmem_tail_free_size(head);
 		// orphan this new block
-		_vmem_arena_disconnect(arena, head);
+		_arena_allocator_disconnect(arena, head);
     }
 
     // also check if there's a free block after, we'll need to combine that one too    
     vmem_block_head_t* next_head = (vmem_block_head_t*)(tail + 1);
-	const uintptr_t arena_end = (uintptr_t)arena + arena->_capacity + sizeof(vmem_arena_t);
-    if((uintptr_t)next_head < arena_end && _vmem_block_is_free(next_head->_size))
+	const uintptr_t arena_allocator_end = (uintptr_t)arena + arena->_capacity + sizeof(arena_allocator_t);
+    if((uintptr_t)next_head < arena_allocator_end && _vmem_block_is_free(next_head->_size))
     {
         const size_t prev_size = _JOS_VMEM_ABS_BLOCK_SIZE(next_head->_size);
         // absorb previous tail and head sizes
         head->_size += prev_size;
         tail = _vmem_tail_from_head(head);
-		_vmem_arena_disconnect(arena, next_head);
+		_arena_allocator_disconnect(arena, next_head);
     }
 	tail->_size = _vmem_tail_free_size(head);
 	head->_size |= kVmemBlockFree;
     // now we can insert the newly freed block
-    _vmem_arena_block_insert_as_free(arena, head);	
+    _arena_allocator_block_insert_as_free(arena, head);	
 }
 
-#endif // _JOS_ARENA_ALLOCATOR_IMPLEMENTED
+#endif // _JOS_arena_allocator_ALLOCATOR_IMPLEMENTED
 
-#endif // _JOS_ARENA_ALLOCATOR_H
+#endif // _JOS_arena_allocator_ALLOCATOR_H

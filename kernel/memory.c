@@ -1,15 +1,17 @@
 #include <c-efi.h>
 
 #define _JOS_IMPLEMENT_ALLOCATORS
+#define _JOS_IMPLEMENT_CONTAINERS
 
 #include <arena_allocator.h>
 #include <fixed_allocator.h>
+#include <linear_allocator.h>
 #include <collections.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <serial.h>
 #include <wchar.h>
-#include <linear_allocator.h>
 #include <memory.h>
 
 // in efi_main.c
@@ -50,8 +52,6 @@ jo_status_t memory_uefi_init(linear_allocator_t** main_allocator)
     // our allocation setup strategy is simply as follows:
     // - first find the largest block of conventional memory available, this will become our root arena allocator region.
     // - secondly look for special memory regions that we need to know about and map these into our own memory map structures (allocated in the previously found arena)
-
-    //wchar_t wbuffer[128];
 
     CEfiMemoryDescriptor* desc = _boot_service_memory_map;
     CEfiMemoryDescriptor* max_desc = 0;
@@ -154,42 +154,3 @@ jo_status_t memory_runtime_init(void) {
     
     return _JO_STATUS_SUCCESS;
 }
-
-// ==============================================================
-// TODO: more pools and arenas?
-#if 0
-void* malloc(size_t size) {
-    void* ptr = vmem_arena_alloc(_bootstrap_arena, size);
-    _JOS_ASSERT(ptr);
-    return ptr;
-}
-
-void free(void* block) {
-    return vmem_arena_free(_bootstrap_arena, block);
-}
-
-void *calloc(size_t nmemb, size_t size)
-{
-    if(!nmemb || !size)
-        return 0;
-    return vmem_arena_alloc(_bootstrap_arena, nmemb * size);
-}
-
-void *realloc(void *ptr, size_t size)
-{
-    if(!ptr)
-        return vmem_arena_alloc(_bootstrap_arena, size);
-    
-    if(!size)
-    {
-        vmem_arena_free(_bootstrap_arena, ptr);
-        return ptr;
-    }
-
-    //TODO: built in realloc, using knowledge of size of allocation
-    void* new_ptr = vmem_arena_alloc(_bootstrap_arena, size);
-    if(new_ptr)
-        vmem_arena_free(_bootstrap_arena, ptr);
-    return new_ptr;
-}
-#endif

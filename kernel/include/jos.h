@@ -14,10 +14,12 @@
 struct _jos_allocator;
 typedef void* (*jos_allocator_alloc_func_t)(struct _jos_allocator*, size_t);
 typedef void  (*jos_allocator_free_func_t)(struct _jos_allocator*, void*);
+typedef void* (*jos_allocator_realloc_func_t)(struct _jos_allocator*, void*, size_t);
 
 typedef struct _jos_allocator {
     jos_allocator_alloc_func_t      alloc;
     jos_allocator_free_func_t       free;
+    jos_allocator_realloc_func_t    realloc;
 
 } jos_allocator_t;
 
@@ -82,6 +84,10 @@ if(!(cond))\
     trace(0, "PANIC @ %s:%d \n", __FILE__,__LINE__);\
     k_panic()
 
+#ifndef min
+#define min(a,b) ((a)<(b) ? (a) : (b))
+#endif
+
 #else
 //TODO: check if this is actually VS, but we're assuming it because we're in control...
 #define _JOS_UNREACHABLE()
@@ -111,10 +117,6 @@ if(!(cond))\
 #define _JOS_ASSERT(cond)
 #endif
 #define _JOS_ALIGN(type,name,alignment) __declspec(align(alignment)) type name
-#endif
-
-#ifndef min
-#define min(a,b) ((a)<(b) ? (a) : (b))
 #endif
 
 #endif // _JOS_H

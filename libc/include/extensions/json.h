@@ -30,7 +30,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <jos.h>
+#ifdef _JOS_KERNEL_BUILD
 #include <extensions/slices.h>
+#else
+#include <slices.h>
+#endif
 #include <collections.h>
 
 typedef struct _json_context {
@@ -38,26 +42,54 @@ typedef struct _json_context {
 	size_t _keys_added;
 	bool _obj_has_key;
 	FILE* _stream;
-
+	
 } json_writer_context_t;
 
-_JOS_INLINE_FUNC void json_initialise_writer(json_writer_context_t* ctx, FILE* stream) {
+_JOS_API_FUNC void json_initialise_writer(json_writer_context_t* ctx, FILE* stream);
+_JOS_API_FUNC void json_write_object_start(json_writer_context_t* writer_ctx);
+_JOS_API_FUNC void json_write_object_end(json_writer_context_t* writer_ctx);
+_JOS_API_FUNC void json_write_key(json_writer_context_t* writer_ctx, const char* key_name);
+_JOS_API_FUNC void json_write_number(json_writer_context_t* writer_ctx, long long number);
+_JOS_API_FUNC void json_write_string(json_writer_context_t* writer_ctx, const char* str);
+
+typedef enum json_token_type {
+
+	kJsonParse_Token_Null,
+	kJsonParse_Token_Object,
+	kJsonParse_Token_String,
+	kJsonParse_Token_Number,
+	kJsonParse_Token_KeyValueSeparator,
+
+} json_token_type_t;
+
+typedef struct _json_parse_token {
+	json_token_type_t _type;
+	char_array_slice_t	_slice;
+} json_token_t;
+
+_JOS_API_FUNC json_token_t* json_tokenise(vector_t* in_out_token_slices, char_array_slice_t in_json);
+_JOS_API_FUNC json_token_t json_value(vector_t* tokens, const char* key);
+
+#if defined(_JOS_IMPLEMENT_JSON) && !defined(_JOS_JSON_IMPLEMENTED)
+#define _JOS_JSON_IMPLEMENTED
+
+_JOS_API_FUNC  void json_initialise_writer(json_writer_context_t* ctx, FILE* stream) {
 	memset(ctx, 0, sizeof(json_writer_context_t));
 	ctx->_stream = stream;
 	ctx->_keys_added = 0;
 	ctx->_obj_has_key = false;
 }
 
-_JOS_INLINE_FUNC void json_write_object_start(json_writer_context_t* writer_ctx) {
+_JOS_API_FUNC void json_write_object_start(json_writer_context_t* writer_ctx) {
 	fwrite("{ ", 1, 2, writer_ctx->_stream);
 	writer_ctx->_obj_has_key = false;
 }
 
-_JOS_INLINE_FUNC void json_write_object_end(json_writer_context_t* writer_ctx) {
+_JOS_API_FUNC void json_write_object_end(json_writer_context_t* writer_ctx) {
 	fwrite(" }", 1, 2, writer_ctx->_stream);
 }
 
-_JOS_INLINE_FUNC void json_write_key(json_writer_context_t* writer_ctx, const char* key_name) {
+_JOS_API_FUNC void json_write_key(json_writer_context_t* writer_ctx, const char* key_name) {
 	if (writer_ctx->_obj_has_key) {
 		fwrite(", ", 1, 2, writer_ctx->_stream);
 	}
@@ -69,30 +101,20 @@ _JOS_INLINE_FUNC void json_write_key(json_writer_context_t* writer_ctx, const ch
 	fwrite(" : ", 1, 3, writer_ctx->_stream);
 }
 
-_JOS_INLINE_FUNC void json_write_number(json_writer_context_t* writer_ctx, long long number) {
+_JOS_API_FUNC void json_write_number(json_writer_context_t* writer_ctx, long long number) {
 	char buffer[32];
 	int written = snprintf(buffer, sizeof(buffer), "%lld", number);
 	fwrite(buffer, 1, written, writer_ctx->_stream);
 }
 
-_JOS_INLINE_FUNC void json_write_string(json_writer_context_t* writer_ctx, const char* str) {
+_JOS_API_FUNC void json_write_string(json_writer_context_t* writer_ctx, const char* str) {
 	fwrite("\"", 1, 1, writer_ctx->_stream);
 	fwrite(str, 1, strlen(str), writer_ctx->_stream);
 	fwrite("\"", 1, 1, writer_ctx->_stream);
 }
 
-
 // ====================================================================
 
-typedef enum _json_parse_token_type {
-
-	kJsonParse_Token_Null,
-	kJsonParse_Token_Object,
-	kJsonParse_Token_String,
-	kJsonParse_Token_Number,
-	kJsonParse_Token_KeyValueSeparator,
-
-} _json_parse_token_type_t;
 
 typedef enum _json_parse_state {
 
@@ -104,12 +126,7 @@ typedef enum _json_parse_state {
 
 } _json_parse_state_t;
 
-typedef struct _json_parse_token {
-	_json_parse_token_type_t _type;
-	char_array_slice_t	_slice;
-} _json_parse_token_t;
-
-_JOS_INLINE_FUNC _json_parse_token_t* _json_tokenise(vector_t* in_out_token_slices, char_array_slice_t in_json) {
+_JOS_API_FUNC json_token_t* json_tokenise(vector_t* in_out_token_slices, char_array_slice_t in_json) {
 	if (!in_json._length || !in_json._ptr)
 		return 0;
 
@@ -143,7 +160,7 @@ _JOS_INLINE_FUNC _json_parse_token_t* _json_tokenise(vector_t* in_out_token_slic
 			case ':':
 			{
 				// we only add this here to be able to validate the JSON, otherwise it's not really used
-				_json_parse_token_t token;
+				json_token_t token;
 				token._type = kJsonParse_Token_KeyValueSeparator;
 				token._slice = kEmptySlice;
 				vector_push_back(in_out_token_slices, &token);
@@ -186,7 +203,7 @@ _JOS_INLINE_FUNC _json_parse_token_t* _json_tokenise(vector_t* in_out_token_slic
 			while (rp!=end && *rp >= '0' && *rp <= '9') ++rp;
 			if (rp == end)
 				break;
-			_json_parse_token_t token;
+			json_token_t token;
 			char_array_slice_create(&token._slice, start, 0, rp - start);
 			token._type = kJsonParse_Token_Number;
 			vector_push_back(in_out_token_slices, &token);
@@ -201,7 +218,7 @@ _JOS_INLINE_FUNC _json_parse_token_t* _json_tokenise(vector_t* in_out_token_slic
 				break;
 			// we include the " in the token
 			++rp;
-			_json_parse_token_t token;
+			json_token_t token;
 			char_array_slice_create(&token._slice, start, 0, rp - start);
 			token._type = kJsonParse_Token_String;
 			vector_push_back(in_out_token_slices, &token);
@@ -219,7 +236,7 @@ _JOS_INLINE_FUNC _json_parse_token_t* _json_tokenise(vector_t* in_out_token_slic
 				if (*rp == '}') {
 					if (--obj_level == 0) {
 						// end of outermost object
-						_json_parse_token_t token;
+						json_token_t token;
 						//NOTE: the slice is *inside* the object so that we can parse it recursively
 						char_array_slice_create(&token._slice, start, 1, rp - start - 1);
 						//TODO: if slice is empty...
@@ -240,15 +257,15 @@ _JOS_INLINE_FUNC _json_parse_token_t* _json_tokenise(vector_t* in_out_token_slic
 		}
 	}
 
-	return ((_json_parse_token_t*)vector_at(in_out_token_slices, first_token));
+	return ((json_token_t*)vector_at(in_out_token_slices, first_token));
 }
 
-_JOS_INLINE_FUNC _json_parse_token_t json_value(vector_t* tokens, const char* key) {
+_JOS_API_FUNC json_token_t json_value(vector_t* tokens, const char* key) {
 
 	int is_key = 1;
 	bool found_key = false;
-	_json_parse_token_t* obj_tokens = (_json_parse_token_t*)vector_data(tokens);
-	_json_parse_token_t value = {._slice = kEmptySlice, ._type = kJsonParse_Token_Null };
+	json_token_t* obj_tokens = (json_token_t*)vector_data(tokens);
+	json_token_t value = {._slice = kEmptySlice, ._type = kJsonParse_Token_Null };
 
 	for (size_t i = 0; i < vector_size(tokens); ++i) {
 		switch (obj_tokens[i]._type)
@@ -302,3 +319,5 @@ _JOS_INLINE_FUNC _json_parse_token_t json_value(vector_t* tokens, const char* ke
 
 	return value;
 }
+
+#endif 

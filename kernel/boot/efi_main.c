@@ -27,6 +27,7 @@
 #include <pagetables.h>
 #include <x86_64.h>
 
+#define _JOS_IMPLEMENT_JSON
 #include <extensions/json.h>
 
 #include <programs/scroller.h>

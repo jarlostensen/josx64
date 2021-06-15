@@ -27,5 +27,5 @@ _JOS_INLINE_FUNC _JOS_ALWAYS_INLINE char_array_slice_t* char_array_slice_create(
     return slice;
 }
 
-extern bool char_array_slice_match_str(char_array_slice_t* slice, const char* str);
-extern bool char_array_slice_equals(char_array_slice_t prefix, char_array_slice_t candidate);
+_JOS_API_FUNC bool char_array_slice_match_str(char_array_slice_t* slice, const char* str);
+_JOS_API_FUNC bool char_array_slice_equals(char_array_slice_t prefix, char_array_slice_t candidate);

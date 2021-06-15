@@ -21,9 +21,6 @@ static size_t   _num_enabled_processors = 0;
 
 static processor_information_t* _processors = 0;
 
-// used as a placeholder event for 
-static CEfiEvent    _ap_event = 0;
-
 #define _JOS_K_IA32_FS_BASE             0xc0000100
 #define _JOS_K_IA32_GS_BASE             0xc0000101
 #define _JOS_K_IA32_KERNEL_GS_BASE      0xc0000102
@@ -81,8 +78,7 @@ typedef struct _xsdt_header {
 const rsdp_descriptor20_t*  _rsdp_desc_20 = 0;
 const _xsdt_header_t*       _xsdt = 0;
 
-static fixed_allocator_t* _per_cpu_allocator;
-static vmem_arena_t* _smp_arena = NULL;
+static arena_allocator_t* _smp_arena = NULL;
 
 bool do_checksum(const uint8_t*ptr, size_t length) {
     uint8_t checksum = 0;
@@ -224,10 +220,10 @@ jo_status_t    smp_initialise(jos_allocator_t* allocator) {
 
             // now we have the information we need to register this module
             // we'll set aside one meg per core for misc
-            _smp_arena = vmem_arena_create(allocator->alloc(allocator, kSMP_PER_CPU_MEMORY_ARENA_SIZE*_num_enabled_processors), 
+            _smp_arena = arena_allocator_create(allocator->alloc(allocator, kSMP_PER_CPU_MEMORY_ARENA_SIZE*_num_enabled_processors), 
                             kSMP_PER_CPU_MEMORY_ARENA_SIZE*_num_enabled_processors);
 
-            _processors = (processor_information_t*)vmem_arena_alloc(_smp_arena, sizeof(processor_information_t) * _num_processors);
+            _processors = (processor_information_t*)arena_allocator_alloc(_smp_arena, sizeof(processor_information_t) * _num_processors);
             memset(_processors, 0, sizeof(processor_information_t) * _num_processors);
             _processors[_bsp_id]._id = _bsp_id;
             initialise_this_ap((void*)&_processors[_bsp_id]);
@@ -253,9 +249,9 @@ jo_status_t    smp_initialise(jos_allocator_t* allocator) {
     else
     {
         // uni processor
-        _smp_arena = vmem_arena_create(allocator->alloc(allocator, kSMP_PER_CPU_MEMORY_ARENA_SIZE), kSMP_PER_CPU_MEMORY_ARENA_SIZE);
+        _smp_arena = arena_allocator_create(allocator->alloc(allocator, kSMP_PER_CPU_MEMORY_ARENA_SIZE), kSMP_PER_CPU_MEMORY_ARENA_SIZE);
         _JOS_KTRACE_CHANNEL(kSmpChannel, "uni processor system, or no UEFI MP protocol handler available");
-        _processors = (processor_information_t*)vmem_arena_alloc(_smp_arena, sizeof(processor_information_t));
+        _processors = (processor_information_t*)arena_allocator_alloc(_smp_arena, sizeof(processor_information_t));
         _processors->_id = 0;
         initialise_this_ap(_processors);        
         _processors->_is_good = true;
@@ -300,15 +296,15 @@ bool smp_has_acpi_20() {
 
 per_cpu_ptr_t       per_cpu_create_ptr(void) {
     _JOS_ASSERT(_num_processors);
-    return (per_cpu_ptr_t)vmem_arena_alloc(_smp_arena, sizeof(uintptr_t)*_num_processors);
+    return (per_cpu_ptr_t)arena_allocator_alloc(_smp_arena, sizeof(uintptr_t)*_num_processors);
 }
 
 per_cpu_queue_t     per_cpu_create_queue(void) {
     _JOS_ASSERT(_num_processors);
-    return (per_cpu_ptr_t)vmem_arena_alloc(_smp_arena, sizeof(queue_t)*_num_processors);
+    return (per_cpu_queue_t)arena_allocator_alloc(_smp_arena, sizeof(queue_t)*_num_processors);
 }
 
 per_cpu_qword_t     per_cpu_create_qword(void) {
     _JOS_ASSERT(_num_processors);
-    return (per_cpu_ptr_t)vmem_arena_alloc(_smp_arena, sizeof(uint64_t)*_num_processors);
+    return (per_cpu_qword_t)arena_allocator_alloc(_smp_arena, sizeof(uint64_t)*_num_processors);
 }

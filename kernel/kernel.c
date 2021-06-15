@@ -1,5 +1,6 @@
 
 #include <jos.h>
+
 #include <kernel.h>
 #include <memory.h>
 #include <video.h>
@@ -45,7 +46,7 @@ jo_status_t kernel_uefi_init(kernel_uefi_init_args_t* args) {
         return status;
     }
 
-    status = smp_initialise(_kernel_allocator);
+    status = smp_initialise((jos_allocator_t*)_kernel_allocator);
     if ( !_JO_SUCCEEDED(status) ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel, "***FATAL ERROR: SMP initialise returned 0x%x", status);
         return status;
@@ -53,7 +54,7 @@ jo_status_t kernel_uefi_init(kernel_uefi_init_args_t* args) {
 
     //TODO: video needs an allocator for the backbuffer (at least)
     // port it to use module register
-    status = video_initialise(_kernel_allocator);
+    status = video_initialise((jos_allocator_t*)_kernel_allocator);
     if ( _JO_FAILED(status)  ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel,"***FATAL ERROR: video initialise returned 0x%x", status);
         return status;
@@ -61,7 +62,7 @@ jo_status_t kernel_uefi_init(kernel_uefi_init_args_t* args) {
 
     // provide memory to the caller, i.e. the outer UEFI application, if it requires it
     if (args->application_memory_size_required) {
-        *args->application_allocated_memory = _kernel_allocator->_super.alloc(_kernel_allocator,args->application_memory_size_required);
+        *args->application_allocated_memory = _kernel_allocator->_super.alloc((jos_allocator_t*)_kernel_allocator, args->application_memory_size_required);
     }
 
     // =====================================================================
@@ -75,7 +76,7 @@ jo_status_t kernel_runtime_init(void) {
     debugger_initialise();
     clock_initialise();
     keyboard_initialise();    
-    tasks_initialise(_kernel_allocator);
+    tasks_initialise((jos_allocator_t*)_kernel_allocator);
     return _JO_STATUS_SUCCESS;
 }
 

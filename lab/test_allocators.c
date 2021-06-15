@@ -39,3 +39,17 @@ void test_linear_allocator(void) {
 	void* data2 = allocator->alloc(allocator, 64);
 	memset(data2, 0, 64);
 }
+
+void test_arena_allocator_allocator(void) {
+
+	char buffer[1024];
+
+	jos_allocator_t* allocator = arena_allocator_create(buffer, sizeof(buffer));
+
+	void* allocated = allocator->alloc(allocator, 128);
+	memset(allocated, 0x11, 128);
+	allocated = allocator->realloc(allocator, allocated, 256);
+	memset((char*)allocated+128, 0x22, 128);
+
+	allocator->free(allocator, allocated);
+}

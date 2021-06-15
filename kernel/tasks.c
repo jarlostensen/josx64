@@ -170,7 +170,6 @@ static void _yield_to_next_task(void) {
 //  as the last thing when all other tasks are done.
 //
 static jo_status_t _idle_task(void* ptr) {    
-    task_context_t* idle_task = (task_context_t*)ptr;
     _JOS_KTRACE_CHANNEL(kTaskChannel, "idle starting");
     //ZZZ: not so much "true" as wait for a kernel shutdown signal
     while(true) {
@@ -261,11 +260,6 @@ void tasks_yield(void) {
 
 
 static linear_allocator_t*  _tasks_allocator = 0;
-static void* _tasks_alloc(size_t size) {
-    void* ptr = linear_allocator_alloc(_tasks_allocator, size);
-    _JOS_ASSERT(ptr);
-    return ptr;
-}
 
 void tasks_initialise(jos_allocator_t * allocator) {
 
@@ -292,10 +286,7 @@ void tasks_start_idle(void) {
     
     cpu_task_context_t* ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     // add idle task to this CPU
-    ctx->_running_task = ctx->_cpu_idle = _create_task_context(_idle_task, 0, "cpu_idle", 
-    &(jos_allocator_t){
-        .alloc = _tasks_alloc
-    });
+    ctx->_running_task = ctx->_cpu_idle = _create_task_context(_idle_task, 0, "cpu_idle", (jos_allocator_t*)_tasks_allocator);
     //NOTE: idle priority is special, and lower than anything else
     ctx->_cpu_idle->_pri = kTaskPri_NumPris;
     // we call this directly to kick things off and the first thing it will do 

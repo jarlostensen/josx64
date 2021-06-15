@@ -100,10 +100,10 @@ pdb_index_match_result pdb_index_match_search(pdb_index_node_t* node, char_array
 
 #define PDB_INDEX_CHILD_INIT_CAPACITY 16
 
-static void pdb_index_add_from_node(pdb_index_node_t* node, char_array_slice_t body, const pdb_index_symbol_t* __restrict data) {
+static void pdb_index_add_from_node(pdb_index_node_t* node, char_array_slice_t body, const pdb_index_symbol_t* __restrict data, jos_allocator_t* allocator) {
 
     if(vector_is_empty(&node->_children)) {
-        vector_create(&node->_children, PDB_INDEX_CHILD_INIT_CAPACITY, sizeof(pdb_index_node_t));
+        vector_create(&node->_children, PDB_INDEX_CHILD_INIT_CAPACITY, sizeof(pdb_index_node_t), allocator);
     }    
     pdb_index_node_t * new_node = node;
     while (!slice_is_empty(&body)) {
@@ -112,7 +112,7 @@ static void pdb_index_add_from_node(pdb_index_node_t* node, char_array_slice_t b
         child_node._symbol = kEmptySymbol;
         child_node._prefix = pdb_index_next_token(&body);
         if( !slice_is_empty(&body) ) {
-            vector_create(&child_node._children, PDB_INDEX_CHILD_INIT_CAPACITY, sizeof(pdb_index_node_t));
+            vector_create(&child_node._children, PDB_INDEX_CHILD_INIT_CAPACITY, sizeof(pdb_index_node_t), allocator);
         }
         vector_push_back(&new_node->_children, &child_node);
         new_node = (pdb_index_node_t*)vector_at(&new_node->_children, vector_size(&new_node->_children)-1);
@@ -122,7 +122,7 @@ static void pdb_index_add_from_node(pdb_index_node_t* node, char_array_slice_t b
 }
 
 pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice_t prefix, char_array_slice_t body, 
-        const pdb_index_symbol_t* __restrict data, pdb_index_node_t** leaf) {
+        const pdb_index_symbol_t* __restrict data, pdb_index_node_t** leaf, jos_allocator_t* allocator) {
 
     bool is_root_node = false;
 
@@ -133,10 +133,10 @@ pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice
             //NOTE: keep node->_prefix empty!
             node->_symbol = kEmptySymbol;
             char_array_slice_t combined;
-            //ZZZ: assert on these actually being contigous and prefix coming before body etc.
+            //ZZZ: assert on these actually being contiguous and prefix coming before body etc.
             combined._length = prefix._length + body._length;
             combined._ptr = prefix._ptr;
-            pdb_index_add_from_node(node, combined, data);
+            pdb_index_add_from_node(node, combined, data, allocator);
             return kPdbIndex_Inserted;
         }
         // else we bypass the prefix check below and skip straight to matching/inserting as a child
@@ -156,7 +156,7 @@ pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice
             }
 
             // use remaining prefixes to build build child tree
-            pdb_index_add_from_node(node, body, data);
+            pdb_index_add_from_node(node, body, data, allocator);
             return kPdbIndex_Inserted;
         }
 
@@ -174,7 +174,7 @@ pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice
         // recursive check against each child
         for (unsigned c = 0; c < child_count; ++c) {
             pdb_index_node_t* child = (pdb_index_node_t*)vector_at(&node->_children, c);            
-            const pdb_index_match_result m = pdb_index_insert(child, next_prefix, body, data, leaf);
+            const pdb_index_match_result m = pdb_index_insert(child, next_prefix, body, data, leaf, allocator);
             if (m != kPdbIndex_NoMatch) {
                 // the rest of the prefixes have been inserted or were already in the index
                 return m;
@@ -187,7 +187,7 @@ pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice
         new_child._prefix = next_prefix;
         new_child._children = kEmptyVector;
         new_child._symbol = kEmptySymbol;
-        pdb_index_add_from_node(&new_child, body, data);
+        pdb_index_add_from_node(&new_child, body, data, allocator);
         vector_push_back(&node->_children, (void*)(&new_child));
 
         return kPdbIndex_Inserted;
@@ -210,7 +210,7 @@ static size_t       _string_store_total_size = 0;
 static const size_t kStringStore_PageSize = 0x800;
 
 // packed array of RVAs used for symbol lookups by memory address range
-// this array is paralelled by _pdb_symbol_name_ptr_array 
+// this array is paralleled by _pdb_symbol_name_ptr_array 
 static uint32_t             * _pdb_symbol_rva_array = 0;
 // array of pointers to names kept in string store pages
 static const char*          * _pdb_symbol_name_ptr_array = 0;
@@ -309,7 +309,7 @@ typedef enum _parse_state {
 
 } parse_state_t;
 
-const pdb_index_node_t* pdb_index_load_from_pdb_yml(const char* pdb_yml_file_pathname) {
+const pdb_index_node_t* pdb_index_load_from_pdb_yml(const char* pdb_yml_file_pathname, jos_allocator_t* allocator) {
     
     pdb_index_node_initialise(&_pdb_index_root);
 
@@ -317,7 +317,7 @@ const pdb_index_node_t* pdb_index_load_from_pdb_yml(const char* pdb_yml_file_pat
     if (yml_file) {
 
         // initialise string store.
-        vector_create(&_string_store_pages, 16, sizeof(char*));
+        vector_create(&_string_store_pages, 16, sizeof(char*), allocator);
         vector_push_back_ptr(&_string_store_pages, _string_store = (char*)malloc(kStringStore_PageSize));
         // NOTE: we use 0 terminators to scan backwards to find the start of a symbol name (in other functions) 
         // so we have to lead with a 0 as a front terminator as well                
@@ -506,7 +506,7 @@ const pdb_index_node_t* pdb_index_load_from_pdb_yml(const char* pdb_yml_file_pat
                 char_array_slice_t prefix = pdb_index_next_token(&body);
                 if(!slice_is_empty(&prefix)) {
                     pdb_index_node_t * leaf;
-                    if (pdb_index_insert(&_pdb_index_root, prefix, body, &symbol, &leaf) != kPdbIndex_NoMatch) {
+                    if (pdb_index_insert(&_pdb_index_root, prefix, body, &symbol, &leaf, allocator) != kPdbIndex_NoMatch) {
                         ++_pdb_index_num_symbols;
                     }
                     //TODO: error checking

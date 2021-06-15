@@ -75,6 +75,9 @@
     <ClCompile Include="test_allocators.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="test_collections.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\libc\include\extensions\pdb_index.h">

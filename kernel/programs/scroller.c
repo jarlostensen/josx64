@@ -232,7 +232,7 @@ void scroller_render_field(void) {
         size_t y = 0;
         for (size_t row = 0; row < kScLayer_Height; ++row) {
             for (size_t col = kScLayer_VisibleFieldWidth - 1; col < kScLayer_LayerFieldWidth; ++col) {
-                const uint8_t* sprite = &_scroller_sprites[_scroller_layers[row][col]];
+                const uint8_t* sprite = (const uint8_t * )&_scroller_sprites[_scroller_layers[row][col]];
                 for (size_t i = 0; i < kScTile_Height; ++i) {
                     for (size_t j = 0; j < kScTile_Width; ++j) {
                         _scroller_bm[y + i][bm_vis_width + j] = _scroller_palette[*sprite++];

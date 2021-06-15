@@ -11,12 +11,12 @@ void i8259a_enable_irq(int i);
 void i8259a_disable_irq(int i);
 void i8259a_send_eoi(int irq);
 
-static _JOS_ALWAYS_INLINE bool i8259a_irq_enabled(int i) {
+_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE bool i8259a_irq_enabled(int i) {
        return (_i8259a_irq_mask & (1<<i))!=0;
 }
 
 #define _JOS_i8259a_IRQ_CLEAR_MASK (1<<2) 
-static _JOS_ALWAYS_INLINE bool i8259a_irqs_muted(void) {
+_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE bool i8259a_irqs_muted(void) {
     return _i8259a_irq_mask==_JOS_i8259a_IRQ_CLEAR_MASK;
 }
 

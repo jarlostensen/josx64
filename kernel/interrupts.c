@@ -41,8 +41,6 @@ static irq_handler_t  _irq_handlers[32];
 // we use this to control interrupts at a "soft" level; if this flag is true we forward interrupts to ISR handlers
 // if false we don't, and we may filter some IRQs as well
 static bool _interrupts_enabled = true;
-//TODO: this all needs to be per CPU
-static interrupt_handler_priority_t _current_priority = kInterrupt_NonCritical_Deferrable;
 
 
 // Intel IA dev guide Vol 3 6.14.1 64-Bit Mode IDT
@@ -142,7 +140,7 @@ EXTERN_IRQ_HANDLER(18);
 EXTERN_IRQ_HANDLER(19);
 
 // returns 64 bit RIP of interrupt handler from entry
-static uint64_t idt_get_rip(idt_entry_t* entry) {
+_JOS_INLINE_FUNC uint64_t idt_get_rip(idt_entry_t* entry) {
     return (uint64_t)entry->offset_lo | (uint64_t)(entry->offset_mid << 16) | ((uint64_t)(entry->offset_hi) << 32);
 }
 // set 64 bit RIP of interrupt handler in entry

@@ -11,6 +11,11 @@
 
 #include "hex_dump.h"
 
+#ifndef min
+#define min(a,b) ((a)<(b)?(a):(b))
+#define _undef_min
+#endif
+
 #define CHARS_IN_BUFFER(buff) sizeof(buff)/sizeof(wchar_t)
 //NOTE: explicitly for 64 bit
 #define PRINT_WIDTH 66u
@@ -99,7 +104,7 @@ static size_t _hex_dump_hex_line(void* mem, size_t bytes, enum hex_dump_unit_siz
 	if (bytes)
 	{				
 		_hex_dump_line_init(&ctx, mem);		
-		const unsigned byte_run = min(bytes, 16);
+		const unsigned byte_run = (const unsigned)(bytes< 16u ? bytes:16u);
 
 		switch (unit_size)
 		{
@@ -201,3 +206,6 @@ void hex_dump_mem(void* mem, size_t bytes, enum hex_dump_unit_size unit_size)
 	}
 }
 
+#ifdef _undef_min
+#undef min
+#endif

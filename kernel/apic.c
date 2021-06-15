@@ -34,7 +34,7 @@ static _JOS_MAYBE_UNUSED void reset_local_apic(processor_information_t* info) {
     val = read_local_apic_register(info, kLApic_Reg_LvtLint1);
     write_local_apic_register(info, kLApic_Reg_LvtLint1, val | _LAPIC_MASK_LVT);
 
-    int max_num_lvts = (info->_local_apic_info._version >> 15) & 0xff;
+    // int max_num_lvts = (info->_local_apic_info._version >> 15) & 0xff;
 }
 
 void apic_collect_this_cpu_information(processor_information_t* info) {

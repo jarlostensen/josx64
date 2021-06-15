@@ -22,7 +22,7 @@ typedef struct _vector
 } vector_t;
 
 // create and initialise
-_JOS_API_FUNC void vector_create(vector_t* vec, size_t capacity, size_t element_size);
+_JOS_API_FUNC void vector_create(vector_t* vec, size_t capacity, size_t element_size, jos_allocator_t* allocator);
 // add element to the end of vector
 _JOS_API_FUNC void vector_push_back(vector_t* vec, void* element);
 _JOS_API_FUNC void vector_set_at(vector_t* vec, size_t i, void* element);
@@ -31,7 +31,7 @@ _JOS_API_FUNC void* vector_at(vector_t* vec, size_t n);
 
 _JOS_INLINE_FUNC _JOS_ALWAYS_INLINE void vector_destroy(vector_t* vec)
 {
-	free(vec->_data);
+	vec->_allocator->free(vec->_allocator, vec->_data);
 	memset(vec, 0, sizeof(vector_t));
 }
 
@@ -86,7 +86,7 @@ typedef struct _queue
 	size_t		_tail;
 } queue_t;
 
-_JOS_API_FUNC void queue_create(queue_t* queue, size_t capacity, size_t element_size);
+_JOS_API_FUNC void queue_create(queue_t* queue, size_t capacity, size_t element_size, jos_allocator_t* allocator);
 _JOS_API_FUNC void queue_pop(queue_t* queue);
 _JOS_API_FUNC void queue_push(queue_t* queue, void* element);
 _JOS_API_FUNC void queue_push_ptr(queue_t* queue, void* ptr);
@@ -112,7 +112,7 @@ _JOS_INLINE_FUNC void queue_clear(queue_t* queue)
 _JOS_INLINE_FUNC void queue_destroy(queue_t* queue)
 {
 	vector_destroy(queue->_elements);
-	free(queue->_elements);
+	queue->_allocator->free(queue->_allocator, queue->_elements);
 	memset(queue, 0, sizeof(queue_t));
 }
 
@@ -148,12 +148,12 @@ _JOS_INLINE_FUNC void* _vector_at(vector_t* vec, size_t n)
 }
 
 // create a vector able to hold capacity items of element_size
-_JOS_API_FUNC void vector_create(vector_t* vec, size_t capacity, size_t element_size)
+_JOS_API_FUNC void vector_create(vector_t* vec, size_t capacity, size_t element_size, jos_allocator_t* allocator)
 {
-	if(!vec || !capacity || !element_size)
-		return;
+	assert(vec && element_size && capacity && allocator);
 
-	vec->_data = malloc(capacity * element_size);
+	vec->_allocator = allocator;
+	vec->_data = vec->_allocator->alloc(vec->_allocator, capacity * element_size);
 	vec->_capacity = capacity;
 	vec->_element_size = element_size;
 	vec->_size = 0;
@@ -168,7 +168,7 @@ _JOS_API_FUNC void vector_push_back(vector_t* vec, void* element)
 	{
 		// optimal growth ratio if we want to stand a chance to re-use memory for future growth
 		vec->_capacity += vec->_capacity>>1;
-		vec->_data = realloc(vec->_data, vec->_capacity*vec->_element_size);
+		vec->_data = vec->_allocator->realloc(vec->_allocator, vec->_data, vec->_capacity*vec->_element_size);
 	}
 
 	const size_t i = vec->_size*vec->_element_size;
@@ -193,10 +193,11 @@ _JOS_API_FUNC void* vector_at(vector_t* vec, size_t n)
 ////////////////////////////////////////////////////////////////////////////////
 // queue
 
-_JOS_API_FUNC  void queue_create(queue_t* queue, size_t capacity, size_t element_size)
+_JOS_API_FUNC  void queue_create(queue_t* queue, size_t capacity, size_t element_size, jos_allocator_t* allocator)
 {
-	queue->_elements = (vector_t*)malloc(sizeof(vector_t));
-	vector_create(queue->_elements, capacity, element_size);
+	queue->_allocator = allocator;
+	queue->_elements = (vector_t*)queue->_allocator->alloc(queue->_allocator, sizeof(vector_t));
+	vector_create(queue->_elements, capacity, element_size, queue->_allocator);
 	queue->_head = queue->_tail = 0;
 }
 

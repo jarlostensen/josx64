@@ -10,14 +10,14 @@
 
 #include "include/arena_allocator.h"
 // working memory arena, used as a scratch area for certain operations
-static vmem_arena_t* _video_memory_arena = 0;
+static arena_allocator_t* _video_memory_arena = 0;
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "include/jos.h"
 #include "include/video.h"
 
-#define STBIR_MALLOC(size,context) vmem_arena_alloc(_video_memory_arena, (size))
-#define STBIR_FREE(ptr,context) vmem_arena_free(_video_memory_arena, (ptr))
+#define STBIR_MALLOC(size,context) arena_allocator_alloc(_video_memory_arena, (size))
+#define STBIR_FREE(ptr,context) arena_allocator_free(_video_memory_arena, (ptr))
 #include "../deps/stb/stb_image_resize.h"
 
 #ifdef _JOS_KERNEL_BUILD
@@ -154,7 +154,7 @@ jo_status_t video_initialise(jos_allocator_t* allocator)
          _backbuffer = (uint8_t*)allocator->alloc(allocator, _framebuffer_size);
          // we set aside an arena with some room
          //TODO: this memory is only used by STB image functions like "scale" and should be managed more dynamically
-         _video_memory_arena = vmem_arena_create(allocator->alloc(allocator, _framebuffer_size), _framebuffer_size);
+         _video_memory_arena = arena_allocator_create(allocator->alloc(allocator, _framebuffer_size), _framebuffer_size);
     }
 
     return status;
@@ -385,10 +385,10 @@ void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t sr
             // straight up/down scaling, no filtering
             if (src_width < dest_width && src_height < dest_height) {
 
-                const uint32_t fp_width = (uint32_t)(src_width << 16);
-                const uint32_t fp_height = (uint32_t)(src_height << 16);
-                const uint32_t fp_x_add = (uint32_t)fp_width / dest_width;
-                const uint32_t fp_y_add = (uint32_t)fp_height / dest_height;
+                const uint32_t fp_width = (const uint32_t)(src_width << 16);
+                const uint32_t fp_height = (const uint32_t)(src_height << 16);
+                const uint32_t fp_x_add = fp_width / (const uint32_t)dest_width;
+                const uint32_t fp_y_add = fp_height / (const uint32_t)dest_height;
 
                 size_t y = 0;
                 size_t src_y = 0;
@@ -418,7 +418,7 @@ void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t sr
         else {
             // generic re-size and filtering
             stbir_resize_uint8_srgb((const unsigned char*)bitmap, (int)src_width, (int)src_height, (int)src_stride<<2, (unsigned char*)backbuffer_wptr(dest_top, dest_left),
-                dest_width, dest_height, _info.pixels_per_scan_line << 2, 4, STBIR_ALPHA_CHANNEL_NONE, 0);
+                (int)dest_width, (int)dest_height, (int)_info.pixels_per_scan_line << 2, 4, STBIR_ALPHA_CHANNEL_NONE, 0);
         }
     }
 }

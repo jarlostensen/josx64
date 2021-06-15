@@ -1,0 +1,9 @@
+{
+  "version": {
+    "major": 4,
+    "minor": 26,
+    "patch": 2
+  },
+  "image_info": { "base": 1311768467750121216 },
+  "foo": "bar"
+}

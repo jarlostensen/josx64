@@ -55,6 +55,7 @@ _JOS_API_FUNC fixed_allocator_t* fixed_allocator_create(void* mem, size_t size, 
 
     pool->_super.alloc = (jos_allocator_alloc_func_t)fixed_allocator_alloc;
     pool->_super.free = (jos_allocator_free_func_t)fixed_allocator_free;
+    pool->_super.realloc = 0;
 
     return pool;
 }

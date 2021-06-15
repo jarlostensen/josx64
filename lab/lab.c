@@ -13,8 +13,8 @@
 
 #include <windows.h>
 
-
 #define _JOS_IMPLEMENT_CONTAINERS
+#define _JOS_IMPLEMENT_JSON
 
 #include "../libc/internal/include/libc_internal.h"
 #include "../kernel/include/hex_dump.h"
@@ -28,9 +28,11 @@
 #include "../deps/font8x8/font8x8.h"
 #include "../libc/internal/include/_file.h"
 #include "../libc/include/extensions/json.h"
+#include "../kernel/include/arena_allocator.h"
 
 void test_fixed_allocator(void);
 void test_linear_allocator(void);
+void test_arena_allocator_allocator(void);
 
 void slice_printf(char_array_slice_t* slice) {
     for (unsigned n = 0; n < slice->_length; ++n) {
@@ -222,22 +224,25 @@ static void test_json(void) {
 
     FILE* ifstream;
     fopen_s(&ifstream, "json_data.json", "r");
-    char buffer[1024];
+    char buffer[512];
     memset(buffer, 0, sizeof(buffer));
     fread(buffer, 1, sizeof(buffer), ifstream);
     
     char_array_slice_t json_slice;
     char_array_slice_create(&json_slice, buffer, 0, strlen(buffer));
+
+    char heap[512];
+    jos_allocator_t* allocator = (jos_allocator_t*)arena_allocator_create(heap, sizeof(heap));
     vector_t tokens;
-    vector_create(&tokens, 12, sizeof(_json_parse_token_t));
-    _json_parse_token_t* root = _json_tokenise(&tokens, json_slice);
+    vector_create(&tokens, 12, sizeof(json_token_t), allocator);
+    json_token_t* root = json_tokenise(&tokens, json_slice);
     assert(root->_type == kJsonParse_Token_Object);
-    _json_tokenise(&tokens, root->_slice);
-    _json_parse_token_t version = json_value(&tokens, "\"version\"");
+    json_tokenise(&tokens, root->_slice);
+    json_token_t version = json_value(&tokens, "\"version\"");
     assert(version._type == kJsonParse_Token_Object);
     vector_clear(&tokens);
-     _json_tokenise(&tokens, version._slice);
-    _json_parse_token_t major = json_value(&tokens, "\"major\"");
+    json_tokenise(&tokens, version._slice);
+    json_token_t major = json_value(&tokens, "\"major\"");
     long long major_version = strtoll(major._slice._ptr, NULL, 10);
 
     printf("found match %d, at %s\n", major_version, major._slice._ptr);
@@ -577,9 +582,11 @@ int main(void)
         
     test_fixed_allocator();
     test_linear_allocator();
+    test_arena_allocator_allocator();
 
     test_json();
 
+#if TODO
     //dump_index(pdb_index_load_from_pdb_yml(), 0);
     pdb_index_load_from_pdb_yml("..\\build\\BOOTX64.YML");
     // RVA: offset from start of .text segment
@@ -601,6 +608,6 @@ int main(void)
     //test_io_file();
     //ui_test_loop();
     //test_line_editor();
-
+#endif
     return 0;
 }

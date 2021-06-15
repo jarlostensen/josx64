@@ -7,7 +7,7 @@
 
 const char_array_slice_t kEmptySlice = { ._ptr = 0, ._length = 0 };
 
-bool char_array_slice_match_str(char_array_slice_t* slice, const char* str) {
+_JOS_API_FUNC bool char_array_slice_match_str(char_array_slice_t* slice, const char* str) {
     
     if(slice_is_empty(slice) || str_is_empty(str) ) {
         return false;
@@ -25,7 +25,7 @@ bool char_array_slice_match_str(char_array_slice_t* slice, const char* str) {
     return n == slice->_length;
 }
 
-bool char_array_slice_equals(char_array_slice_t prefix, char_array_slice_t candidate) {
+_JOS_API_FUNC bool char_array_slice_equals(char_array_slice_t prefix, char_array_slice_t candidate) {
     
     if (slice_is_empty(&prefix) || slice_is_empty(&candidate)) {
         return false;

@@ -29,6 +29,7 @@ _JOS_API_FUNC linear_allocator_t* linear_allocator_create(void* memory, size_t s
 
     linalloc->_super.alloc = (jos_allocator_alloc_func_t)linear_allocator_alloc;
     linalloc->_super.free = 0;
+    linalloc->_super.realloc = 0;
 
     return linalloc;
 }
