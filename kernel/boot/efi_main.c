@@ -48,23 +48,12 @@ peutil_pe_context_t _pe_ctx;
 #define _EFI_PRINT(s)\
 g_st->con_out->output_string(g_st->con_out, s)
 
-struct _debugger_serial_packet {
-    
-    uint32_t        _id;
-    uint32_t        _length;
 
-} JOS_PACKED;
-typedef struct _debugger_serial_packet debugger_serial_packet_t;
 
 static void test_send_back_some_data_to_debugger(void) {    
     //TEST send some data back to the debugger
-    uint8_t buffer[2*sizeof(uint32_t)+sizeof(uintptr_t)];
-    debugger_serial_packet_t* packet = (debugger_serial_packet_t*)buffer;
-    packet->_id = 0x12345678;
-    packet->_length = sizeof(uintptr_t);
-    *(uintptr_t*)(packet+1) = (uintptr_t)_lip->image_base;
-    serial_write(kCom1, (const char*)buffer, sizeof(buffer));
-
+    debugger_send_packet(0x12345678, &_lip->image_base, sizeof(_lip->image_base));
+    
     char json_buffer[1024];
     IO_FILE stream;
     memset(&stream,0,sizeof(FILE));
@@ -92,10 +81,8 @@ static void test_send_back_some_data_to_debugger(void) {
         json_write_string(&ctx, "bar");
     json_write_object_end(&ctx);
 
-    packet->_id = 42;
-    packet->_length = ftell(&stream);
-    serial_write(kCom1, (const char*)buffer, 2*sizeof(uint32_t));
-    serial_write(kCom1, json_buffer, packet->_length);
+    uint32_t json_size = (uint32_t)ftell(&stream);
+    debugger_send_packet(42, json_buffer, json_size);
 }
 
 // ==============================================================

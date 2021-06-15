@@ -17,7 +17,7 @@ static bool _debugger_connected = false;
 
 #define FLAGS_TRAP_FLAG 0x100
 
-void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length) {
+_JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length) {
     
     ZydisDecoder decoder;
     ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
@@ -124,12 +124,12 @@ static void _int_3_handler(const interrupt_stack_t * context) {
     output_console_line_break();
 }
 
-void debugger_initialise(void) {
+_JOS_API_FUNC void debugger_initialise(void) {
     interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=0x3, ._handler=_int_3_handler });
     output_console_output_string(L"debug handler initialised\n");
 }
 
-void debugger_wait_for_connection(void) {
+_JOS_API_FUNC void debugger_wait_for_connection(void) {
     
     static const char dbg_conn_id[4] = {'j','o','s','x'};
     int conn_id_pos = 0;
@@ -150,7 +150,19 @@ void debugger_wait_for_connection(void) {
     _debugger_connected = true;
 }
 
-bool debugger_is_connected(void) {
+_JOS_API_FUNC bool debugger_is_connected(void) {
     return _debugger_connected;
 }
 
+_JOS_API_FUNC void debugger_send_packet(uint32_t id, void* data, uint32_t length) {
+    if ( !_debugger_connected ) {
+        return;
+    }
+    debugger_serial_packet_t packet = { ._id = id, ._length = length };
+    serial_write(kCom1, (const char*)&packet, sizeof(packet));
+    serial_write(kCom1, data, length);
+}
+
+// _JOS_API_FUNC bool debugger_read_packet_header(debugger_serial_packet_t* packet) {
+//     return false;
+// }

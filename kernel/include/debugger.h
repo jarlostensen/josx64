@@ -4,15 +4,27 @@
 #include <jos.h>
 
 // to be called after early initialisation of interrupts
-void debugger_initialise(void);
+_JOS_API_FUNC void debugger_initialise(void);
 // outputs disassembly to the console 
-void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length);
+_JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length);
+
+typedef struct _debugger_serial_packet {
+    
+    uint32_t        _id;
+    uint32_t        _length;
+
+} JOS_PACKED;
+typedef struct _debugger_serial_packet debugger_serial_packet_t;
 
 // waits for an establishes a connection with the remote debugger
 // subsequently the "debugger_is_connected" function will return true
-void debugger_wait_for_connection(void);
+_JOS_API_FUNC void debugger_wait_for_connection(void);
 
 // true if we're connected to a debugger...obviously
-bool debugger_is_connected(void);
+_JOS_API_FUNC bool debugger_is_connected(void);
+
+_JOS_API_FUNC void debugger_send_packet(uint32_t id, void* data, uint32_t length);
+_JOS_API_FUNC bool debugger_read_packet_header(debugger_serial_packet_t* packet);
+
 
 #endif // _JOS_KERNEL_DEBUGGER_H
