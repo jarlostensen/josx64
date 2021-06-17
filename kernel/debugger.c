@@ -6,6 +6,7 @@
 #include <kernel.h>
 #include <debugger.h>
 #include <serial.h>
+#include <extensions/json.h>
 
 #include <Zydis/Zydis.h>
 
@@ -81,47 +82,88 @@ _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffe
 
 static void _int_3_handler(const interrupt_stack_t * context) {
 
-    _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx\n", context->rip);
+    if ( debugger_is_connected() ) {
+        // -------------------------------------- running in debugger
 
-    //ZZZ: ============================================================
-    wchar_t buf[1024];
-    const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
+        char json_buffer[1024];
+        IO_FILE stream;
+        memset(&stream,0,sizeof(FILE));
+        _io_file_from_buffer(&stream, json_buffer, sizeof(json_buffer));
 
-    swprintf(buf,bufcount,L"\nDBGBREAK\n\tat 0x%016llx\n", context->rip);
-    output_console_output_string(buf);
+        json_writer_context_t ctx;
+        json_initialise_writer(&ctx, &stream);
 
-    // dump registers
-    swprintf(buf, bufcount,
-        L"\trax 0x%016llx\trbx 0x%016llx\n\trcx 0x%016llx\trdx 0x%016llx\n"
-        L"\trsi 0x%016llx\trdi 0x%016llx\n\trbp 0x%016llx\trsp 0x%016llx\n"
-        L"\tr8  0x%016llx\tr9  0x%016llx\n\tr10 0x%016llx\tr11 0x%016llx\n"
-        L"\tr12 0x%016llx\tr13 0x%016llx\n\tr14 0x%016llx\tr15 0x%016llx\n"
-        L"\tcs 0x%04llx\tss 0x%04llx\n\n",
-        context->rax, context->rbx, context->rcx, context->rdx,
-        context->rsi, context->rdi, context->rbp, context->rsp,
-        context->r8, context->r9, context->r10, context->r11,
-        context->r12, context->r13, context->r14, context->r15,
-        context->cs, context->ss
-    );
-    output_console_line_break();
-    output_console_output_string(buf);
-    
-    // stack dump
-    const uint64_t* stack = (const uint64_t*)context->rsp;
-    swprintf(buf, bufcount, 
-        L"stack @ 0x%016llx:\n\t"
-        L"0x%016llx\n\t0x%016llx\n\t0x%016llx\n\t0x%016llx\n\t"
-        L"0x%016llx\n\t0x%016llx\n\t0x%016llx\n\t0x%016llx\n\n",
-        stack,
-        stack[0], stack[1], stack[2], stack[3],
-        stack[4], stack[5], stack[6], stack[7]
-    );    
-    output_console_output_string(buf);
+        //TESTING: use binary or base64 for bulk data
+        json_write_object_start(&ctx);
+            json_write_key(&ctx, "rip");
+            json_write_number(&ctx, (long long)context->rip);
+            json_write_key(&ctx, "rax");
+            json_write_number(&ctx, (long long)context->rax);
+            json_write_key(&ctx, "rbx");
+            json_write_number(&ctx, (long long)context->rbx);
+            json_write_key(&ctx, "rcx");
+            json_write_number(&ctx, (long long)context->rcx);
+            json_write_key(&ctx, "rdx");
+            json_write_number(&ctx, (long long)context->rdx);
+            json_write_key(&ctx, "rdi");
+            json_write_number(&ctx, (long long)context->rdi);
+            json_write_key(&ctx, "rsi");
+            json_write_number(&ctx, (long long)context->rsi);
+            json_write_key(&ctx, "cs");
+            json_write_number(&ctx, (long long)context->cs);
+            json_write_key(&ctx, "ss");
+            json_write_number(&ctx, (long long)context->ss);
+        json_write_object_end(&ctx);
+        
+        uint32_t json_size = (uint32_t)ftell(&stream);
+        debugger_send_packet(kDebuggerPacket_Int3, json_buffer, json_size);
 
-    wchar_t output_buffer[512];
-    debugger_disasm((void*)context->rip, 50, output_buffer, 512);
-    output_console_output_string(output_buffer);
-    output_console_line_break();
+        //TODO: wait for the debugger to send back a command 
+    }
+    else {
+        // -------------------------------------- running without a debugger
+        _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx\n", context->rip);
+
+        //ZZZ: ============================================================
+        wchar_t buf[1024];
+        const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
+
+        swprintf(buf,bufcount,L"\nDBGBREAK\n\tat 0x%016llx\n", context->rip);
+        output_console_output_string(buf);
+
+        // dump registers
+        swprintf(buf, bufcount,
+            L"\trax 0x%016llx\trbx 0x%016llx\n\trcx 0x%016llx\trdx 0x%016llx\n"
+            L"\trsi 0x%016llx\trdi 0x%016llx\n\trbp 0x%016llx\trsp 0x%016llx\n"
+            L"\tr8  0x%016llx\tr9  0x%016llx\n\tr10 0x%016llx\tr11 0x%016llx\n"
+            L"\tr12 0x%016llx\tr13 0x%016llx\n\tr14 0x%016llx\tr15 0x%016llx\n"
+            L"\tcs 0x%04llx\tss 0x%04llx\n\n",
+            context->rax, context->rbx, context->rcx, context->rdx,
+            context->rsi, context->rdi, context->rbp, context->rsp,
+            context->r8, context->r9, context->r10, context->r11,
+            context->r12, context->r13, context->r14, context->r15,
+            context->cs, context->ss
+        );
+        output_console_line_break();
+        output_console_output_string(buf);
+        
+        // stack dump
+        const uint64_t* stack = (const uint64_t*)context->rsp;
+        swprintf(buf, bufcount, 
+            L"stack @ 0x%016llx:\n\t"
+            L"0x%016llx\n\t0x%016llx\n\t0x%016llx\n\t0x%016llx\n\t"
+            L"0x%016llx\n\t0x%016llx\n\t0x%016llx\n\t0x%016llx\n\n",
+            stack,
+            stack[0], stack[1], stack[2], stack[3],
+            stack[4], stack[5], stack[6], stack[7]
+        );    
+        output_console_output_string(buf);
+
+        wchar_t output_buffer[512];
+        debugger_disasm((void*)context->rip, 50, output_buffer, 512);
+        output_console_output_string(output_buffer);
+        output_console_line_break();
+    }
 }
 
 _JOS_API_FUNC void debugger_initialise(void) {

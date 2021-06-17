@@ -51,8 +51,6 @@ g_st->con_out->output_string(g_st->con_out, s)
 
 
 static void test_send_back_some_data_to_debugger(void) {    
-    //TEST send some data back to the debugger
-    debugger_send_packet(0x12345678, &_lip->image_base, sizeof(_lip->image_base));
     
     char json_buffer[1024];
     IO_FILE stream;
@@ -355,7 +353,8 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     // everything needed to run anything; interrupts, clocks, keyboard...etc...
     kernel_runtime_init();
 
-    // TEST
+    // TESTS
+    _JOS_GDB_DBGBREAK();
     _JOS_KTRACE_CHANNEL("efi_main","0 pointer access check");
     pagetables_enable_nullptr_gpf();
     char* tmp = 0;

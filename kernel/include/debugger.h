@@ -8,6 +8,7 @@ typedef enum _debugger_packet_id {
 
     kDebuggerPacket_Trace,
     kDebuggerPacket_KernelConnectionInfo,
+    kDebuggerPacket_Int3,
     
     kDebuggerPacket_Size, 
 
