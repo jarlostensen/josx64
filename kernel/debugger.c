@@ -14,8 +14,8 @@
 #include <output_console.h>
 
 static bool _debugger_connected = false;
-
 #define FLAGS_TRAP_FLAG 0x100
+
 
 _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length) {
     
@@ -154,15 +154,21 @@ _JOS_API_FUNC bool debugger_is_connected(void) {
     return _debugger_connected;
 }
 
-_JOS_API_FUNC void debugger_send_packet(uint32_t id, void* data, uint32_t length) {
+_JOS_API_FUNC void debugger_send_packet(debugger_packet_id_t id, void* data, uint32_t length) {
     if ( !_debugger_connected ) {
         return;
     }
-    debugger_serial_packet_t packet = { ._id = id, ._length = length };
+    debugger_serial_packet_t packet = { ._id = (uint32_t)id, ._length = length };
     serial_write(kCom1, (const char*)&packet, sizeof(packet));
     serial_write(kCom1, data, length);
 }
 
-// _JOS_API_FUNC bool debugger_read_packet_header(debugger_serial_packet_t* packet) {
-//     return false;
-// }
+_JOS_API_FUNC void debugger_read_packet_header(debugger_serial_packet_t* packet) {    
+    // simply read 8 raw bytes into the structure
+    serial_read(kCom1, (char*)packet, sizeof(debugger_serial_packet_t));
+}
+
+_JOS_API_FUNC void debugger_read_packet_body(debugger_serial_packet_t* packet, void* buffer, uint32_t buffer_size) {
+    assert(packet->_length <= buffer_size);
+    serial_read(kCom1, (char*)buffer, packet->_length);
+}

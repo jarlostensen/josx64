@@ -73,6 +73,16 @@ void serial_write(short port, const char* data, size_t len)
     }
 }
 
+void serial_read(short port, char* data, size_t len)
+{
+    //_JOS_ASSERT(port==kCom1 || port==kCom2);
+    while(len)
+    {
+        *data++ = serial_getch(port, 1);
+        len--;
+    }
+}
+
 void serial_write_str(short port, const char* str)
 {
     // _JOS_ASSERT(port==kCom1 || port==kCom2);

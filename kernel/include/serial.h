@@ -21,3 +21,5 @@ void serial_flush(short port);
 void serial_write(short port, const char* data, size_t len);
 // write a 0 terminated string to the port
 void serial_write_str(short port, const char* str);
+// read up to len bytes (blocking) from serial port
+void serial_read(short port, char* data, size_t len);

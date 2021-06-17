@@ -22,15 +22,14 @@ void trace_buf(const char* __restrict channel, const void* __restrict data, size
     length = length < (sizeof(buffer)-written-2) ? length:(sizeof(buffer)-written-2);
     memcpy(buffer+written, data, length);
     
-    buffer[written+0] = '\r';
-    buffer[written+1] = '\n';
-    buffer[written+2] = 0;
-
-    if (!debugger_is_connected()) {
+    if (!debugger_is_connected()) {    
+        buffer[written+0] = '\r';
+        buffer[written+1] = '\n';
+        buffer[written+2] = 0;
         serial_write(kCom1, buffer, written+length+3);
     }
     else {
-        //TODO: send the data as a packet instead of as raw text
+        debugger_send_packet(kDebuggerPacket_Trace, buffer, written+length);
     }
 }
 
@@ -49,15 +48,14 @@ void trace(const char* __restrict channel, const char* __restrict format,...) {
 		written = snprintf(buffer, sizeof(buffer), "[%lld] ", _ticks++);
     written += vsnprintf(buffer+written, sizeof(buffer)-written, format, parameters);
     va_end(parameters);
-
-    buffer[written+0] = '\r';
-    buffer[written+1] = '\n';
-    buffer[written+2] = 0;
-
-    if (!debugger_is_connected()) {
+    
+    if (!debugger_is_connected()) {        
+        buffer[written+0] = '\r';
+        buffer[written+1] = '\n';
+        buffer[written+2] = 0;
         serial_write(kCom1, buffer, written+3);
     }
     else {
-        //TODO: send the data as a packet instead of as raw text
+        debugger_send_packet(kDebuggerPacket_Trace, buffer, written);
     }
 }

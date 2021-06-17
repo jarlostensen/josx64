@@ -77,12 +77,10 @@ static void test_send_back_some_data_to_debugger(void) {
             json_write_key(&ctx, "base");
             json_write_number(&ctx, (long long)_lip->image_base);
         json_write_object_end(&ctx);
-        json_write_key(&ctx, "foo");
-        json_write_string(&ctx, "bar");
     json_write_object_end(&ctx);
 
     uint32_t json_size = (uint32_t)ftell(&stream);
-    debugger_send_packet(42, json_buffer, json_size);
+    debugger_send_packet(kDebuggerPacket_KernelConnectionInfo, json_buffer, json_size);
 }
 
 // ==============================================================
