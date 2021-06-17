@@ -6,7 +6,9 @@
 #include <kernel.h>
 #include <debugger.h>
 #include <serial.h>
+#include <linear_allocator.h>
 #include <extensions/json.h>
+#include <extensions/base64.h>
 
 #include <Zydis/Zydis.h>
 
@@ -82,39 +84,30 @@ _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffe
 
 static void _int_3_handler(const interrupt_stack_t * context) {
 
+    _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx", context->rip);
+
     if ( debugger_is_connected() ) {
         // -------------------------------------- running in debugger
 
+        char register_buffer[1024];
+        linear_allocator_t * buffer_allocator = linear_allocator_create(register_buffer, sizeof(register_buffer));
+        size_t out_len;
+        const char* encoded = (const char*)base64_encode((const unsigned char*)context, sizeof(interrupt_stack_t), &out_len, (jos_allocator_t*)buffer_allocator);
+        
         char json_buffer[1024];
         IO_FILE stream;
         memset(&stream,0,sizeof(FILE));
         _io_file_from_buffer(&stream, json_buffer, sizeof(json_buffer));
-
         json_writer_context_t ctx;
         json_initialise_writer(&ctx, &stream);
 
-        //TESTING: use binary or base64 for bulk data
         json_write_object_start(&ctx);
             json_write_key(&ctx, "rip");
             json_write_number(&ctx, (long long)context->rip);
-            json_write_key(&ctx, "rax");
-            json_write_number(&ctx, (long long)context->rax);
-            json_write_key(&ctx, "rbx");
-            json_write_number(&ctx, (long long)context->rbx);
-            json_write_key(&ctx, "rcx");
-            json_write_number(&ctx, (long long)context->rcx);
-            json_write_key(&ctx, "rdx");
-            json_write_number(&ctx, (long long)context->rdx);
-            json_write_key(&ctx, "rdi");
-            json_write_number(&ctx, (long long)context->rdi);
-            json_write_key(&ctx, "rsi");
-            json_write_number(&ctx, (long long)context->rsi);
-            json_write_key(&ctx, "cs");
-            json_write_number(&ctx, (long long)context->cs);
-            json_write_key(&ctx, "ss");
-            json_write_number(&ctx, (long long)context->ss);
+            json_write_key(&ctx, "stackframe");
+            json_write_string(&ctx, encoded);
         json_write_object_end(&ctx);
-        
+
         uint32_t json_size = (uint32_t)ftell(&stream);
         debugger_send_packet(kDebuggerPacket_Int3, json_buffer, json_size);
 

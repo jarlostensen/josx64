@@ -12,7 +12,7 @@ void trace_buf(const char* __restrict channel, const void* __restrict data, size
 
     if(!data || !length)
         return;
-    char buffer[512];
+    char buffer[1024];
 	int written;
 	if(channel)
 		written = snprintf(buffer, sizeof(buffer), "[%lld:%s] ", _ticks++, channel);
@@ -38,7 +38,7 @@ void trace(const char* __restrict channel, const char* __restrict format,...) {
     if(!format || !format[0])
         return;
     //ZZZ:
-    char buffer[256];
+    char buffer[1024];
     va_list parameters;
     va_start(parameters, format);
 	int written;

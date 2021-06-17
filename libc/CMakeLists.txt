@@ -5,6 +5,7 @@ target_sources(c PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/string/memset.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/string/strlen.c"    
     "${CMAKE_CURRENT_SOURCE_DIR}/extensions/slices.c"  
+    "${CMAKE_CURRENT_SOURCE_DIR}/extensions/base64.c"  
     "${CMAKE_CURRENT_SOURCE_DIR}/internal/_vprint.c"    
     "${CMAKE_CURRENT_SOURCE_DIR}/internal/_wchar.c"    
     "${CMAKE_CURRENT_SOURCE_DIR}/math/pow.c"

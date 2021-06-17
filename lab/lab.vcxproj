@@ -151,6 +151,7 @@
     <ClCompile Include="..\kernel\pe.c" />
     <ClCompile Include="..\kernel\programs\scroller.c" />
     <ClCompile Include="..\kernel\video.c" />
+    <ClCompile Include="..\libc\extensions\base64.c" />
     <ClCompile Include="..\libc\extensions\pdb_index.c" />
     <ClCompile Include="..\libc\extensions\slices.c" />
     <ClCompile Include="..\libc\internal\_vprint.c" />

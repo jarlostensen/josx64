@@ -78,6 +78,9 @@
     <ClCompile Include="test_collections.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\libc\extensions\base64.c">
+      <Filter>Header Files\libc</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\libc\include\extensions\pdb_index.h">

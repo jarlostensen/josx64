@@ -11,6 +11,7 @@
 #include <stdarg.h>
 #include <conio.h>
 
+
 #include <windows.h>
 
 #define _JOS_IMPLEMENT_CONTAINERS
@@ -18,6 +19,7 @@
 
 #include "../libc/internal/include/libc_internal.h"
 #include "../kernel/include/hex_dump.h"
+#include "../kernel/include/interrupts.h"
 #include "../kernel/include/pe.h"
 #include "../kernel/include/video.h"
 #include "../kernel/include/output_console.h"
@@ -28,6 +30,8 @@
 #include "../deps/font8x8/font8x8.h"
 #include "../libc/internal/include/_file.h"
 #include "../libc/include/extensions/json.h"
+#include "../libc/include/extensions/base64.h"
+#include "../kernel/include/linear_allocator.h"
 #include "../kernel/include/arena_allocator.h"
 
 void test_fixed_allocator(void);
@@ -201,6 +205,13 @@ static void test_json(void) {
     json_writer_context_t ctx;
     json_initialise_writer(&ctx, stdout);
 
+	char register_buffer[512];
+	linear_allocator_t* buffer_allocator = linear_allocator_create(register_buffer, sizeof(register_buffer));
+	size_t out_len = 0;
+	interrupt_stack_t stack;
+	memset(&stack, 0xcd, sizeof(stack));
+	unsigned char* encoded = base64_encode((const unsigned char*)&stack, sizeof(interrupt_stack_t), &out_len, (jos_allocator_t*)buffer_allocator);
+
     json_write_object_start(&ctx);
         json_write_key(&ctx, "version");
         json_write_object_start(&ctx);
@@ -216,8 +227,8 @@ static void test_json(void) {
             json_write_key(&ctx, "base");
             json_write_number(&ctx, 0x12345678abcdef00);
         json_write_object_end(&ctx);
-        json_write_key(&ctx, "foo");
-        json_write_string(&ctx, "bar");
+        json_write_key(&ctx, "binary");
+        json_write_string(&ctx, encoded);
     json_write_object_end(&ctx);
     
     printf("\n");
