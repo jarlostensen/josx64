@@ -164,7 +164,7 @@ _JOS_API_FUNC void debugger_initialise(void) {
     output_console_output_string(L"debug handler initialised\n");
 }
 
-_JOS_API_FUNC void debugger_wait_for_connection(void) {
+_JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uint64_t image_base) {
     
     static const char dbg_conn_id[4] = {'j','o','s','x'};
     int conn_id_pos = 0;
@@ -183,6 +183,36 @@ _JOS_API_FUNC void debugger_wait_for_connection(void) {
     }
     
     _debugger_connected = true;
+
+     char json_buffer[1024];
+    IO_FILE stream;
+    memset(&stream,0,sizeof(FILE));
+    _io_file_from_buffer(&stream, json_buffer, sizeof(json_buffer));
+
+    json_writer_context_t ctx;
+    json_initialise_writer(&ctx, &stream);
+
+    json_write_object_start(&ctx);
+        json_write_key(&ctx, "version");
+        json_write_object_start(&ctx);
+            json_write_key(&ctx, "major");
+            json_write_number(&ctx, 0);
+            json_write_key(&ctx, "minor");
+            json_write_number(&ctx, 1);
+            json_write_key(&ctx, "patch");
+            json_write_number(&ctx, 0);
+        json_write_object_end(&ctx);
+        json_write_key(&ctx, "image_info");
+        json_write_object_start(&ctx);
+            json_write_key(&ctx, "base");
+            json_write_number(&ctx, (long long)image_base);
+            json_write_key(&ctx, "entry_point");
+            json_write_number(&ctx, (long long)peutil_entry_point(pe_ctx));
+        json_write_object_end(&ctx);
+    json_write_object_end(&ctx);
+
+    uint32_t json_size = (uint32_t)ftell(&stream);
+    debugger_send_packet(kDebuggerPacket_KernelConnectionInfo, json_buffer, json_size);
 }
 
 _JOS_API_FUNC bool debugger_is_connected(void) {
@@ -206,4 +236,8 @@ _JOS_API_FUNC void debugger_read_packet_header(debugger_serial_packet_t* packet)
 _JOS_API_FUNC void debugger_read_packet_body(debugger_serial_packet_t* packet, void* buffer, uint32_t buffer_size) {
     assert(packet->_length <= buffer_size);
     serial_read(kCom1, (char*)buffer, packet->_length);
+}
+
+_JOS_API_FUNC void debugger_ext_break(void) {
+    _JOS_GDB_DBGBREAK();
 }

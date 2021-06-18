@@ -7,6 +7,7 @@ typedef void* region_handle_t;
 
 jo_status_t output_console_initialise(void);
 void output_console_clear_screen(void);
+uint32_t output_console_get_colour(void);
 void output_console_set_colour(uint32_t colour);
 void output_console_set_bg_colour(uint32_t bg_colour);
 jo_status_t output_console_set_font(const uint8_t* font, size_t width, size_t height);

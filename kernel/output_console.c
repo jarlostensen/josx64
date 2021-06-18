@@ -69,6 +69,10 @@ void output_console_set_colour(uint32_t colour) {
     _active_context->_colour = colour;
 }
 
+uint32_t output_console_get_colour(void) {
+    return _active_context->_colour;
+}
+
 void output_console_set_bg_colour(uint32_t bg_colour) {
     _active_context->_bg_colour = bg_colour;
 }

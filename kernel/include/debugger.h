@@ -2,6 +2,7 @@
 #define _JOS_KERNEL_DEBUGGER_H
 
 #include <jos.h>
+#include <pe.h>
 
 // packet ids used to decode data sent to or recieved from the debugger
 typedef enum _debugger_packet_id {
@@ -40,7 +41,7 @@ _JOS_INLINE_FUNC unsigned int debugger_packet_length(debugger_serial_packet_t* p
 
 // waits for an establishes a connection with the remote debugger
 // subsequently the "debugger_is_connected" function will return true
-_JOS_API_FUNC void debugger_wait_for_connection(void);
+_JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uint64_t image_base);
 
 // true if we're connected to a debugger...obviously
 _JOS_API_FUNC bool debugger_is_connected(void);
@@ -48,5 +49,7 @@ _JOS_API_FUNC bool debugger_is_connected(void);
 _JOS_API_FUNC void debugger_send_packet(debugger_packet_id_t id, void* data, uint32_t length);
 _JOS_API_FUNC void debugger_read_packet_header(debugger_serial_packet_t* packet);
 _JOS_API_FUNC void debugger_read_packet_body(debugger_serial_packet_t* packet, void* buffer, uint32_t buffer_size);
+
+_JOS_API_FUNC void debugger_ext_break(void);
 
 #endif // _JOS_KERNEL_DEBUGGER_H

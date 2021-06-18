@@ -49,38 +49,6 @@ peutil_pe_context_t _pe_ctx;
 g_st->con_out->output_string(g_st->con_out, s)
 
 
-
-static void test_send_back_some_data_to_debugger(void) {    
-    
-    char json_buffer[1024];
-    IO_FILE stream;
-    memset(&stream,0,sizeof(FILE));
-    _io_file_from_buffer(&stream, json_buffer, sizeof(json_buffer));
-
-    json_writer_context_t ctx;
-    json_initialise_writer(&ctx, &stream);
-
-    json_write_object_start(&ctx);
-        json_write_key(&ctx, "version");
-        json_write_object_start(&ctx);
-            json_write_key(&ctx, "major");
-            json_write_number(&ctx, 0);
-            json_write_key(&ctx, "minor");
-            json_write_number(&ctx, 1);
-            json_write_key(&ctx, "patch");
-            json_write_number(&ctx, 0);
-        json_write_object_end(&ctx);
-        json_write_key(&ctx, "image_info");
-        json_write_object_start(&ctx);
-            json_write_key(&ctx, "base");
-            json_write_number(&ctx, (long long)_lip->image_base);
-        json_write_object_end(&ctx);
-    json_write_object_end(&ctx);
-
-    uint32_t json_size = (uint32_t)ftell(&stream);
-    debugger_send_packet(kDebuggerPacket_KernelConnectionInfo, json_buffer, json_size);
-}
-
 // ==============================================================
 void exit_boot_services(CEfiHandle h) {
 
@@ -142,10 +110,6 @@ void uefi_init(CEfiHandle h) {
     if ( _JO_FAILED(status) ) {
         halt_cpu();
     }
-
-//TESTING:
-    debugger_wait_for_connection();
-    test_send_back_some_data_to_debugger();
 
     // we'll use this allocator for various incidentals
     _efi_allocator = linear_allocator_create(efi_app_memory, EFI_APP_MEMORY_POOL_SIZE);
@@ -352,6 +316,14 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 
     // everything needed to run anything; interrupts, clocks, keyboard...etc...
     kernel_runtime_init();
+
+    // start debugger
+    uint32_t col = output_console_get_colour();
+    output_console_set_colour(0xff2222);
+    output_console_output_string(L"\n\nwaiting for debugger...");
+    debugger_wait_for_connection(&_pe_ctx, (uint64_t)_lip->image_base);
+    output_console_output_string(L"connected\n\n");
+    output_console_set_colour(col);
 
     // TESTS
     _JOS_GDB_DBGBREAK();
