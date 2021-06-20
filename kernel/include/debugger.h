@@ -7,9 +7,13 @@
 // packet ids used to decode data sent to or recieved from the debugger
 typedef enum _debugger_packet_id {
 
+    kDebuggerPacket_Continue,
     kDebuggerPacket_Trace,
     kDebuggerPacket_KernelConnectionInfo,
     kDebuggerPacket_Int3,
+    kDebuggerPacket_ReadTargetMemory,
+    kDebuggerPacket_ReadTargetMemory_Resp,
+    kDebuggerPacket_WriteTargetMemory,
     
     kDebuggerPacket_Size, 
 

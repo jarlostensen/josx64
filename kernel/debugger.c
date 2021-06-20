@@ -19,6 +19,54 @@
 static bool _debugger_connected = false;
 #define FLAGS_TRAP_FLAG 0x100
 
+struct _debugger_packet_rw_target_memory {
+
+    uint64_t    _address;
+    uint32_t    _length;
+
+} _JOS_PACKED;
+ typedef struct _debugger_packet_rw_target_memory debugger_packet_rw_target_memory_t;
+
+
+static void _debugger_loop(void) {
+    if ( !debugger_is_connected() )
+        return;
+
+    bool continue_run = false;
+    while(!continue_run) {
+        debugger_serial_packet_t packet;
+        debugger_read_packet_header(&packet);
+        switch(packet._id) {
+            case kDebuggerPacket_ReadTargetMemory:
+            {                
+                debugger_packet_rw_target_memory_t rt_packet;
+                debugger_read_packet_body(&packet, (void*)&rt_packet, sizeof(rt_packet));
+                if( rt_packet._length ) {
+                    // serialise directly from memory
+                    debugger_send_packet(kDebuggerPacket_ReadTargetMemory_Resp, (void*)rt_packet._address, rt_packet._length);
+                }
+            }
+            break;            
+            case kDebuggerPacket_WriteTargetMemory:
+            {
+                debugger_packet_rw_target_memory_t rt_packet;
+                debugger_read_packet_body(&packet, (void*)&rt_packet, sizeof(rt_packet));
+                //TODO: sanity checks!
+                if( rt_packet._length ) {
+                    // serialise directly to memory
+                    serial_read(kCom1, (char*)rt_packet._address, rt_packet._length);
+                }
+            }
+            break;
+            case kDebuggerPacket_Continue:
+            {
+                _JOS_KTRACE_CHANNEL("debugger", "continuing execution");
+                continue_run = true;
+            }
+            default:;
+        }
+    }
+}
 
 _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length) {
     
@@ -111,7 +159,8 @@ static void _int_3_handler(const interrupt_stack_t * context) {
         uint32_t json_size = (uint32_t)ftell(&stream);
         debugger_send_packet(kDebuggerPacket_Int3, json_buffer, json_size);
 
-        //TODO: wait for the debugger to send back a command 
+        // enter loop waiting for further instructions
+        _debugger_loop();
     }
     else {
         // -------------------------------------- running without a debugger
@@ -225,7 +274,9 @@ _JOS_API_FUNC void debugger_send_packet(debugger_packet_id_t id, void* data, uin
     }
     debugger_serial_packet_t packet = { ._id = (uint32_t)id, ._length = length };
     serial_write(kCom1, (const char*)&packet, sizeof(packet));
-    serial_write(kCom1, data, length);
+    if ( length ) {
+        serial_write(kCom1, data, length);
+    }
 }
 
 _JOS_API_FUNC void debugger_read_packet_header(debugger_serial_packet_t* packet) {    
@@ -234,6 +285,8 @@ _JOS_API_FUNC void debugger_read_packet_header(debugger_serial_packet_t* packet)
 }
 
 _JOS_API_FUNC void debugger_read_packet_body(debugger_serial_packet_t* packet, void* buffer, uint32_t buffer_size) {
+    if( !packet->_length )
+        return;
     assert(packet->_length <= buffer_size);
     serial_read(kCom1, (char*)buffer, packet->_length);
 }
