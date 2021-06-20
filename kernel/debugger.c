@@ -40,8 +40,9 @@ static void _debugger_loop(void) {
             case kDebuggerPacket_ReadTargetMemory:
             {                
                 debugger_packet_rw_target_memory_t rt_packet;
-                debugger_read_packet_body(&packet, (void*)&rt_packet, sizeof(rt_packet));
-                if( rt_packet._length ) {
+                debugger_read_packet_body(&packet, (void*)&rt_packet, packet._length);
+                _JOS_KTRACE_CHANNEL("debugger", "kDebuggerPacket_ReadTargetMemory 0x%llx, %d bytes", rt_packet._address, rt_packet._length);
+                if( rt_packet._length ) {                    
                     // serialise directly from memory
                     debugger_send_packet(kDebuggerPacket_ReadTargetMemory_Resp, (void*)rt_packet._address, rt_packet._length);
                 }
@@ -63,7 +64,12 @@ static void _debugger_loop(void) {
                 _JOS_KTRACE_CHANNEL("debugger", "continuing execution");
                 continue_run = true;
             }
-            default:;
+            break;
+            default:
+            {
+                _JOS_KTRACE_CHANNEL("debugger", "unhandled packet id %d, length %d", packet._id, packet._length);
+            }
+            break;
         }
     }
 }
