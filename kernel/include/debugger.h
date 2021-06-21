@@ -14,6 +14,7 @@ typedef enum _debugger_packet_id {
     kDebuggerPacket_ReadTargetMemory,
     kDebuggerPacket_ReadTargetMemory_Resp,
     kDebuggerPacket_WriteTargetMemory,
+    kDebuggerPacket_GPF,
     
     kDebuggerPacket_Size, 
 

@@ -161,6 +161,7 @@ static void idt_init(idt_entry_t* entry, void* handler) {
 
 void interrupts_isr_handler(interrupt_stack_t *stack) {
 
+    bool handled = false;
     if ( _interrupts_enabled )
     {        
         isr_handler_func_t handler = _isr_handlers[stack->handler_id]._handler;
@@ -172,20 +173,24 @@ void interrupts_isr_handler(interrupt_stack_t *stack) {
             x86_64_sti();       
             handler(&ctx);
             x86_64_cli();
+            handled = true;
         }
     }
 
-    // and hard handling, like this one
-    if ( stack->handler_id == 0xd ) {
-        _JOS_KTRACE_CHANNEL(kInterruptsChannel, "#GPF: error code 0x%x, rip 0x%llx", stack->error_code,stack->rip);
-        wchar_t buf[512];
-        swprintf(buf,512,L"\nGPF, error code 0x%x: rip : 0x%016llx\n", 
-            stack->error_code,
-            stack->rip);
-        output_console_output_string(buf);
-        debugger_disasm((void*)stack->rip, 50, buf, 512);
-        output_console_output_string(buf);
-        halt_cpu();
+    if ( !handled ) {
+        // and default handling, like this one
+        static const uint64_t kGeneralProtectionFault = 0x0d;
+        if ( stack->handler_id == kGeneralProtectionFault ) {
+           _JOS_KTRACE_CHANNEL(kInterruptsChannel, "#GPF: error code 0x%x, rip 0x%llx", stack->error_code,stack->rip);
+            wchar_t buf[512];
+            swprintf(buf,512,L"\nGPF, error code 0x%x: rip : 0x%016llx\n", 
+                stack->error_code,
+                stack->rip);
+            output_console_output_string(buf);
+            debugger_disasm((void*)stack->rip, 50, buf, 512);
+            output_console_output_string(buf);
+            halt_cpu();
+        }
     }
 }
 

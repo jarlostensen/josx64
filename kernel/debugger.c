@@ -48,7 +48,7 @@ static void _debugger_loop(void) {
             {                
                 debugger_packet_rw_target_memory_t rt_packet;
                 debugger_read_packet_body(&packet, (void*)&rt_packet, packet._length);
-                _JOS_KTRACE_CHANNEL("debugger", "kDebuggerPacket_ReadTargetMemory 0x%llx, %d bytes", rt_packet._address, rt_packet._length);
+                //_JOS_KTRACE_CHANNEL("debugger", "kDebuggerPacket_ReadTargetMemory 0x%llx, %d bytes", rt_packet._address, rt_packet._length);
                 if( rt_packet._length ) {                    
                     // serialise directly from memory
                     debugger_send_packet(kDebuggerPacket_ReadTargetMemory_Resp, (void*)rt_packet._address, rt_packet._length);
@@ -143,7 +143,8 @@ _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffe
     output_buffer[output_buffer_length-1] = 0;
 }
 
-static void _int_3_handler(const interrupt_stack_t * context) {
+//NOTE: this handles both int 3 and GPFs if a debugger is connected
+static void _debugger_isr_handler(const interrupt_stack_t * context) {
 
     _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx", context->rip);
 
@@ -152,7 +153,16 @@ static void _int_3_handler(const interrupt_stack_t * context) {
 
         debugger_packet_bp_t bp_info;
         memcpy(&bp_info._stack, context, sizeof(interrupt_stack_t));
-        debugger_send_packet(kDebuggerPacket_Int3, &bp_info, sizeof(bp_info));
+
+        switch ( context->handler_id ) {
+            case 3:
+                debugger_send_packet(kDebuggerPacket_Int3, &bp_info, sizeof(bp_info));
+                break;
+            case 0xd:
+                debugger_send_packet(kDebuggerPacket_GPF, &bp_info, sizeof(bp_info));
+                break;
+            default:;
+        }
 
         // enter loop waiting for further instructions
         _debugger_loop();
@@ -204,7 +214,7 @@ static void _int_3_handler(const interrupt_stack_t * context) {
 }
 
 _JOS_API_FUNC void debugger_initialise(void) {
-    interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=0x3, ._handler=_int_3_handler });
+    interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=0x3, ._handler=_debugger_isr_handler });
     output_console_output_string(L"debug handler initialised\n");
 }
 
@@ -227,6 +237,8 @@ _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uin
     }
     
     _debugger_connected = true;
+    // from this point on we want to catch general protection faults
+    interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=0xd, ._handler=_debugger_isr_handler });
 
      char json_buffer[1024];
     IO_FILE stream;

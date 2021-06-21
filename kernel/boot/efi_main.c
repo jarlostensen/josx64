@@ -325,13 +325,6 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     output_console_output_string(L"connected\n\n");
     output_console_set_colour(col);
 
-    // TESTS
-    _JOS_GDB_DBGBREAK();
-    _JOS_KTRACE_CHANNEL("efi_main","0 pointer access check");
-    pagetables_enable_nullptr_gpf();
-    char* tmp = 0;
-    *tmp = 42;
-
     // ================================================================
 
     scroller_initialise(&(rect_t){
