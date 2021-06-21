@@ -9,6 +9,8 @@
 #include <linear_allocator.h>
 #include <extensions/json.h>
 #include <extensions/base64.h>
+#include <smp.h>
+#include <memory.h>
 
 #include <Zydis/Zydis.h>
 
@@ -19,13 +21,18 @@
 static bool _debugger_connected = false;
 #define FLAGS_TRAP_FLAG 0x100
 
-struct _debugger_packet_rw_target_memory {
+typedef struct _debugger_packet_rw_target_memory {
 
     uint64_t    _address;
     uint32_t    _length;
 
-} _JOS_PACKED;
- typedef struct _debugger_packet_rw_target_memory debugger_packet_rw_target_memory_t;
+} _JOS_PACKED debugger_packet_rw_target_memory_t;
+
+typedef struct _debugger_packet_bp {
+    interrupt_stack_t   _stack;
+    // ..+ control registers etc.
+
+} _JOS_PACKED debugger_packet_bp_t;
 
 
 static void _debugger_loop(void) {
@@ -143,27 +150,9 @@ static void _int_3_handler(const interrupt_stack_t * context) {
     if ( debugger_is_connected() ) {
         // -------------------------------------- running in debugger
 
-        char register_buffer[1024];
-        linear_allocator_t * buffer_allocator = linear_allocator_create(register_buffer, sizeof(register_buffer));
-        size_t out_len;
-        const char* encoded = (const char*)base64_encode((const unsigned char*)context, sizeof(interrupt_stack_t), &out_len, (jos_allocator_t*)buffer_allocator);
-        
-        char json_buffer[1024];
-        IO_FILE stream;
-        memset(&stream,0,sizeof(FILE));
-        _io_file_from_buffer(&stream, json_buffer, sizeof(json_buffer));
-        json_writer_context_t ctx;
-        json_initialise_writer(&ctx, &stream);
-
-        json_write_object_start(&ctx);
-            json_write_key(&ctx, "rip");
-            json_write_number(&ctx, (long long)context->rip);
-            json_write_key(&ctx, "stackframe");
-            json_write_string(&ctx, encoded);
-        json_write_object_end(&ctx);
-
-        uint32_t json_size = (uint32_t)ftell(&stream);
-        debugger_send_packet(kDebuggerPacket_Int3, json_buffer, json_size);
+        debugger_packet_bp_t bp_info;
+        memcpy(&bp_info._stack, context, sizeof(interrupt_stack_t));
+        debugger_send_packet(kDebuggerPacket_Int3, &bp_info, sizeof(bp_info));
 
         // enter loop waiting for further instructions
         _debugger_loop();
@@ -249,21 +238,28 @@ _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uin
 
     json_write_object_start(&ctx);
         json_write_key(&ctx, "version");
-        json_write_object_start(&ctx);
-            json_write_key(&ctx, "major");
-            json_write_number(&ctx, 0);
-            json_write_key(&ctx, "minor");
-            json_write_number(&ctx, 1);
-            json_write_key(&ctx, "patch");
-            json_write_number(&ctx, 0);
-        json_write_object_end(&ctx);
+            json_write_object_start(&ctx);
+                json_write_key(&ctx, "major");
+                json_write_number(&ctx, 0);
+                json_write_key(&ctx, "minor");
+                json_write_number(&ctx, 1);
+                json_write_key(&ctx, "patch");
+                json_write_number(&ctx, 0);
+            json_write_object_end(&ctx);
         json_write_key(&ctx, "image_info");
-        json_write_object_start(&ctx);
-            json_write_key(&ctx, "base");
-            json_write_number(&ctx, (long long)image_base);
-            json_write_key(&ctx, "entry_point");
-            json_write_number(&ctx, (long long)peutil_entry_point(pe_ctx));
-        json_write_object_end(&ctx);
+            json_write_object_start(&ctx);
+                json_write_key(&ctx, "base");
+                json_write_number(&ctx, (long long)image_base);
+                json_write_key(&ctx, "entry_point");
+                json_write_number(&ctx, (long long)peutil_entry_point(pe_ctx));
+            json_write_object_end(&ctx);
+        json_write_key(&ctx, "system_info");
+            json_write_object_start(&ctx);
+                json_write_key(&ctx, "processors");
+                json_write_number(&ctx, smp_get_processor_count());
+                json_write_key(&ctx, "memory");
+                json_write_number(&ctx, memory_get_total());
+            json_write_object_end(&ctx);
     json_write_object_end(&ctx);
 
     uint32_t json_size = (uint32_t)ftell(&stream);
