@@ -25,44 +25,9 @@
 #define TASK_STACK_SIZE     1024*1024
 #define TASK_QUEUE_SIZE     16
 
-typedef struct _task_context {
-
-    // current priority level
-    task_priority_level_t _pri;
-
-    // a little below the top of the stack for this task (holds registers+iretq stack frame)
-    uintptr_t       _rsp;
-    // entry point
-    task_func_t     _func;
-    // task handler argument
-    void*           _ptr;
-    // 'tis helpful 
-    const char*     _name;
-
-    //WIP: task queue link
-    struct _task_context*   _next;
-
-} _JOS_PACKED_ task_context_t;
+#include <internal/_tasks.h>
 
 static const char* kTaskChannel = "tasks";
-
-// ===================================================================================
-
-// each CPU has one of these, accessed via gs:0
-typedef struct _cpu_task_context {
-
-    struct _ready_queue {
-        task_context_t      _head;
-        task_context_t*     _tail;    
-    } _ready_queues[kTaskPri_NumPris];
-    
-    // each CPU can only have one running task at one time, and this is the one
-    task_context_t*      _running_task;
-
-    // the idle task for this cpu which we fall back to when there is nothing else to do
-    task_context_t*      _cpu_idle;
-
-} cpu_task_context_t;
 
 static void cpu_context_initialise(cpu_task_context_t* cpu_ctx) {
     memset(cpu_ctx, 0, sizeof(cpu_task_context_t));
@@ -99,6 +64,15 @@ static task_context_t* cpu_context_try_pop_task(cpu_task_context_t* cpu_ctx, siz
 extern task_context_t* x86_64_task_switch(interrupt_stack_t* curr_stack, interrupt_stack_t* new_stack);
 // handle to per-cpu context instances
 static per_cpu_ptr_t _per_cpu_ctx;
+
+_JOS_API_FUNC _tasks_debugger_task_iterator_t _tasks_debugger_task_iterator_begin(void) {
+    return ((cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx))->_running_task;
+}
+
+_JOS_API_FUNC uint32_t _tasks_debugger_num_tasks(void) {
+    //TODO: per priority, or something. For now just return 1 == running task on this CPU
+    return 1;
+}
 
 // selects the next task to run *on this CPU*
 static task_context_t*  _select_next_task_to_run(void) {

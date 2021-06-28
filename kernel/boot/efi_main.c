@@ -347,6 +347,8 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     },
     (jos_allocator_t*)_efi_allocator);
 
+    _JOS_GDB_DBGBREAK();
+
     output_console_output_string(L"starting idle task...\n");
 
     // this never actually returns...

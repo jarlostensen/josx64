@@ -168,10 +168,10 @@ void interrupts_isr_handler(interrupt_stack_t *stack) {
         if( handler ) {
 
             // provide a read only context for the handler
-            interrupt_stack_t ctx;
-            memcpy(&ctx, stack, sizeof(interrupt_stack_t));
+            // interrupt_stack_t ctx;
+            // memcpy(&ctx, stack, sizeof(interrupt_stack_t));
             x86_64_sti();       
-            handler(&ctx);
+            handler(stack);
             x86_64_cli();
             handled = true;
         }

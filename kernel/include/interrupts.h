@@ -31,7 +31,7 @@ typedef enum _interrupt_handler_priority {
     kInterrupt_NonCritical_Deferrable
 } interrupt_handler_priority_t;
 
-typedef void (*isr_handler_func_t)(const interrupt_stack_t * context);
+typedef void (*isr_handler_func_t)(interrupt_stack_t * context);
 typedef struct _isr_handler_def {
 
     int                             _isr_number;

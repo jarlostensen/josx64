@@ -11,6 +11,8 @@
 #include <extensions/base64.h>
 #include <smp.h>
 #include <memory.h>
+#include <tasks.h>
+#include <internal/_tasks.h>
 
 #include <Zydis/Zydis.h>
 
@@ -30,15 +32,35 @@ typedef struct _debugger_packet_rw_target_memory {
 
 typedef struct _debugger_packet_bp {
     interrupt_stack_t   _stack;
+    // MAX 15 bytes for Intel/AMD instructions
+    uint8_t             _instruction[15];
     // ..+ control registers etc.
 
 } _JOS_PACKED debugger_packet_bp_t;
 
+typedef struct _debugger_packet_gpf {
+    interrupt_stack_t _isr_stack;    
+} _JOS_PACKED debugger_packet_gpf_t;
 
-static void _debugger_loop(void) {
+typedef struct _debugger_task_info_header {
+    
+    uint32_t    _num_tasks;
+    uint32_t    _task_context_size;
+
+} _JOS_PACKED debugger_task_info_header_t;
+
+typedef struct _debugger_task_info {
+    // truncated name, 0 terminated
+    char                _name[MAX_TASK_NAME_LENGTH+1];
+    uint64_t            _entry_pt;
+    interrupt_stack_t    _stack;
+} _JOS_PACKED debugger_task_info_t;
+
+
+static void _debugger_loop(interrupt_stack_t * context) {
     if ( !debugger_is_connected() )
         return;
-
+   
     bool continue_run = false;
     while(!continue_run) {
         debugger_serial_packet_t packet;
@@ -46,6 +68,7 @@ static void _debugger_loop(void) {
         switch(packet._id) {
             case kDebuggerPacket_ReadTargetMemory:
             {                
+                //_JOS_KTRACE_CHANNEL("debugger", "kDebuggerPacket_ReadTargetMemory");
                 debugger_packet_rw_target_memory_t rt_packet;
                 debugger_read_packet_body(&packet, (void*)&rt_packet, packet._length);
                 //_JOS_KTRACE_CHANNEL("debugger", "kDebuggerPacket_ReadTargetMemory 0x%llx, %d bytes", rt_packet._address, rt_packet._length);
@@ -64,6 +87,42 @@ static void _debugger_loop(void) {
                     // serialise directly to memory
                     serial_read(kCom1, (char*)rt_packet._address, rt_packet._length);
                 }
+            }
+            break;
+            case kDebuggerPacket_Get_TaskList:
+            {
+                //_JOS_KTRACE_CHANNEL("debugger", "kDebuggerPacket_Get_TaskList");
+                _tasks_debugger_task_iterator_t i = _tasks_debugger_task_iterator_begin();
+                //TODO: check i, needs to be set
+                debugger_task_info_header_t packet;
+                
+                packet._num_tasks = _tasks_debugger_num_tasks();
+                packet._task_context_size = sizeof(debugger_task_info_t);
+                debugger_serial_packet_t header = { 
+                     ._id = (uint32_t)kDebuggerPacket_Get_TaskList_Resp, 
+                     ._length = sizeof(packet)+(packet._num_tasks * packet._task_context_size) };
+                serial_write(kCom1, (const char*)&header, sizeof(header));
+                serial_write(kCom1, (const char*)&packet, sizeof(packet));
+                
+                // serialise a packed array of debugger_task_info_t instances                
+                for(; i != _tasks_debugger_task_iterator_end(); _tasks_debugger_task_iterator_next(i)) {
+                    _tasks_debugger_task_iterator_t ctx = _tasks_debugger_task_iterator(i);
+                    debugger_task_info_t info;
+                    info._entry_pt = (uint64_t)ctx->_func;
+                    size_t chars_to_copy = strlen(ctx->_name);
+                    chars_to_copy = min(chars_to_copy+1, MAX_TASK_NAME_LENGTH+1);
+                    memcpy(info._name, ctx->_name, chars_to_copy);
+                    info._name[chars_to_copy-1] = 0;
+                    memcpy(&info._stack, (const void*)ctx->_rsp, sizeof(interrupt_stack_t));
+                    serial_write(kCom1, (const char*)&info, sizeof(info));
+                }
+            }
+            break;
+            case kDebuggerPacket_SingleStep:
+            {
+                // switch on the trap flag so that it will trigger on the next instruction after our iret
+                context->rflags |= (1<<8);
+                continue_run = true;
             }
             break;
             case kDebuggerPacket_Continue:
@@ -144,28 +203,52 @@ _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffe
 }
 
 //NOTE: this handles both int 3 and GPFs if a debugger is connected
-static void _debugger_isr_handler(const interrupt_stack_t * context) {
-
-    _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx", context->rip);
-
+static void _debugger_isr_handler(interrupt_stack_t * context) {
+    
     if ( debugger_is_connected() ) {
         // -------------------------------------- running in debugger
-
-        debugger_packet_bp_t bp_info;
-        memcpy(&bp_info._stack, context, sizeof(interrupt_stack_t));
-
         switch ( context->handler_id ) {
-            case 3:
+            case 1: // TRAP 
+            case 3: // breakpoint
+            {                            
+                _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx", context->rip);
+                debugger_packet_bp_t bp_info;
+                memcpy(&bp_info._stack, context, sizeof(interrupt_stack_t));
+
+                // decode the instruction @ rip so that we can send it to the debugger for display
+                ZydisDecoder decoder;
+                ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
+                ZyanU64 runtime_address = (ZyanU64)context->rip;
+                ZydisDecodedInstruction instruction;
+                if (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, (const void*)runtime_address, 15, &instruction)) ) {
+                    memcpy(bp_info._instruction, (const void*)context->rip, instruction.length);
+                }
+                else {
+                    // shouldn't really ever happen...
+                    memset(bp_info._instruction, 0, sizeof(bp_info._instruction));
+                }                
                 debugger_send_packet(kDebuggerPacket_Int3, &bp_info, sizeof(bp_info));
-                break;
-            case 0xd:
-                debugger_send_packet(kDebuggerPacket_GPF, &bp_info, sizeof(bp_info));
-                break;
+            }
+            break;
+            case 13: // #GPF
+            {
+                _JOS_KTRACE_CHANNEL("debugger", "GP# at 0x%016llx", context->rip);
+                debugger_packet_gpf_t gpf_info;
+                memcpy(&gpf_info._isr_stack, context, sizeof(interrupt_stack_t));            
+                debugger_send_packet(kDebuggerPacket_GPF, &gpf_info, sizeof(gpf_info));
+            }
+            break;
+            case 14: // #PF
+            {
+                _JOS_KTRACE_CHANNEL("debugger", "PF# at 0x%016llx", context->rip);
+                //TODO:
+            }
+            break;
             default:;
         }
 
         // enter loop waiting for further instructions
-        _debugger_loop();
+        _debugger_loop(context);
     }
     else {
         // -------------------------------------- running without a debugger
@@ -214,6 +297,7 @@ static void _debugger_isr_handler(const interrupt_stack_t * context) {
 }
 
 _JOS_API_FUNC void debugger_initialise(void) {
+    // we "enter" the debugger with int 3 so we need to register this from the start
     interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=0x3, ._handler=_debugger_isr_handler });
     output_console_output_string(L"debug handler initialised\n");
 }
@@ -237,8 +321,14 @@ _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uin
     }
     
     _debugger_connected = true;
-    // from this point on we want to catch general protection faults
-    interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=0xd, ._handler=_debugger_isr_handler });
+    // from this point on we want to control a number of traps and faults (in addition to int 3)
+
+    // debug trap (single step)
+    interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=1, ._handler=_debugger_isr_handler });
+    // general protection fault
+    interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=13, ._handler=_debugger_isr_handler });
+    // page fault
+    interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=14, ._handler=_debugger_isr_handler });
 
      char json_buffer[1024];
     IO_FILE stream;

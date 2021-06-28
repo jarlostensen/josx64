@@ -12,12 +12,15 @@ typedef enum _debugger_packet_id {
     kDebuggerPacket_KernelConnectionInfo,
     kDebuggerPacket_Int3,
     kDebuggerPacket_ReadTargetMemory,
-    kDebuggerPacket_ReadTargetMemory_Resp,
     kDebuggerPacket_WriteTargetMemory,
     kDebuggerPacket_GPF,
+    kDebuggerPacket_Get_TaskList,
+    kDebuggerPacket_SingleStep,
     
-    kDebuggerPacket_Size, 
-
+    // response packets have a high bit set so that they can be filtered in the debugger
+    kDebuggerPacket_ReadTargetMemory_Resp = (kDebuggerPacket_ReadTargetMemory + 0x800),
+    kDebuggerPacket_Get_TaskList_Resp = (kDebuggerPacket_Get_TaskList + 0x800),
+    
 } debugger_packet_id_t;
 
 // to be called after early initialisation of interrupts
