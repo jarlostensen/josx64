@@ -345,9 +345,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
          .pri = kTaskPri_Normal,
          .name = "main_task"        
     },
-    (jos_allocator_t*)_efi_allocator);
-
-    _JOS_GDB_DBGBREAK();
+    (jos_allocator_t*)_efi_allocator);    
 
     output_console_output_string(L"starting idle task...\n");
 

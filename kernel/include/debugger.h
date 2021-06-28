@@ -10,7 +10,7 @@ typedef enum _debugger_packet_id {
     kDebuggerPacket_Continue,
     kDebuggerPacket_Trace,
     kDebuggerPacket_KernelConnectionInfo,
-    kDebuggerPacket_Int3,
+    kDebuggerPacket_Breakpoint,
     kDebuggerPacket_ReadTargetMemory,
     kDebuggerPacket_WriteTargetMemory,
     kDebuggerPacket_GPF,

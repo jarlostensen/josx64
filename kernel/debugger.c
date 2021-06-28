@@ -30,17 +30,14 @@ typedef struct _debugger_packet_rw_target_memory {
 
 } _JOS_PACKED debugger_packet_rw_target_memory_t;
 
+#define INTEL_AMD_MAX_INSTRUCTION_LENGTH 15
 typedef struct _debugger_packet_bp {
     interrupt_stack_t   _stack;
     // MAX 15 bytes for Intel/AMD instructions
-    uint8_t             _instruction[15];
+    uint8_t             _instruction[INTEL_AMD_MAX_INSTRUCTION_LENGTH];
     // ..+ control registers etc.
 
 } _JOS_PACKED debugger_packet_bp_t;
-
-typedef struct _debugger_packet_gpf {
-    interrupt_stack_t _isr_stack;    
-} _JOS_PACKED debugger_packet_gpf_t;
 
 typedef struct _debugger_task_info_header {
     
@@ -140,6 +137,20 @@ static void _debugger_loop(interrupt_stack_t * context) {
     }
 }
 
+static void _decode_instruction(const void* at, void* buffer) {
+    // decode the instruction @ rip so that we can send it to the debugger for display
+    ZydisDecoder decoder;
+    ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
+    ZydisDecodedInstruction instruction;
+    if (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, at, INTEL_AMD_MAX_INSTRUCTION_LENGTH, &instruction)) ) {
+        memcpy(buffer, (const void*)at, instruction.length);
+    }
+    else {
+        // shouldn't really ever happen...
+        memset(buffer, 0, INTEL_AMD_MAX_INSTRUCTION_LENGTH);
+    }
+}
+
 _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length) {
     
     ZydisDecoder decoder;
@@ -211,30 +222,18 @@ static void _debugger_isr_handler(interrupt_stack_t * context) {
             case 1: // TRAP 
             case 3: // breakpoint
             {                            
-                _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx", context->rip);
+                // _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx", context->rip);
                 debugger_packet_bp_t bp_info;
                 memcpy(&bp_info._stack, context, sizeof(interrupt_stack_t));
-
-                // decode the instruction @ rip so that we can send it to the debugger for display
-                ZydisDecoder decoder;
-                ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
-                ZyanU64 runtime_address = (ZyanU64)context->rip;
-                ZydisDecodedInstruction instruction;
-                if (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, (const void*)runtime_address, 15, &instruction)) ) {
-                    memcpy(bp_info._instruction, (const void*)context->rip, instruction.length);
-                }
-                else {
-                    // shouldn't really ever happen...
-                    memset(bp_info._instruction, 0, sizeof(bp_info._instruction));
-                }                
-                debugger_send_packet(kDebuggerPacket_Int3, &bp_info, sizeof(bp_info));
+                _decode_instruction((const void*)context->rip, bp_info._instruction);
+                debugger_send_packet(kDebuggerPacket_Breakpoint, &bp_info, sizeof(bp_info));
             }
             break;
             case 13: // #GPF
             {
-                _JOS_KTRACE_CHANNEL("debugger", "GP# at 0x%016llx", context->rip);
-                debugger_packet_gpf_t gpf_info;
-                memcpy(&gpf_info._isr_stack, context, sizeof(interrupt_stack_t));            
+                debugger_packet_bp_t gpf_info;
+                memcpy(&gpf_info._stack, context, sizeof(interrupt_stack_t));
+                _decode_instruction((const void*)context->rip, gpf_info._instruction);
                 debugger_send_packet(kDebuggerPacket_GPF, &gpf_info, sizeof(gpf_info));
             }
             break;
