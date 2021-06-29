@@ -16,10 +16,13 @@ typedef enum _debugger_packet_id {
     kDebuggerPacket_GPF,
     kDebuggerPacket_Get_TaskList,
     kDebuggerPacket_SingleStep,
+    kDebuggerPacket_GetFrameFlags,
+    kDebuggerPacket_Assert,
     
     // response packets have a high bit set so that they can be filtered in the debugger
     kDebuggerPacket_ReadTargetMemory_Resp = (kDebuggerPacket_ReadTargetMemory + 0x800),
     kDebuggerPacket_Get_TaskList_Resp = (kDebuggerPacket_Get_TaskList + 0x800),
+    kDebuggerPacket_GetFrameFlags_Resp = (kDebuggerPacket_GetFrameFlags + 0x800),
     
 } debugger_packet_id_t;
 
@@ -50,6 +53,9 @@ _JOS_INLINE_FUNC unsigned int debugger_packet_length(debugger_serial_packet_t* p
 // waits for an establishes a connection with the remote debugger
 // subsequently the "debugger_is_connected" function will return true
 _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uint64_t image_base);
+
+// triggers an assert message to the debugger (if connected)
+_JOS_API_FUNC void debugger_trigger_assert(const char* cond, const char* file, int line);
 
 // true if we're connected to a debugger...obviously
 _JOS_API_FUNC bool debugger_is_connected(void);

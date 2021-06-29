@@ -10,6 +10,7 @@
 #include <extensions/json.h>
 #include <extensions/base64.h>
 #include <smp.h>
+#include <pagetables.h>
 #include <memory.h>
 #include <tasks.h>
 #include <internal/_tasks.h>
@@ -35,9 +36,18 @@ typedef struct _debugger_packet_bp {
     interrupt_stack_t   _stack;
     // MAX 15 bytes for Intel/AMD instructions
     uint8_t             _instruction[INTEL_AMD_MAX_INSTRUCTION_LENGTH];
-    // ..+ control registers etc.
+    uint64_t            _cr0;
+    uint64_t            _cr3;
+    uint64_t            _cr4;
 
 } _JOS_PACKED debugger_packet_bp_t;
+
+typedef struct _debugger_packet_page_info {
+
+    uintptr_t   _address;
+    uint16_t    _flags;
+
+} _JOS_PACKED debugger_packet_page_info_t;
 
 typedef struct _debugger_task_info_header {
     
@@ -53,8 +63,9 @@ typedef struct _debugger_task_info {
     interrupt_stack_t    _stack;
 } _JOS_PACKED debugger_task_info_t;
 
-
-static void _debugger_loop(interrupt_stack_t * context) {
+// wait for debugger commands.
+// if isr_stack == 0 this will not allow continuing or single stepping (used by asserts)
+static void _debugger_loop(interrupt_stack_t * isr_stack) {
     if ( !debugger_is_connected() )
         return;
    
@@ -84,6 +95,16 @@ static void _debugger_loop(interrupt_stack_t * context) {
                     // serialise directly to memory
                     serial_read(kCom1, (char*)rt_packet._address, rt_packet._length);
                 }
+            }
+            break;
+            case kDebuggerPacket_GetFrameFlags:
+            {
+                debugger_packet_page_info_t resp_packet;
+                debugger_read_packet_body(&packet, (void*)&resp_packet._address, packet._length);
+                uint16_t flags;
+                pagetables_get_frame_flags((void*)resp_packet._address, &flags);                
+                resp_packet._flags = flags;
+                debugger_send_packet(kDebuggerPacket_GetFrameFlags_Resp, (void*)&resp_packet, sizeof(resp_packet));
             }
             break;
             case kDebuggerPacket_Get_TaskList:
@@ -117,15 +138,18 @@ static void _debugger_loop(interrupt_stack_t * context) {
             break;
             case kDebuggerPacket_SingleStep:
             {
-                // switch on the trap flag so that it will trigger on the next instruction after our iret
-                context->rflags |= (1<<8);
-                continue_run = true;
+                if ( isr_stack ) {
+                    // switch on the trap flag so that it will trigger on the next instruction after our iret
+                    isr_stack->rflags |= (1<<8);
+                    continue_run = true;
+                }
             }
             break;
             case kDebuggerPacket_Continue:
             {
-                _JOS_KTRACE_CHANNEL("debugger", "continuing execution");
-                continue_run = true;
+                if ( isr_stack ) {
+                    continue_run = true;
+                }
             }
             break;
             default:
@@ -135,6 +159,33 @@ static void _debugger_loop(interrupt_stack_t * context) {
             break;
         }
     }
+}
+
+_JOS_API_FUNC void debugger_trigger_assert(const char* cond, const char* file, int line) {
+    
+    char json_buffer[512];
+    IO_FILE stream;
+    memset(&stream,0,sizeof(FILE));
+    _io_file_from_buffer(&stream, json_buffer, sizeof(json_buffer));
+
+    json_writer_context_t ctx;
+    json_initialise_writer(&ctx, &stream);
+
+    json_write_object_start(&ctx);
+        json_write_key(&ctx, "assert");
+            json_write_object_start(&ctx);
+                json_write_key(&ctx, "cond");
+                json_write_string(&ctx, cond);
+                json_write_key(&ctx, "file");
+                json_write_string(&ctx, file);
+                json_write_key(&ctx, "line");
+                json_write_number(&ctx, line);
+            json_write_object_end(&ctx);        
+    json_write_object_end(&ctx);
+
+    uint32_t json_size = (uint32_t)ftell(&stream);
+    debugger_send_packet(kDebuggerPacket_Assert, (void*)json_buffer, json_size);
+    _debugger_loop(0);
 }
 
 static void _decode_instruction(const void* at, void* buffer) {
@@ -149,6 +200,14 @@ static void _decode_instruction(const void* at, void* buffer) {
         // shouldn't really ever happen...
         memset(buffer, 0, INTEL_AMD_MAX_INSTRUCTION_LENGTH);
     }
+}
+
+static void _fill_in_debugger_packet(debugger_packet_bp_t* bp_info, interrupt_stack_t * isr_stack) {
+    memcpy(&bp_info->_stack, isr_stack, sizeof(interrupt_stack_t));
+    _decode_instruction((const void*)isr_stack->rip, bp_info->_instruction);
+    bp_info->_cr0 = x86_64_read_cr0();
+    bp_info->_cr3 = x86_64_read_cr3();
+    bp_info->_cr4 = x86_64_read_cr4();
 }
 
 _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length) {
@@ -214,32 +273,30 @@ _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffe
 }
 
 //NOTE: this handles both int 3 and GPFs if a debugger is connected
-static void _debugger_isr_handler(interrupt_stack_t * context) {
+static void _debugger_isr_handler(interrupt_stack_t * stack) {
     
     if ( debugger_is_connected() ) {
         // -------------------------------------- running in debugger
-        switch ( context->handler_id ) {
+        switch ( stack->handler_id ) {
             case 1: // TRAP 
             case 3: // breakpoint
             {                            
                 // _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx", context->rip);
                 debugger_packet_bp_t bp_info;
-                memcpy(&bp_info._stack, context, sizeof(interrupt_stack_t));
-                _decode_instruction((const void*)context->rip, bp_info._instruction);
+                _fill_in_debugger_packet(&bp_info, stack);
                 debugger_send_packet(kDebuggerPacket_Breakpoint, &bp_info, sizeof(bp_info));
             }
             break;
             case 13: // #GPF
             {
-                debugger_packet_bp_t gpf_info;
-                memcpy(&gpf_info._stack, context, sizeof(interrupt_stack_t));
-                _decode_instruction((const void*)context->rip, gpf_info._instruction);
-                debugger_send_packet(kDebuggerPacket_GPF, &gpf_info, sizeof(gpf_info));
+                debugger_packet_bp_t bp_info;
+                _fill_in_debugger_packet(&bp_info, stack);
+                debugger_send_packet(kDebuggerPacket_GPF, &bp_info, sizeof(bp_info));
             }
             break;
             case 14: // #PF
             {
-                _JOS_KTRACE_CHANNEL("debugger", "PF# at 0x%016llx", context->rip);
+                _JOS_KTRACE_CHANNEL("debugger", "PF# at 0x%016llx", stack->rip);
                 //TODO:
             }
             break;
@@ -247,52 +304,9 @@ static void _debugger_isr_handler(interrupt_stack_t * context) {
         }
 
         // enter loop waiting for further instructions
-        _debugger_loop(context);
+        _debugger_loop(stack);
     }
-    else {
-        // -------------------------------------- running without a debugger
-        _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx\n", context->rip);
-
-        //ZZZ: ============================================================
-        wchar_t buf[1024];
-        const size_t bufcount = sizeof(buf)/sizeof(wchar_t);
-
-        swprintf(buf,bufcount,L"\nDBGBREAK\n\tat 0x%016llx\n", context->rip);
-        output_console_output_string(buf);
-
-        // dump registers
-        swprintf(buf, bufcount,
-            L"\trax 0x%016llx\trbx 0x%016llx\n\trcx 0x%016llx\trdx 0x%016llx\n"
-            L"\trsi 0x%016llx\trdi 0x%016llx\n\trbp 0x%016llx\trsp 0x%016llx\n"
-            L"\tr8  0x%016llx\tr9  0x%016llx\n\tr10 0x%016llx\tr11 0x%016llx\n"
-            L"\tr12 0x%016llx\tr13 0x%016llx\n\tr14 0x%016llx\tr15 0x%016llx\n"
-            L"\tcs 0x%04llx\tss 0x%04llx\n\n",
-            context->rax, context->rbx, context->rcx, context->rdx,
-            context->rsi, context->rdi, context->rbp, context->rsp,
-            context->r8, context->r9, context->r10, context->r11,
-            context->r12, context->r13, context->r14, context->r15,
-            context->cs, context->ss
-        );
-        output_console_line_break();
-        output_console_output_string(buf);
-        
-        // stack dump
-        const uint64_t* stack = (const uint64_t*)context->rsp;
-        swprintf(buf, bufcount, 
-            L"stack @ 0x%016llx:\n\t"
-            L"0x%016llx\n\t0x%016llx\n\t0x%016llx\n\t0x%016llx\n\t"
-            L"0x%016llx\n\t0x%016llx\n\t0x%016llx\n\t0x%016llx\n\n",
-            stack,
-            stack[0], stack[1], stack[2], stack[3],
-            stack[4], stack[5], stack[6], stack[7]
-        );    
-        output_console_output_string(buf);
-
-        wchar_t output_buffer[512];
-        debugger_disasm((void*)context->rip, 50, output_buffer, 512);
-        output_console_output_string(output_buffer);
-        output_console_line_break();
-    }
+    // else: trigger assert?       
 }
 
 _JOS_API_FUNC void debugger_initialise(void) {
@@ -329,7 +343,7 @@ _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uin
     // page fault
     interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=14, ._handler=_debugger_isr_handler });
 
-     char json_buffer[1024];
+    char json_buffer[1024];
     IO_FILE stream;
     memset(&stream,0,sizeof(FILE));
     _io_file_from_buffer(&stream, json_buffer, sizeof(json_buffer));

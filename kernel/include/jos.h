@@ -42,6 +42,10 @@ typedef struct _rect {
 
 #ifdef _JOS_KERNEL_BUILD
 
+// NOTE: this ties us in with the debugger module which may not be something we want longer term
+extern bool debugger_is_connected(void);
+extern void debugger_trigger_assert(const char*, const char*, int);
+
 //TODO: this will be removed
 extern uint16_t kJosKernelCS;
 
@@ -72,7 +76,12 @@ asm volatile ("xchg %bx,%bx")
 #define _JOS_ASSERT(cond)\
 if(!(cond))\
 {\
-    trace(0, "assert %s, %s:%d \n", _JOS_ASSERT_COND(cond), __FILE__,__LINE__);\
+    if ( !debugger_is_connected() ) {\
+        trace(0, "assert %s, %s:%d \n", _JOS_ASSERT_COND(cond), __FILE__,__LINE__);\
+    }\
+    else {\
+        debugger_trigger_assert(_JOS_ASSERT_COND(cond), __FILE__, __LINE__);\
+    }\
 }
 
 #define _JOS_ALIGN(type,name,alignment) type name __attribute__ ((aligned (alignment)))
