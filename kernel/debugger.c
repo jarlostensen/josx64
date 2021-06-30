@@ -83,6 +83,60 @@ typedef struct _debugger_packet_rdmsr_resp {
 } _JOS_PACKED debugger_packet_rdmsr_resp_t;
 
 static peutil_pe_context_t* _pe_ctx = 0;
+static ZydisDecoder _zydis_decoder;
+static const char* kDebuggerChannel = "debugger";
+
+// ==============================================
+//TODO: TESTING:
+typedef struct _debugger_breakpoint {
+
+    bool        _active;
+    uintptr_t   _at;
+    uint8_t     _instr_byte;    
+
+} debugger_breakpoint_t;
+#define _MAX_BREAKPOINTS 16
+#define _BREAKPOINT_INSTR 0xcc
+static debugger_breakpoint_t _breakpoints[_MAX_BREAKPOINTS];
+static size_t _num_breakpoints = 0;
+
+_JOS_API_FUNC void debugger_set_breakpoint(uintptr_t at) {    
+    // first check if the breakpoint is already set
+    bool existing = false;
+    for ( size_t bp = 0; bp < _num_breakpoints; ++bp ) {
+        if ( _breakpoints[bp]._at == at ) {
+            // re-activate
+            _JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint re-activated at 0x%llx", at);
+            _breakpoints[bp]._instr_byte = ((uint8_t*)at)[0];
+            ((uint8_t*)at)[0] = _BREAKPOINT_INSTR;
+            _breakpoints[bp]._active = true;
+            existing = true;
+            break;
+        }
+    }
+    if ( !existing ) {
+        _JOS_ASSERT(_num_breakpoints<_MAX_BREAKPOINTS);
+        _JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint set at 0x%llx", at);
+        _breakpoints[_num_breakpoints]._at = at;
+        _breakpoints[_num_breakpoints]._instr_byte = ((uint8_t*)at)[0];
+        ((uint8_t*)at)[0] = _BREAKPOINT_INSTR;
+        _breakpoints[_num_breakpoints]._active = true;
+        ++_num_breakpoints;
+    }
+}
+
+static debugger_breakpoint_t* _debugger_breakpoint_at(uintptr_t at)  {
+    for ( size_t bp = 0; bp < _num_breakpoints; ++bp ) {
+        if ( _breakpoints[bp]._at == at ) {
+            return _breakpoints+bp;
+        }
+    }
+    return 0;
+}
+// ==============================================
+
+#define _CLEAR_TF(isr_stack) isr_stack->rflags &= ~(1<<8)
+#define _SET_TF(isr_stack) isr_stack->rflags |= (1<<8)
 
 // wait for debugger commands.
 // if isr_stack == 0 this will not allow continuing or single stepping (used by asserts)
@@ -130,31 +184,7 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
             break;
             case kDebuggerPacket_Get_TaskList:
             {
-                //_JOS_KTRACE_CHANNEL("debugger", "kDebuggerPacket_Get_TaskList");
-                _tasks_debugger_task_iterator_t i = _tasks_debugger_task_iterator_begin();
-                //TODO: check i, needs to be set
-                debugger_task_info_header_t packet;
-                
-                packet._num_tasks = _tasks_debugger_num_tasks();
-                packet._task_context_size = sizeof(debugger_task_info_t);
-                debugger_serial_packet_t header = { 
-                     ._id = (uint32_t)kDebuggerPacket_Get_TaskList_Resp, 
-                     ._length = sizeof(packet)+(packet._num_tasks * packet._task_context_size) };
-                serial_write(kCom1, (const char*)&header, sizeof(header));
-                serial_write(kCom1, (const char*)&packet, sizeof(packet));
-                
-                // serialise a packed array of debugger_task_info_t instances                
-                for(; i != _tasks_debugger_task_iterator_end(); _tasks_debugger_task_iterator_next(i)) {
-                    _tasks_debugger_task_iterator_t ctx = _tasks_debugger_task_iterator(i);
-                    debugger_task_info_t info;
-                    info._entry_pt = (uint64_t)ctx->_func;
-                    size_t chars_to_copy = strlen(ctx->_name);
-                    chars_to_copy = min(chars_to_copy+1, MAX_TASK_NAME_LENGTH+1);
-                    memcpy(info._name, ctx->_name, chars_to_copy);
-                    info._name[chars_to_copy-1] = 0;
-                    memcpy(&info._stack, (const void*)ctx->_rsp, sizeof(interrupt_stack_t));
-                    serial_write(kCom1, (const char*)&info, sizeof(info));
-                }
+                //TODO:
             }
             break;
             case kDebuggerPacket_RDMSR:
@@ -174,14 +204,30 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
             {
                 if ( isr_stack ) {
                     // switch on the trap flag so that it will trigger on the next instruction after our iret
-                    isr_stack->rflags |= (1<<8);
+                    _SET_TF(isr_stack);
                     continue_run = true;
                 }
             }
             break;
+            // case kDebuggerPacket_StepOver:
+            // {
+            //     if ( isr_stack ) {
+            //         // check if the next instruction is indeed something to skip, i.e. a call
+            //         ZydisDecodedInstruction instruction;
+            //         if (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&_zydis_decoder, isr_stack->rip, INTEL_AMD_MAX_INSTRUCTION_LENGTH, &instruction)) ) {
+            //             if ( instruction.mnemonic == ZYDIS_MNEMONIC_CALL ) {
+            //                 // we can skip this instruction so we'll set a bp after it and continue execution
+            //                 debugger_set_breakpoint(isr_stack->rip + instruction.length);
+            //                 _CLEAR_TF(isr_stack);
+            //             }
+            //         }
+            //     }
+            // }
+            // break;
             case kDebuggerPacket_Continue:
             {
                 if ( isr_stack ) {
+                    _CLEAR_TF(isr_stack);
                     continue_run = true;
                 }
             }
@@ -224,10 +270,8 @@ _JOS_API_FUNC void debugger_trigger_assert(const char* cond, const char* file, i
 
 static void _decode_instruction(const void* at, void* buffer) {
     // decode the instruction @ rip so that we can send it to the debugger for display
-    ZydisDecoder decoder;
-    ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
     ZydisDecodedInstruction instruction;
-    if (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, at, INTEL_AMD_MAX_INSTRUCTION_LENGTH, &instruction)) ) {
+    if (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&_zydis_decoder, at, INTEL_AMD_MAX_INSTRUCTION_LENGTH, &instruction)) ) {
         memcpy(buffer, (const void*)at, instruction.length);
     }
     else {
@@ -315,7 +359,19 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
         switch ( stack->handler_id ) {
             case 1: // TRAP 
             case 3: // breakpoint
-            {                            
+            {       
+                // first check if we've hit a programmatic breakpoint
+                debugger_breakpoint_t* bp = _debugger_breakpoint_at(stack->rip - 1);
+                if ( bp ) {
+                    _JOS_KTRACE_CHANNEL(kDebuggerChannel, "hit programmatic bp @ 0x%llx", bp->_at);
+                    // re-set instruction
+                    ((uint8_t*)bp->_at)[0] = bp->_instr_byte;
+                    // go back so that we'll execute the original instruction next
+                    --stack->rip;
+
+                    //TODO: restore the bp...
+                }
+
                 // _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx", context->rip);
                 debugger_packet_bp_t bp_info;
                 _fill_in_debugger_packet(&bp_info, stack);
@@ -331,7 +387,7 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
             break;
             case 14: // #PF
             {
-                _JOS_KTRACE_CHANNEL("debugger", "PF# at 0x%016llx", stack->rip);
+                _JOS_KTRACE_CHANNEL(kDebuggerChannel, "PF# at 0x%016llx", stack->rip);
                 //TODO:
             }
             break;
@@ -347,6 +403,9 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
 _JOS_API_FUNC void debugger_initialise(void) {
     // we "enter" the debugger with int 3 so we need to register this from the start
     interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=0x3, ._handler=_debugger_isr_handler });
+    
+    ZydisDecoderInit(&_zydis_decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
+
     output_console_output_string(L"debug handler initialised\n");
 }
 

@@ -113,6 +113,7 @@ static task_context_t*  _select_next_task_to_run(void) {
     }
 
     // if we get here the only task left to run is idle
+    _JOS_KTRACE_CHANNEL(kTaskChannel, "idle task only candidate");
     return 0;
 }
 
@@ -157,9 +158,8 @@ static jo_status_t _idle_task(void* ptr) {
 
 static void _task_wrapper(task_context_t* ctx) {
 
-_JOS_GDB_DBGBREAK();
-    
     jo_status_t status _JOS_MAYBE_UNUSED = ctx->_func(ctx->_ptr);
+
     // post-amble: remove this task and switch to a new one
     cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     _JOS_ASSERT(cpu_ctx->_running_task == ctx);
@@ -214,9 +214,11 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
     interrupt_frame->rcx = (uintptr_t)ctx;
     interrupt_frame->rip = (uintptr_t)_task_wrapper;
     
-    // switching stack
+    // switching stack area
     ctx->_stack[0] = (uint64_t)interrupt_frame;
     ctx->_stack[1] = interrupt_frame->ss;
+    
+    ctx->_stack_top = stack_top;
 
     return ctx;
 }

@@ -6,8 +6,6 @@
 #include <stdio.h>
 #include <string.h>
 
-static long long _ticks = 0;
-
 void trace_buf(const char* __restrict channel, const void* __restrict data, size_t length) {
 
     if(!data || !length)
@@ -15,9 +13,9 @@ void trace_buf(const char* __restrict channel, const void* __restrict data, size
     char buffer[1024];
 	int written;
 	if(channel)
-		written = snprintf(buffer, sizeof(buffer), "[%lld:%s] ", _ticks++, channel);
+		written = snprintf(buffer, sizeof(buffer), "[%s] ", channel);
 	else
-		written = snprintf(buffer, sizeof(buffer), "[%lld] ", _ticks++);
+		written = snprintf(buffer, sizeof(buffer), "[.] ");
 
     length = length < (sizeof(buffer)-written-2) ? length:(sizeof(buffer)-written-2);
     memcpy(buffer+written, data, length);
@@ -43,9 +41,9 @@ void trace(const char* __restrict channel, const char* __restrict format,...) {
     va_start(parameters, format);
 	int written;
 	if(channel)
-		written = snprintf(buffer, sizeof(buffer), "[%lld:%s] ", _ticks++, channel);
+		written = snprintf(buffer, sizeof(buffer), "[%s] ", channel);
 	else
-		written = snprintf(buffer, sizeof(buffer), "[%lld] ", _ticks++);
+		written = snprintf(buffer, sizeof(buffer), "[.] ");
     written += vsnprintf(buffer+written, sizeof(buffer)-written, format, parameters);
     va_end(parameters);
     
