@@ -77,7 +77,8 @@ section .text
 %define TASK_CONTEXT_T_SS  168
 
 global x86_64_task_switch
-; task_context_t* int x86_64_task_switch((interrupt_stack_t* curr_stack, interrupt_stack_t* new_stack)
+; task_context_t* int x86_64_task_switch(uintptr_t* curr_stack, uintptr_t* new_stack)
+; curr/next_stack are 2 element arrays containing rsp, ss
 x86_64_task_switch:
 
     ; prev may be 0 when idle tasks are started
@@ -104,16 +105,17 @@ x86_64_task_switch:
 
     cli
     ; save current task's stack
-    mov     [rcx+TASK_CONTEXT_T_RSP], rsp
+    mov     [rcx+0], rsp
+    xor     rax, rax
     mov     ax, ss
-    mov     [rcx+TASK_CONTEXT_T_SS], rax
+    mov     [rcx+8], rax
 
 ._task_switch_next:
     
     cli
     ; switch to new task's stack
-    mov     rsp, [rdx+TASK_CONTEXT_T_RSP]
-    mov     rax, [rdx+TASK_CONTEXT_T_SS]
+    mov     rsp, [rdx+0]
+    mov     rax, [rdx+8]
     mov     ss, ax          ;< this isn't really needed, since we never change ss but kept for good measure    
     sti
 
@@ -325,6 +327,11 @@ x86_64_get_ss:
 global x86_64_get_pml4
 x86_64_get_pml4:
     mov     rax, cr3
+    ret
+
+global x86_64_get_rsp
+x86_64_get_rsp:
+    mov     rax, rsp
     ret
 
 ; apparently one does not simply disable chkstk insertion on Clang, so this is the second best thing

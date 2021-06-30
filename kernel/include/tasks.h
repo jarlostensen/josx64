@@ -27,6 +27,6 @@ void            tasks_initialise(jos_allocator_t * allocator);
 // start the idle task on this CPU.
 // this function never returns
 void            tasks_start_idle(void);
-task_handle_t   tasks_create(task_create_args_t* args, jos_allocator_t * allocator);
+task_handle_t   tasks_create(task_create_args_t* args);
 void            tasks_yield(void);
 

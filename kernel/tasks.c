@@ -64,7 +64,7 @@ static task_context_t* cpu_context_try_pop_task(cpu_task_context_t* cpu_ctx, siz
 }
 
 // in x86_64.asm
-extern task_context_t* x86_64_task_switch(interrupt_stack_t* curr_stack, interrupt_stack_t* new_stack);
+extern task_context_t* x86_64_task_switch(uintptr_t* curr_stack, uintptr_t* new_stack);
 // handle to per-cpu context instances
 static per_cpu_ptr_t _per_cpu_ctx;
 
@@ -125,17 +125,15 @@ static void _yield_to_next_task(void) {
     if( next_task ) {
         _JOS_KTRACE_CHANNEL(kTaskChannel, "switching from \"%s\" to \"%s\"", 
             prev ? prev->_name : "(0)", cpu_ctx->_running_task->_name);
-
-        interrupt_stack_t* to_stack = (interrupt_stack_t*)cpu_ctx->_running_task->_rsp;
-        _JOS_ASSERT((uintptr_t)to_stack->rip==(uintptr_t)_task_wrapper);
         
-        x86_64_task_switch(prev ? (interrupt_stack_t*)prev->_rsp : 0, (interrupt_stack_t*)cpu_ctx->_running_task->_rsp);
+        x86_64_task_switch(prev ? prev->_stack : 0, cpu_ctx->_running_task->_stack);
     }
     // else we're now idling
-    //NOISE: _JOS_KTRACE_CHANNEL(kTaskChannel, "back to idling on cpu %d", per_cpu_this_cpu_id());
+    //NOISE: 
+    _JOS_KTRACE_CHANNEL(kTaskChannel, "back to idling on cpu %d", per_cpu_this_cpu_id());
     if ( prev != cpu_ctx->_cpu_idle ) {
         cpu_ctx->_running_task = cpu_ctx->_cpu_idle;
-        x86_64_task_switch(0, (interrupt_stack_t*)cpu_ctx->_cpu_idle->_rsp);
+        x86_64_task_switch(0, cpu_ctx->_cpu_idle->_stack);
     }
 }
 
@@ -159,6 +157,8 @@ static jo_status_t _idle_task(void* ptr) {
 
 static void _task_wrapper(task_context_t* ctx) {
 
+_JOS_GDB_DBGBREAK();
+    
     jo_status_t status _JOS_MAYBE_UNUSED = ctx->_func(ctx->_ptr);
     // post-amble: remove this task and switch to a new one
     cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
@@ -200,7 +200,8 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
     interrupt_frame->cs = x86_64_get_cs();
     interrupt_frame->ss = x86_64_get_ss();
 
-    interrupt_frame->rsp = (uint64_t)interrupt_frame;
+    // points to the 16 byte aligned top of stack which will be active once the task switch occurs
+    interrupt_frame->rsp = stack_top;
     interrupt_frame->rbp = interrupt_frame->rsp;
     _JOS_ASSERT(interrupt_frame->rsp>(uintptr_t)(ctx+1));
 
@@ -211,7 +212,9 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
     interrupt_frame->rcx = (uintptr_t)ctx;
     interrupt_frame->rip = (uintptr_t)_task_wrapper;
     
-    ctx->_rsp = interrupt_frame->rsp;
+    // switching stack
+    ctx->_stack[0] = (uint64_t)interrupt_frame;
+    ctx->_stack[1] = interrupt_frame->ss;
 
     return ctx;
 }

@@ -25,6 +25,9 @@ typedef struct _peutil_pe_context {
     };
     const IMAGE_SECTION_HEADER* _imageSections;
     WORD _numSections;
+    DWORD _text_va;
+    DWORD _text_ptr;
+    DWORD _text_end;
     bool _is_64_bit : 1;
     bool _relocated : 1;
     bool _is_dot_net : 1;
@@ -54,3 +57,5 @@ const IMAGE_DELAYLOAD_DESCRIPTOR* peutil_delayload_directory(peutil_pe_context_t
 const void* peutil_rva_to_phys(peutil_pe_context_t* ctx, DWORD rva);
 
 const IMAGE_SECTION_HEADER* peutil_section_for_rva(peutil_pe_context_t* ctx, DWORD rva);
+
+const bool peutil_phys_is_executable(peutil_pe_context_t* ctx, uintptr_t phys);
