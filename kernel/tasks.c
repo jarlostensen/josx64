@@ -14,6 +14,7 @@
 #include <debugger.h>
 #include <x86_64.h>
 #include <tasks.h>
+#include <internal/_tasks.h>
 #include <linear_allocator.h>
 
 #include <stdlib.h>
@@ -28,6 +29,8 @@
 #include <internal/_tasks.h>
 
 static const char* kTaskChannel = "tasks";
+static linear_allocator_t*  _tasks_allocator = 0;
+
 
 static void cpu_context_initialise(cpu_task_context_t* cpu_ctx) {
     memset(cpu_ctx, 0, sizeof(cpu_task_context_t));
@@ -145,9 +148,9 @@ static void _yield_to_next_task(void) {
 //
 static jo_status_t _idle_task(void* ptr) {    
     _JOS_KTRACE_CHANNEL(kTaskChannel, "idle starting");
-    //ZZZ: not so much "true" as wait for a kernel shutdown signal
+    //ZZZ: not so much "true" as wait for a kernel shutdown signal   
     while(true) {
-        _yield_to_next_task();
+        _yield_to_next_task();        
         x86_64_pause_cpu();
     }
     _JOS_UNREACHABLE();
@@ -155,19 +158,8 @@ static jo_status_t _idle_task(void* ptr) {
 }
 
 static void _task_wrapper(task_context_t* ctx) {
- 
-    _JOS_KTRACE_CHANNEL(kTaskChannel, "task_wrapper starting \"%s\"(0x%llx [0x%llx])", 
-             ctx->_name, ctx->_func, ctx->_ptr);
-    
-    // invoke
-    jo_status_t status = ctx->_func(ctx->_ptr);
-    if ( _JO_SUCCEEDED(status) ) {
-        _JOS_KTRACE_CHANNEL(kTaskChannel, "task \"%s\" terminated normally", ctx->_name);
-    }
-    else {
-        _JOS_KTRACE_CHANNEL(kTaskChannel, "task \"%s\" terminated with error 0x%x", ctx->_name, status);
-    }
 
+    jo_status_t status _JOS_MAYBE_UNUSED = ctx->_func(ctx->_ptr);
     // post-amble: remove this task and switch to a new one
     cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     _JOS_ASSERT(cpu_ctx->_running_task == ctx);
@@ -177,28 +169,41 @@ static void _task_wrapper(task_context_t* ctx) {
 }
 
 #define TASK_STACK_CONTEXT_SIZE TASK_STACK_SIZE + sizeof(task_context_t)
-static task_context_t* _create_task_context(task_func_t func, void* ptr, const char* name, jos_allocator_t * allocator) {
+static task_context_t* _create_task_context(task_func_t func, void* ptr, const char* name) {
 
     // allocate memory for the stack and the task context object
-    task_context_t* ctx = (task_context_t*)allocator->alloc(allocator, TASK_STACK_CONTEXT_SIZE);
+    /*
+            ---------------------------
+            | stack_top               |
+            .                         .
+            | rsp (interrupt_stack)   |
+            ---------------------------
+            .                         .
+            .                         .
+            ...........................
+            | ctx + 1                 |
+            ___________________________
+            | ctx                     |
+            ---------------------------
+    */
+    task_context_t* ctx = (task_context_t*)_tasks_allocator->_super.alloc((jos_allocator_t*)_tasks_allocator, TASK_STACK_CONTEXT_SIZE);
     _JOS_ASSERT(ctx);
     ctx->_func = func;
     ctx->_ptr = ptr ? ptr : (void*)ctx;    //< we can also pass in "self"...
     ctx->_name = name;
     
     // set up returnable stack for the task, rounded down to make it 10h byte aligned
-    const size_t stack_top = ((size_t)ctx + TASK_STACK_SIZE) & ~0x0f;
+    const uintptr_t stack_top = ((uintptr_t)(ctx+1) + TASK_STACK_SIZE) & ~0x0f;
     interrupt_stack_t* interrupt_frame = (interrupt_stack_t*)(stack_top - sizeof(interrupt_stack_t));
 
-
-    //TODO: SOMEWHERE THIS CREATES AN INVALID STACK FRAME
-
-    memset(interrupt_frame, 0xcd, sizeof(interrupt_stack_t));
+    memset(interrupt_frame, 0, sizeof(interrupt_stack_t));
     interrupt_frame->cs = x86_64_get_cs();
     interrupt_frame->ss = x86_64_get_ss();
 
     interrupt_frame->rsp = (uint64_t)interrupt_frame;
     interrupt_frame->rbp = interrupt_frame->rsp;
+    _JOS_ASSERT(interrupt_frame->rsp>(uintptr_t)(ctx+1));
+
     // always enable IF for tasks!
     interrupt_frame->rflags = x86_64_get_rflags() | (1ull<<9);
 
@@ -213,12 +218,12 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
 
 // ------------------------------------------------------
 
-task_handle_t   tasks_create(task_create_args_t* args, jos_allocator_t * allocator) {
+task_handle_t   tasks_create(task_create_args_t* args) {
 
     _JOS_KTRACE_CHANNEL(kTaskChannel, "created task \"%s\" 0x%llx (0x%llx), pri %d", 
         args->name, args->func, args->ptr, args->pri);
 
-    task_context_t* ctx = _create_task_context(args->func, args->ptr, args->name, allocator);
+    task_context_t* ctx = _create_task_context(args->func, args->ptr, args->name);
     cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);    
 
     //ZZZ: this should probably be done in a separate "start" function?
@@ -232,9 +237,6 @@ void tasks_yield(void) {
     _yield_to_next_task();
 }
 
-
-static linear_allocator_t*  _tasks_allocator = 0;
-
 void tasks_initialise(jos_allocator_t * allocator) {
 
     //NOTE: called on the BSP *only*
@@ -243,15 +245,17 @@ void tasks_initialise(jos_allocator_t * allocator) {
 
     // fixed pool of memory for the per-cpu IDLE tasks, this is all we allocate up front    
     const size_t idle_task_pool_size = sizeof(linear_allocator_t) + smp_get_processor_count() * (sizeof(cpu_task_context_t) + TASK_STACK_CONTEXT_SIZE);
-    _tasks_allocator = linear_allocator_create(allocator->alloc(allocator, idle_task_pool_size), idle_task_pool_size);
-
+    void* allocator_arena = allocator->alloc(allocator, idle_task_pool_size);
+    _JOS_ASSERT(allocator_arena);
+    _tasks_allocator = linear_allocator_create(allocator_arena, idle_task_pool_size);
+    
     for(size_t cpu = 0; cpu < smp_get_processor_count(); ++cpu ) {
 
         _JOS_KTRACE_CHANNEL(kTaskChannel, "initialising for ap %d", cpu);
         cpu_task_context_t* ctx = (cpu_task_context_t*)linear_allocator_alloc(_tasks_allocator, sizeof(cpu_task_context_t));
         _JOS_ASSERT(ctx);
         cpu_context_initialise(ctx);        
-        _JOS_PER_CPU_PTR(_per_cpu_ctx,cpu) = (uintptr_t)ctx;
+        _JOS_PER_CPU_PTR(_per_cpu_ctx, cpu) = (uintptr_t)ctx;
     }
 }
 
@@ -260,7 +264,7 @@ void tasks_start_idle(void) {
     
     cpu_task_context_t* ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     // add idle task to this CPU
-    ctx->_running_task = ctx->_cpu_idle = _create_task_context(_idle_task, 0, "cpu_idle", (jos_allocator_t*)_tasks_allocator);
+    ctx->_running_task = ctx->_cpu_idle = _create_task_context(_idle_task, 0, "cpu_idle");
     //NOTE: idle priority is special, and lower than anything else
     ctx->_cpu_idle->_pri = kTaskPri_NumPris;
     // we call this directly to kick things off and the first thing it will do 

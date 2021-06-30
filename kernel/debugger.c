@@ -13,6 +13,7 @@
 #include <pagetables.h>
 #include <memory.h>
 #include <tasks.h>
+#include <pe.h>
 #include <internal/_tasks.h>
 
 #include <Zydis/Zydis.h>
@@ -37,6 +38,7 @@ typedef struct _debugger_packet_bp {
     // MAX 15 bytes for Intel/AMD instructions
     uint8_t             _instruction[INTEL_AMD_MAX_INSTRUCTION_LENGTH];
     uint64_t            _cr0;
+    uint64_t            _cr2;
     uint64_t            _cr3;
     uint64_t            _cr4;
 
@@ -44,10 +46,17 @@ typedef struct _debugger_packet_bp {
 
 typedef struct _debugger_packet_page_info {
 
-    uintptr_t   _address;
-    uint16_t    _flags;
+    uintptr_t   _address;    
 
 } _JOS_PACKED debugger_packet_page_info_t;
+
+typedef struct _debugger_packet_page_info_resp {
+
+    uintptr_t   _address;
+    //NOTE: assumes 4 level paging!
+    uintptr_t   _entries[4];
+
+} _JOS_PACKED debugger_packet_page_info_resp_t;
 
 typedef struct _debugger_task_info_header {
     
@@ -62,6 +71,18 @@ typedef struct _debugger_task_info {
     uint64_t            _entry_pt;
     interrupt_stack_t    _stack;
 } _JOS_PACKED debugger_task_info_t;
+
+typedef struct _debugger_packet_rdmsr {
+    uint32_t _msr;
+} _JOS_PACKED debugger_packet_rdmsr_t;
+
+typedef struct _debugger_packet_rdmsr_resp {
+    uint32_t    _msr;
+    uint32_t    _lo;
+    uint32_t    _hi;
+} _JOS_PACKED debugger_packet_rdmsr_resp_t;
+
+static peutil_pe_context_t* _pe_ctx = 0;
 
 // wait for debugger commands.
 // if isr_stack == 0 this will not allow continuing or single stepping (used by asserts)
@@ -97,14 +118,14 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
                 }
             }
             break;
-            case kDebuggerPacket_GetFrameFlags:
+            case kDebuggerPacket_TraversePageTable:
             {
-                debugger_packet_page_info_t resp_packet;
-                debugger_read_packet_body(&packet, (void*)&resp_packet._address, packet._length);
-                uint16_t flags;
-                pagetables_get_frame_flags((void*)resp_packet._address, &flags);                
-                resp_packet._flags = flags;
-                debugger_send_packet(kDebuggerPacket_GetFrameFlags_Resp, (void*)&resp_packet, sizeof(resp_packet));
+                debugger_packet_page_info_t page_info_packet;
+                debugger_read_packet_body(&packet, (void*)&page_info_packet, sizeof(page_info_packet));
+                debugger_packet_page_info_resp_t resp_packet;
+                resp_packet._address = page_info_packet._address;
+                pagetables_traverse_tables((void*)page_info_packet._address, resp_packet._entries, 4);
+                debugger_send_packet(kDebuggerPacket_TraversePageTable_Resp, (void*)&resp_packet, sizeof(resp_packet));
             }
             break;
             case kDebuggerPacket_Get_TaskList:
@@ -134,6 +155,19 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
                     memcpy(&info._stack, (const void*)ctx->_rsp, sizeof(interrupt_stack_t));
                     serial_write(kCom1, (const char*)&info, sizeof(info));
                 }
+            }
+            break;
+            case kDebuggerPacket_RDMSR:
+            {
+                debugger_packet_rdmsr_t rdmsr_packet;
+                debugger_read_packet_body(&packet, (void*)&rdmsr_packet, sizeof(rdmsr_packet));
+                debugger_packet_rdmsr_resp_t resp_packet;
+                resp_packet._msr = rdmsr_packet._msr;
+                uint32_t lo, hi;
+                x86_64_rdmsr(rdmsr_packet._msr, &lo, &hi);
+                resp_packet._lo = lo;
+                resp_packet._hi = hi;
+                debugger_send_packet(kDebuggerPacket_RDMSR_Resp, (void*)&resp_packet, sizeof(resp_packet));
             }
             break;
             case kDebuggerPacket_SingleStep:
@@ -206,6 +240,7 @@ static void _fill_in_debugger_packet(debugger_packet_bp_t* bp_info, interrupt_st
     memcpy(&bp_info->_stack, isr_stack, sizeof(interrupt_stack_t));
     _decode_instruction((const void*)isr_stack->rip, bp_info->_instruction);
     bp_info->_cr0 = x86_64_read_cr0();
+    bp_info->_cr2 = x86_64_read_cr2();
     bp_info->_cr3 = x86_64_read_cr3();
     bp_info->_cr4 = x86_64_read_cr4();
 }
@@ -317,6 +352,8 @@ _JOS_API_FUNC void debugger_initialise(void) {
 
 _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uint64_t image_base) {
     
+    _pe_ctx = pe_ctx;
+
     static const char dbg_conn_id[4] = {'j','o','s','x'};
     int conn_id_pos = 0;
     char in_char = serial_getch(kCom1, 1);

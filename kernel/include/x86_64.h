@@ -50,11 +50,40 @@ _JOS_INLINE_FUNC void x86_64_pause_cpu(void) {
     __asm__ volatile ("pause");
 }
 
+_JOS_INLINE_FUNC uint64_t x86_64_read_cr0(void)
+{
+    uint64_t val;
+    __asm__ volatile ( "mov %%cr0, %0" : "=r"(val) );
+    return val;
+}
+
+_JOS_INLINE_FUNC uint64_t x86_64_read_cr2(void)
+{
+    uint64_t val;
+    __asm__ volatile ( "mov %%cr2, %0" : "=r"(val) );
+    return val;
+}
+
+_JOS_INLINE_FUNC uint64_t x86_64_read_cr3(void)
+{
+    uint64_t val;
+    __asm__ volatile ( "mov %%cr3, %0" : "=r"(val) );
+    return val;
+}
+
+_JOS_INLINE_FUNC uint64_t x86_64_read_cr4(void)
+{
+    uint64_t val;
+    __asm__ volatile ( "mov %%cr4, %0" : "=r"(val) );
+    return val;
+}
+
 // (safe) dummy write to POST port, this usually provides a ~usecond delay
 #define x86_64_io_wait() x86_64_outb(0x80, 0)
 
 extern uint16_t x86_64_get_cs(void);
 extern uint16_t x86_64_get_ss(void);
+extern uint64_t x86_64_get_rsp(void);
 extern uint64_t x86_64_get_rflags(void);
 extern uint64_t x86_64_get_pml4(void);
 

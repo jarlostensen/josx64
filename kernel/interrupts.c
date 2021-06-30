@@ -166,10 +166,6 @@ void interrupts_isr_handler(interrupt_stack_t *stack) {
     {        
         isr_handler_func_t handler = _isr_handlers[stack->handler_id]._handler;
         if( handler ) {
-
-            // provide a read only context for the handler
-            // interrupt_stack_t ctx;
-            // memcpy(&ctx, stack, sizeof(interrupt_stack_t));
             x86_64_sti();       
             handler(stack);
             x86_64_cli();
@@ -178,19 +174,7 @@ void interrupts_isr_handler(interrupt_stack_t *stack) {
     }
 
     if ( !handled ) {
-        // and default handling, like this one
-        static const uint64_t kGeneralProtectionFault = 0x0d;
-        if ( stack->handler_id == kGeneralProtectionFault ) {
-           _JOS_KTRACE_CHANNEL(kInterruptsChannel, "#GPF: error code 0x%x, rip 0x%llx", stack->error_code,stack->rip);
-            wchar_t buf[512];
-            swprintf(buf,512,L"\nGPF, error code 0x%x: rip : 0x%016llx\n", 
-                stack->error_code,
-                stack->rip);
-            output_console_output_string(buf);
-            debugger_disasm((void*)stack->rip, 50, buf, 512);
-            output_console_output_string(buf);
-            halt_cpu();
-        }
+        _JOS_KTRACE_CHANNEL(kInterruptsChannel, "unhandled interrupt 0x%x", stack->handler_id);        
     }
 }
 

@@ -21,14 +21,49 @@ bool peutil_bind(peutil_pe_context_t* ctx, const void* ptr, peutil_instance_type
             ctx->_imageSections = (const IMAGE_SECTION_HEADER*)(ctx->_headers64 + 1);
             ctx->_numSections = ctx->_headers64->FileHeader.NumberOfSections;
             ctx->_is_dot_net = (ctx->_headers64->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR].VirtualAddress != 0);
+
+            // find .text since we use it often
+            for (WORD section = 0; section < ctx->_numSections; ++section)
+            {
+                static char* kDotTextName = ".text";
+                int n = 5;
+                while (n>=0) {
+                    if (ctx->_imageSections[section].Name[n] != kDotTextName[n]) {
+                        break;
+                    }
+                    --n;
+                }
+                if (n < 0) {
+                    ctx->_text_va = ctx->_imageSections[section].VirtualAddress;
+                    ctx->_text_ptr = ctx->_imageSections[section].PointerToRawData;
+                    ctx->_text_end = ctx->_imageSections[section].VirtualAddress + ctx->_imageSections[section].SizeOfRawData;
+                    break;
+                }
+			}
             return true;
         }
     }
     return false;
 }
 
-const void* peutil_rva_to_phys(peutil_pe_context_t* ctx, DWORD rva)
-{
+const bool peutil_phys_is_executable(peutil_pe_context_t* ctx, uintptr_t phys) {
+
+    if ((uintptr_t)phys < (uintptr_t)ctx->_header) {
+        return false;
+    }
+
+    uintptr_t rel = (uintptr_t)phys - (uintptr_t)ctx->_header;
+    uintptr_t rva;
+    if (ctx->_relocated) {
+        rva = rel;
+    }
+    else {
+        rva = rel + (ctx->_text_va - ctx->_text_ptr);
+    }
+    return rva < ctx->_text_end;
+}
+
+const void* peutil_rva_to_phys(peutil_pe_context_t* ctx, DWORD rva) {
     const IMAGE_SECTION_HEADER* section = peutil_section_for_rva(ctx, rva);
     if(!section)
         return 0;
