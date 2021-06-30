@@ -123,104 +123,128 @@ void uefi_init(CEfiHandle h) {
     _JOS_KTRACE_CHANNEL("efi_main", "kernel starting");
 }
 
-jo_status_t main_task(void* ptr) {
+static jo_status_t main_task(void* ptr);
+static void start_debugger() {
+    // start debugger
+    uint32_t col = output_console_get_colour();
+    output_console_set_colour(0xff2222);
+    output_console_output_string(L"\n\nwaiting for debugger...");
 
-    _JOS_KTRACE_CHANNEL("main_task", "starting");
+    debugger_wait_for_connection(&_pe_ctx, (uint64_t)_lip->image_base);
+    debugger_set_breakpoint((uintptr_t)main_task);
+
+    output_console_output_string(L"connected\n\n");
+    output_console_set_colour(col);
+}
+
+static bool _read_input(void) {
     wchar_t buf[128];
-
-    output_console_output_string(L"any key or ESC...\n");
-    
-    uint64_t t0 = clock_ms_since_boot();
-    bool done = false;
-    while(!done) {
-        if ( keyboard_has_key() ) {
-            uint32_t key = keyboard_get_last_key();
-            if ( KEYBOARD_VK_PRESSED(key) ) {
-                short c = (short)KEYBOARD_VK_CHAR(key);
-                
-                    switch(c) {
-                    case KEYBOARD_VK_ESC:
-                        output_console_output_string(L"\ngot ESC\n");
-                        done = true;
-                        break;
-                    case KEYBOARD_VK_RIGHT:
-                        output_console_output_string(L" -> ");
-                        break;
-                    case KEYBOARD_VK_LEFT:
-                        output_console_output_string(L" <- ");
-                        break;
-                    case KEYBOARD_VK_UP:
-                        output_console_output_string(L" ^ ");
-                        break;
-                    case KEYBOARD_VK_DOWN:
-                        output_console_output_string(L" v ");
-                        break;
-                    case KEYBOARD_VK_BACKSPACE:
-                        output_console_output_string(L"bs");
-                        break;
-                    case KEYBOARD_VK_CR:
-                        output_console_line_break();
-                        break;
-                    case KEYBOARD_VK_F1:
-                        output_console_output_string(L" F1 ");
-                        break;
-                    case KEYBOARD_VK_F2:
-                        output_console_output_string(L" F2 ");
-                        break;
-                    case KEYBOARD_VK_F3:
-                        output_console_output_string(L" F3 ");
-                        break;
-                    case KEYBOARD_VK_F4:
-                        output_console_output_string(L" F4 ");
-                        break;
-                    case KEYBOARD_VK_F5:
-                        output_console_output_string(L" F5 ");
-                        break;
-                    case KEYBOARD_VK_F6:
-                        output_console_output_string(L" F6 ");
-                        break;
-                    case KEYBOARD_VK_F7:
-                        output_console_output_string(L" F7 ");
-                        break;
-                    case KEYBOARD_VK_F8:
-                        output_console_output_string(L" F8 ");
-                        break;
-                    case KEYBOARD_VK_F9:
-                        output_console_output_string(L" F9 ");
-                        break;
-                    case KEYBOARD_VK_F10:
-                        output_console_output_string(L" F10 ");
-                        break;
-                    case KEYBOARD_VK_F11:
-                        output_console_output_string(L" F11 ");
-                        break;
-                    case KEYBOARD_VK_F12:
-                        output_console_output_string(L" F12 ");
-                        break;
-                    default: {
-                        swprintf(buf, 128, L"0x%x ", key);
-                        output_console_output_string(buf);                
-                    }
+    if ( keyboard_has_key() ) {
+        uint32_t key = keyboard_get_last_key();
+        if ( KEYBOARD_VK_PRESSED(key) ) {
+            short c = (short)KEYBOARD_VK_CHAR(key);
+            
+                switch(c) {
+                case KEYBOARD_VK_ESC:
+                    output_console_output_string(L"\ngot ESC\n");
+                    return true;
+                case KEYBOARD_VK_RIGHT:
+                    output_console_output_string(L" -> ");
                     break;
-                }                
-            }
+                case KEYBOARD_VK_LEFT:
+                    output_console_output_string(L" <- ");
+                    break;
+                case KEYBOARD_VK_UP:
+                    output_console_output_string(L" ^ ");
+                    break;
+                case KEYBOARD_VK_DOWN:
+                    output_console_output_string(L" v ");
+                    break;
+                case KEYBOARD_VK_BACKSPACE:
+                    output_console_output_string(L"bs");
+                    break;
+                case KEYBOARD_VK_CR:
+                    output_console_line_break();
+                    break;
+                case KEYBOARD_VK_F1:
+                    output_console_output_string(L" F1 ");
+                    break;
+                case KEYBOARD_VK_F2:
+                    output_console_output_string(L" F2 ");
+                    break;
+                case KEYBOARD_VK_F3:
+                    output_console_output_string(L" F3 ");
+                    break;
+                case KEYBOARD_VK_F4:
+                    output_console_output_string(L" F4 ");
+                    break;
+                case KEYBOARD_VK_F5:
+                    output_console_output_string(L" F5 ");
+                    break;
+                case KEYBOARD_VK_F6:
+                    output_console_output_string(L" F6 ");
+                    break;
+                case KEYBOARD_VK_F7:
+                    output_console_output_string(L" F7 ");
+                    break;
+                case KEYBOARD_VK_F8:
+                    output_console_output_string(L" F8 ");
+                    break;
+                case KEYBOARD_VK_F9:
+                    output_console_output_string(L" F9 ");
+                    break;
+                case KEYBOARD_VK_F10:
+                    output_console_output_string(L" F10 ");
+                    break;
+                case KEYBOARD_VK_F11:
+                    output_console_output_string(L" F11 ");
+                    break;
+                case KEYBOARD_VK_F12:
+                    output_console_output_string(L" F12 ");
+                    break;
+                default: {
+                    swprintf(buf, 128, L"0x%x ", key);
+                    output_console_output_string(buf);                
+                }
+                break;
+            }                
         }
+    }
+    return false;
+}
 
+static jo_status_t main_task(void* ptr) {
+    
+    _JOS_KTRACE_CHANNEL("main_task", "starting");
+    output_console_output_string(L"any key or ESC...\n");
+
+    debugger_set_breakpoint((uintptr_t)_read_input);
+        
+    scroller_initialise(&(rect_t){
+        .top = 250,
+        .left = 8,
+        .bottom = 400,
+        .right = 600
+    });
+    
+    bool done = false;    
+    uint64_t t0 = clock_ms_since_boot(); 
+    while(!done) {                            
         uint64_t t1 = clock_ms_since_boot();
         if( t1 - t0 >= 33 ) {
             t0 = t1;
             scroller_render_field();            
         }
+        done = _read_input();
     }
     output_console_line_break();
     output_console_set_colour(video_make_color(0xff,0,0));
-
+    wchar_t buf[128];
     swprintf(buf,128,L"\nmain task is done @ %dms\n", clock_ms_since_boot());
     output_console_output_string(buf);
     
     _JOS_KTRACE_CHANNEL("main_task", "terminating %llu ms after boot", clock_ms_since_boot());    
-    // halt_cpu();
-    // _JOS_UNREACHABLE();
+    
     return _JO_STATUS_SUCCESS;
 }
 
@@ -317,38 +341,18 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     // everything needed to run anything; interrupts, clocks, keyboard...etc...
     kernel_runtime_init();
 
-    // start debugger
-    uint32_t col = output_console_get_colour();
-    output_console_set_colour(0xff2222);
-    output_console_output_string(L"\n\nwaiting for debugger...");
-    debugger_wait_for_connection(&_pe_ctx, (uint64_t)_lip->image_base);
-    output_console_output_string(L"connected\n\n");
-    output_console_set_colour(col);
-
+   
     // ================================================================
 
-    scroller_initialise(&(rect_t){
-        .top = 250,
-        .left = 8,
-        .bottom = 400,
-        .right = 600
-    });
-
-    uint64_t elapsed = __rdtsc();
-    x86_64_io_wait();
-    elapsed = __rdtsc() - elapsed;
-
-    _JOS_KTRACE_CHANNEL("efi_main", "port 0x80 wait took ~ %d cycles\n", elapsed);
-        
     tasks_create(&(task_create_args_t){
          .func = main_task,
          .pri = kTaskPri_Normal,
-         .name = "main_task"        
-    },
-    (jos_allocator_t*)_efi_allocator);    
+         .name = "main_task"
+    });
+
+    start_debugger();    
 
     output_console_output_string(L"starting idle task...\n");
-
     // this never actually returns...
     kernel_runtime_start();
 

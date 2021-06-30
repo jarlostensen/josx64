@@ -98,6 +98,8 @@ typedef struct _debugger_breakpoint {
 #define _MAX_BREAKPOINTS 16
 #define _BREAKPOINT_INSTR 0xcc
 static debugger_breakpoint_t _breakpoints[_MAX_BREAKPOINTS];
+// tracks the last runtime bp we've hit so that we can restore it after a trap
+static debugger_breakpoint_t _last_rt_bp;
 static size_t _num_breakpoints = 0;
 
 _JOS_API_FUNC void debugger_set_breakpoint(uintptr_t at) {    
@@ -107,8 +109,11 @@ _JOS_API_FUNC void debugger_set_breakpoint(uintptr_t at) {
         if ( _breakpoints[bp]._at == at ) {
             // re-activate
             _JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint re-activated at 0x%llx", at);
-            _breakpoints[bp]._instr_byte = ((uint8_t*)at)[0];
-            ((uint8_t*)at)[0] = _BREAKPOINT_INSTR;
+            uint8_t instr_byte = ((uint8_t*)at)[0];
+            if ( instr_byte!=_BREAKPOINT_INSTR ) {
+                _breakpoints[bp]._instr_byte = instr_byte;
+                ((uint8_t*)at)[0] = _BREAKPOINT_INSTR;
+            }            
             _breakpoints[bp]._active = true;
             existing = true;
             break;
@@ -355,27 +360,54 @@ _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffe
 static void _debugger_isr_handler(interrupt_stack_t * stack) {
     
     if ( debugger_is_connected() ) {
+
+        debugger_breakpoint_t* bp = 0;
+
         // -------------------------------------- running in debugger
         switch ( stack->handler_id ) {
             case 1: // TRAP 
             case 3: // breakpoint
             {       
-                // first check if we've hit a programmatic breakpoint
-                debugger_breakpoint_t* bp = _debugger_breakpoint_at(stack->rip - 1);
-                if ( bp ) {
-                    _JOS_KTRACE_CHANNEL(kDebuggerChannel, "hit programmatic bp @ 0x%llx", bp->_at);
-                    // re-set instruction
-                    ((uint8_t*)bp->_at)[0] = bp->_instr_byte;
-                    // go back so that we'll execute the original instruction next
-                    --stack->rip;
+                if ( _last_rt_bp._active ) {
+                    // we're trapping after a runtime bp instruction
+                    // we now need to restore it by poking back in the 0xcc byte and continue
 
-                    //TODO: restore the bp...
+                    uint8_t instr = ((uint8_t*)_last_rt_bp._at)[0];
+                    _JOS_ASSERT(instr!=_BREAKPOINT_INSTR);
+                    _last_rt_bp._instr_byte = instr;
+                    // reset to int 3
+                    ((uint8_t*)_last_rt_bp._at)[0] = _BREAKPOINT_INSTR;
+                    _last_rt_bp._active = false;
+                    _CLEAR_TF(stack);
+
+                    // we're done here
+                    return;
                 }
+                else {
+                    // first check if we've hit a programmatic breakpoint
+                    bp = _debugger_breakpoint_at(stack->rip - 1);
+                    if ( bp && bp->_active ) {
+                        _JOS_KTRACE_CHANNEL(kDebuggerChannel, "hit programmatic bp @ 0x%llx", bp->_at);
+                        // re-set instruction
+                        ((uint8_t*)bp->_at)[0] = bp->_instr_byte;
+                        // go back so that we'll execute the original instruction next
+                        --stack->rip;                                            
+                    }
 
-                // _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx", context->rip);
+                    if ( !bp || bp->_active ) {
+                        // _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx", context->rip);
+                        debugger_packet_bp_t bp_info;
+                        _fill_in_debugger_packet(&bp_info, stack);
+                        debugger_send_packet(kDebuggerPacket_Breakpoint, &bp_info, sizeof(bp_info));
+                    }
+                }
+            }
+            break;
+            case 6: // UD#
+            {
                 debugger_packet_bp_t bp_info;
                 _fill_in_debugger_packet(&bp_info, stack);
-                debugger_send_packet(kDebuggerPacket_Breakpoint, &bp_info, sizeof(bp_info));
+                debugger_send_packet(kDebuggerPacket_UD, &bp_info, sizeof(bp_info));
             }
             break;
             case 13: // #GPF
@@ -396,11 +428,26 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
 
         // enter loop waiting for further instructions
         _debugger_loop(stack);
+
+        if ( bp && bp->_active ) {
+            // if we are coming out of a runtime breakpoint that's still active we need to re-set it
+            _last_rt_bp._active = true;
+            _last_rt_bp._at = stack->rip;
+            _last_rt_bp._instr_byte = bp->_instr_byte;
+            // make sure we trap immediately after this instruction again so that we can restore it
+            _SET_TF(stack);
+        }
+        else {
+            _last_rt_bp._active = false;
+        }
     }
     // else: trigger assert?       
 }
 
 _JOS_API_FUNC void debugger_initialise(void) {
+
+    _last_rt_bp._active = false;
+
     // we "enter" the debugger with int 3 so we need to register this from the start
     interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=0x3, ._handler=_debugger_isr_handler });
     
@@ -434,6 +481,8 @@ _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uin
 
     // debug trap (single step)
     interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=1, ._handler=_debugger_isr_handler });
+    // undefined instruction fault
+    interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=6, ._handler=_debugger_isr_handler });
     // general protection fault
     interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=13, ._handler=_debugger_isr_handler });
     // page fault

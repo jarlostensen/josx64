@@ -16,13 +16,17 @@ typedef enum _debugger_packet_id {
     kDebuggerPacket_GPF,
     kDebuggerPacket_Get_TaskList,
     kDebuggerPacket_SingleStep,
-    kDebuggerPacket_GetFrameFlags,
+    kDebuggerPacket_TraversePageTable,
     kDebuggerPacket_Assert,
+    kDebuggerPacket_RDMSR,
+    kDebuggerPacket_UD,
     
     // response packets have a high bit set so that they can be filtered in the debugger
-    kDebuggerPacket_ReadTargetMemory_Resp = (kDebuggerPacket_ReadTargetMemory + 0x800),
-    kDebuggerPacket_Get_TaskList_Resp = (kDebuggerPacket_Get_TaskList + 0x800),
-    kDebuggerPacket_GetFrameFlags_Resp = (kDebuggerPacket_GetFrameFlags + 0x800),
+    kDebuggerPacket_Response_Mask = 0x800,
+    kDebuggerPacket_ReadTargetMemory_Resp = (kDebuggerPacket_ReadTargetMemory + kDebuggerPacket_Response_Mask),
+    kDebuggerPacket_Get_TaskList_Resp = (kDebuggerPacket_Get_TaskList + kDebuggerPacket_Response_Mask),
+    kDebuggerPacket_TraversePageTable_Resp = (kDebuggerPacket_TraversePageTable + kDebuggerPacket_Response_Mask),
+    kDebuggerPacket_RDMSR_Resp = (kDebuggerPacket_RDMSR + kDebuggerPacket_Response_Mask),
     
 } debugger_packet_id_t;
 
@@ -64,6 +68,7 @@ _JOS_API_FUNC void debugger_send_packet(debugger_packet_id_t id, void* data, uin
 _JOS_API_FUNC void debugger_read_packet_header(debugger_serial_packet_t* packet);
 _JOS_API_FUNC void debugger_read_packet_body(debugger_serial_packet_t* packet, void* buffer, uint32_t buffer_size);
 
+_JOS_API_FUNC void debugger_set_breakpoint(uintptr_t at);
 _JOS_API_FUNC void debugger_ext_break(void);
 
 #endif // _JOS_KERNEL_DEBUGGER_H
