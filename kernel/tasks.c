@@ -200,8 +200,10 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
     interrupt_frame->cs = x86_64_get_cs();
     interrupt_frame->ss = x86_64_get_ss();
 
-    // points to the 16 byte aligned top of stack which will be active once the task switch occurs
-    interrupt_frame->rsp = stack_top;
+    // The top of stack is 16 byte aligned but the call to _task_wrapper will 
+    // push an 8 byte return value on to the stack, making it non-aligned again.
+    // This adjustment makes sure that we're 16-byte aligned again when the task function is invoked
+    interrupt_frame->rsp = stack_top - 8;
     interrupt_frame->rbp = interrupt_frame->rsp;
     _JOS_ASSERT(interrupt_frame->rsp>(uintptr_t)(ctx+1));
 
