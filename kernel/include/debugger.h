@@ -21,6 +21,7 @@ typedef enum _debugger_packet_id {
     kDebuggerPacket_RDMSR,
     kDebuggerPacket_UD,
     kDebuggerPacket_UpdateBreakpoints,
+	kDebuggerPacket_BreakpointCallstack,
     
     // response packets have a high bit set so that they can be filtered in the debugger
     kDebuggerPacket_Response_Mask = 0x800,
@@ -42,19 +43,6 @@ typedef struct _debugger_serial_packet {
 } JOS_PACKED;
 typedef struct _debugger_serial_packet debugger_serial_packet_t;
 
-_JOS_INLINE_FUNC void debugger_packet_create(debugger_serial_packet_t* packet, debugger_packet_id_t id, unsigned int length) {
-    packet->_id = (uint32_t)id;
-    packet->_length = (uint32_t)length;
-}
-
-_JOS_INLINE_FUNC debugger_packet_id_t debugger_packet_id(debugger_serial_packet_t* packet) {
-    return (debugger_packet_id_t)packet->_id;
-}
-
-_JOS_INLINE_FUNC unsigned int debugger_packet_length(debugger_serial_packet_t* packet) {
-    return (unsigned int)packet->_length;
-}
-
 // waits for an establishes a connection with the remote debugger
 // subsequently the "debugger_is_connected" function will return true
 _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uint64_t image_base);
@@ -64,12 +52,11 @@ _JOS_API_FUNC void debugger_trigger_assert(const char* cond, const char* file, i
 
 // true if we're connected to a debugger...obviously
 _JOS_API_FUNC bool debugger_is_connected(void);
+// set a breakpoint at the given location
+_JOS_API_FUNC void debugger_set_breakpoint(uintptr_t at);
 
 _JOS_API_FUNC void debugger_send_packet(debugger_packet_id_t id, void* data, uint32_t length);
 _JOS_API_FUNC void debugger_read_packet_header(debugger_serial_packet_t* packet);
 _JOS_API_FUNC void debugger_read_packet_body(debugger_serial_packet_t* packet, void* buffer, uint32_t buffer_size);
-
-_JOS_API_FUNC void debugger_set_breakpoint(uintptr_t at);
-_JOS_API_FUNC void debugger_ext_break(void);
 
 #endif // _JOS_KERNEL_DEBUGGER_H

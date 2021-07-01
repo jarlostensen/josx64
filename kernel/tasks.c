@@ -225,6 +225,11 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
 
 // ------------------------------------------------------
 
+_JOS_API_FUNC task_context_t* tasks_this_task(void) {
+	cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);    
+	return cpu_ctx->_running_task;
+}
+
 task_handle_t   tasks_create(task_create_args_t* args) {
 
     _JOS_KTRACE_CHANNEL(kTaskChannel, "created task \"%s\" 0x%llx (0x%llx), pri %d", 

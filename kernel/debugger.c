@@ -43,6 +43,9 @@ typedef struct _debugger_packet_bp {
     uint64_t            _cr3;
     uint64_t            _cr4;
 
+	// NOTE: an array of _stack_size of 8 byte pointers follows this packet if a call stack is present
+	uint16_t _call_stack_size;
+
 } _JOS_PACKED debugger_packet_bp_t;
 
 typedef struct _debugger_packet_page_info {
@@ -105,9 +108,9 @@ typedef struct _debugger_breakpoint {
 
 #define _BREAKPOINT_INSTR 0xcc
 static vector_t _breakpoints;
+static jos_allocator_t*  _allocator = 0;
 // tracks the last runtime bp we've hit so that we can restore it after a trap
 static debugger_breakpoint_t _last_rt_bp;
-static jos_allocator_t*  _allocator = 0;
 
 
 #define _CLEAR_TF(isr_stack) isr_stack->rflags &= ~(1<<8)
@@ -123,7 +126,6 @@ if (!bp->_active) {\
 		((uint8_t*)bp->_at)[0] = _BREAKPOINT_INSTR;\
 			bp->_active = true;\
 }
-
 
 _JOS_API_FUNC void debugger_set_breakpoint(uintptr_t at) {    
     // first check if the breakpoint is already set
@@ -389,6 +391,7 @@ static void _fill_in_debugger_packet(debugger_packet_bp_t* bp_info, interrupt_st
     bp_info->_cr2 = x86_64_read_cr2();
     bp_info->_cr3 = x86_64_read_cr3();
     bp_info->_cr4 = x86_64_read_cr4();
+	bp_info->_call_stack_size = 0;
 }
 
 _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length) {
@@ -484,7 +487,7 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
                     // first check if we've hit a programmatic breakpoint
                     bp = _debugger_breakpoint_at(stack->rip - 1);
                     if ( bp && bp->_active ) {
-                        _JOS_KTRACE_CHANNEL(kDebuggerChannel, "hit programmatic bp @ 0x%llx", bp->_at);
+                        //_JOS_KTRACE_CHANNEL(kDebuggerChannel, "hit programmatic bp @ 0x%llx", bp->_at);
                         // re-set instruction
                         ((uint8_t*)bp->_at)[0] = bp->_instr_byte;
                         // go back so that we'll execute the original instruction next
@@ -495,7 +498,32 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
                         // _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx", context->rip);
                         debugger_packet_bp_t bp_info;
                         _fill_in_debugger_packet(&bp_info, stack);
-                        debugger_send_packet(kDebuggerPacket_Breakpoint, &bp_info, sizeof(bp_info));
+
+						// unwind the call stack
+						// here we just look up stack entries to see if they point to executable code.
+						// the debugger will check these for actual call sites
+						task_context_t* this_task = tasks_this_task();
+						uint64_t* rsp = (uint64_t*)stack->rsp;
+						const uint64_t* stack_end = (const uint64_t*)this_task->_stack_top;
+
+						static vector_t callstack;
+						static bool callstack_initialised = false;
+						if (!callstack_initialised) {
+							vector_create(&callstack, 16, sizeof(uint64_t), _allocator);
+						}
+						while (rsp < stack_end) {
+							if (peutil_phys_is_executable(_pe_ctx, *rsp)) {
+								vector_push_back(&callstack, (void*)rsp);
+							}
+							++rsp;
+						}
+
+						bp_info._call_stack_size = (uint16_t)vector_size(&callstack);
+						debugger_send_packet(kDebuggerPacket_Breakpoint, &bp_info, sizeof(bp_info));
+
+						if (bp_info._call_stack_size) {
+							debugger_send_packet(kDebuggerPacket_BreakpointCallstack, vector_data(&callstack), bp_info._call_stack_size * sizeof(uint64_t));
+						}
                     }
                 }
             }
@@ -653,8 +681,4 @@ _JOS_API_FUNC void debugger_read_packet_body(debugger_serial_packet_t* packet, v
         return;
     assert(packet->_length <= buffer_size);
     serial_read(kCom1, (char*)buffer, packet->_length);
-}
-
-_JOS_API_FUNC void debugger_ext_break(void) {
-    _JOS_GDB_DBGBREAK();
 }
