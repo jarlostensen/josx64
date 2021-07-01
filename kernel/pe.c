@@ -46,7 +46,7 @@ bool peutil_bind(peutil_pe_context_t* ctx, const void* ptr, peutil_instance_type
     return false;
 }
 
-const bool peutil_phys_is_executable(peutil_pe_context_t* ctx, uintptr_t phys) {
+const bool peutil_phys_is_executable(peutil_pe_context_t* ctx, uintptr_t phys, uintptr_t* out_rva) {
 
     if ((uintptr_t)phys < (uintptr_t)ctx->_header) {
         return false;
@@ -59,6 +59,9 @@ const bool peutil_phys_is_executable(peutil_pe_context_t* ctx, uintptr_t phys) {
     }
     else {
         rva = rel + (ctx->_text_va - ctx->_text_ptr);
+    }
+    if (out_rva) {
+        *out_rva = rva;
     }
     return rva < ctx->_text_end;
 }

@@ -512,7 +512,7 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
 							vector_create(&callstack, 16, sizeof(uint64_t), _allocator);
 						}
 						while (rsp < stack_end) {
-							if (peutil_phys_is_executable(_pe_ctx, *rsp)) {
+							if (peutil_phys_is_executable(_pe_ctx, *rsp, 0)) {
 								vector_push_back(&callstack, (void*)rsp);
 							}
 							++rsp;

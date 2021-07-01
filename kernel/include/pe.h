@@ -58,4 +58,4 @@ const void* peutil_rva_to_phys(peutil_pe_context_t* ctx, DWORD rva);
 
 const IMAGE_SECTION_HEADER* peutil_section_for_rva(peutil_pe_context_t* ctx, DWORD rva);
 
-const bool peutil_phys_is_executable(peutil_pe_context_t* ctx, uintptr_t phys);
+const bool peutil_phys_is_executable(peutil_pe_context_t* ctx, uintptr_t phys, uintptr_t* out_rva);

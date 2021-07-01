@@ -158,7 +158,7 @@ static jo_status_t _idle_task(void* ptr) {
 
 static void _task_wrapper(task_context_t* ctx) {
 
-    jo_status_t status _JOS_MAYBE_UNUSED = ctx->_func(ctx->_ptr);
+	jo_status_t status _JOS_MAYBE_UNUSED = ctx->_func(ctx->_ptr);
 
     // post-amble: remove this task and switch to a new one
     cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
@@ -205,8 +205,7 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
     // This adjustment makes sure that we're 16-byte aligned again when the task function is invoked
     interrupt_frame->rsp = stack_top - 8;
     interrupt_frame->rbp = interrupt_frame->rsp;
-    _JOS_ASSERT(interrupt_frame->rsp>(uintptr_t)(ctx+1));
-
+    
     // always enable IF for tasks!
     interrupt_frame->rflags = x86_64_get_rflags() | (1ull<<9);
 
@@ -218,7 +217,8 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
     ctx->_stack[0] = (uint64_t)interrupt_frame;
     ctx->_stack[1] = interrupt_frame->ss;
     
-    ctx->_stack_top = stack_top;
+	// this is as far up as a stack unwind can go, beyond this there is no sensible information
+    ctx->_stack_top = interrupt_frame->rsp;
 
     return ctx;
 }
