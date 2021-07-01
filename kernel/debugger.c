@@ -6,7 +6,8 @@
 #include <kernel.h>
 #include <debugger.h>
 #include <serial.h>
-#include <linear_allocator.h>
+#include <collections.h>
+#include <arena_allocator.h>
 #include <extensions/json.h>
 #include <extensions/base64.h>
 #include <smp.h>
@@ -82,12 +83,18 @@ typedef struct _debugger_packet_rdmsr_resp {
     uint32_t    _hi;
 } _JOS_PACKED debugger_packet_rdmsr_resp_t;
 
+#define _BREAKPOINT_STATUS_ENABLED  0
+#define _BREAKPOINT_STATUS_DISABLED 1
+#define _BREAKPOINT_STATUS_CLEARED  2
+typedef struct _debugger_packet_breakpoint_info {
+    uint64_t    _at;
+    uint8_t     _edc;
+} _JOS_PACKED debugger_packet_breakpoint_info_t;
+
 static peutil_pe_context_t* _pe_ctx = 0;
 static ZydisDecoder _zydis_decoder;
 static const char* kDebuggerChannel = "debugger";
 
-// ==============================================
-//TODO: TESTING:
 typedef struct _debugger_breakpoint {
 
     bool        _active;
@@ -95,53 +102,70 @@ typedef struct _debugger_breakpoint {
     uint8_t     _instr_byte;    
 
 } debugger_breakpoint_t;
-#define _MAX_BREAKPOINTS 16
+
 #define _BREAKPOINT_INSTR 0xcc
-static debugger_breakpoint_t _breakpoints[_MAX_BREAKPOINTS];
+static vector_t _breakpoints;
 // tracks the last runtime bp we've hit so that we can restore it after a trap
 static debugger_breakpoint_t _last_rt_bp;
-static size_t _num_breakpoints = 0;
+static jos_allocator_t*  _allocator = 0;
+
+
+#define _CLEAR_TF(isr_stack) isr_stack->rflags &= ~(1<<8)
+#define _SET_TF(isr_stack) isr_stack->rflags |= (1<<8)
+#define _DISABLE_BP_IF_ACTIVE(bp)\
+if (bp->_active) {\
+	((uint8_t*)bp->_at)[0] = bp->_instr_byte;\
+		bp->_active = false;\
+}
+#define _RESTORE_BP_IF_INACTIVE(bp)\
+if (!bp->_active) {\
+	bp->_instr_byte = ((uint8_t*)bp->_at)[0];\
+		((uint8_t*)bp->_at)[0] = _BREAKPOINT_INSTR;\
+			bp->_active = true;\
+}
+
 
 _JOS_API_FUNC void debugger_set_breakpoint(uintptr_t at) {    
     // first check if the breakpoint is already set
     bool existing = false;
-    for ( size_t bp = 0; bp < _num_breakpoints; ++bp ) {
-        if ( _breakpoints[bp]._at == at ) {
+    const size_t num_bps = vector_size(&_breakpoints);
+	debugger_breakpoint_t* bp = vector_data(&_breakpoints);
+    for ( size_t bpi = 0; bpi < num_bps; ++bpi ) {
+        if ( bp->_at == at ) {
             // re-activate
             _JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint re-activated at 0x%llx", at);
             uint8_t instr_byte = ((uint8_t*)at)[0];
             if ( instr_byte!=_BREAKPOINT_INSTR ) {
-                _breakpoints[bp]._instr_byte = instr_byte;
+                bp->_instr_byte = instr_byte;
                 ((uint8_t*)at)[0] = _BREAKPOINT_INSTR;
             }            
-            _breakpoints[bp]._active = true;
+            bp->_active = true;
             existing = true;
             break;
         }
+		++bp;
     }
     if ( !existing ) {
-        _JOS_ASSERT(_num_breakpoints<_MAX_BREAKPOINTS);
         _JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint set at 0x%llx", at);
-        _breakpoints[_num_breakpoints]._at = at;
-        _breakpoints[_num_breakpoints]._instr_byte = ((uint8_t*)at)[0];
-        ((uint8_t*)at)[0] = _BREAKPOINT_INSTR;
-        _breakpoints[_num_breakpoints]._active = true;
-        ++_num_breakpoints;
+		debugger_breakpoint_t new_bp = { ._at = at, ._instr_byte = ((uint8_t*)at)[0], ._active = true };
+		((uint8_t*)at)[0] = _BREAKPOINT_INSTR;
+		vector_push_back(&_breakpoints, &new_bp);
     }
 }
 
 static debugger_breakpoint_t* _debugger_breakpoint_at(uintptr_t at)  {
-    for ( size_t bp = 0; bp < _num_breakpoints; ++bp ) {
-        if ( _breakpoints[bp]._at == at ) {
-            return _breakpoints+bp;
+	const size_t num_bps = vector_size(&_breakpoints);
+	debugger_breakpoint_t* bp = vector_data(&_breakpoints);
+    for ( size_t bpi = 0; bpi < num_bps; ++bpi ) {
+        if ( bp->_at == at ) {
+			// TODO: strictly this should be the index since the vector can re-scale
+			// but we're invoking this function in a controlled serial way so we're good for now...
+            return bp;
         }
+		++bp;
     }
     return 0;
 }
-// ==============================================
-
-#define _CLEAR_TF(isr_stack) isr_stack->rflags &= ~(1<<8)
-#define _SET_TF(isr_stack) isr_stack->rflags |= (1<<8)
 
 // wait for debugger commands.
 // if isr_stack == 0 this will not allow continuing or single stepping (used by asserts)
@@ -154,6 +178,79 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
         debugger_serial_packet_t packet;
         debugger_read_packet_header(&packet);
         switch(packet._id) {
+            case kDebuggerPacket_UpdateBreakpoints:
+            {
+				// NOTE:
+				// this assumes that the debugger and kernel maintain a synchronised list of breakoints
+				// and that the debugger sends the full list of breakpoints whenever something changes.
+				// if the list of breakpoints is large (100's) then this is not efficient but that is an optimisation problem 
+				// to be addressed later - if at all required.
+
+                debugger_packet_breakpoint_info_t info;
+                size_t num_packets = packet._length / sizeof(info);
+				if (num_packets == 0) {
+					// clear all breakpoints
+
+					// first restore all instruction bytes
+					const size_t num_bps = vector_size(&_breakpoints);					
+					for (size_t bpi = 0; bpi < num_bps; ++bpi) {
+						debugger_breakpoint_t* bp = (debugger_breakpoint_t*)vector_at(&_breakpoints, bpi);						
+						_DISABLE_BP_IF_ACTIVE(bp);
+					}					
+					vector_clear(&_breakpoints);
+				}
+				else {
+					// update specific breakpoints
+					void* packet_buffer = _allocator->alloc(_allocator, packet._length);
+					_JOS_ASSERT(packet_buffer);
+					debugger_read_packet_body(&packet, packet_buffer, packet._length);
+					debugger_packet_breakpoint_info_t* bpinfo = (debugger_packet_breakpoint_info_t*)packet_buffer;
+					vector_t updated_breakpoints;			
+					vector_create_like(&updated_breakpoints, &_breakpoints);
+
+					_JOS_KTRACE_CHANNEL(kDebuggerChannel, "updating %d breakpoints", num_packets);
+					
+					while (num_packets--) {
+
+						debugger_breakpoint_t* bp = _debugger_breakpoint_at(bpinfo->_at);
+						if (bp) {
+							switch (bpinfo->_edc) {
+								case _BREAKPOINT_STATUS_ENABLED:
+									_RESTORE_BP_IF_INACTIVE(bp);
+									vector_push_back(&updated_breakpoints, (void*)bp);
+									break;
+								case _BREAKPOINT_STATUS_DISABLED:
+									_DISABLE_BP_IF_ACTIVE(bp);
+									vector_push_back(&updated_breakpoints, (void*)bp);
+									break;
+								case _BREAKPOINT_STATUS_CLEARED:
+									_DISABLE_BP_IF_ACTIVE(bp);
+									break;
+								default:;
+							}
+						}
+						else {
+							// new breakpoint, just add it to the list
+							debugger_breakpoint_t new_bp = { 
+								._at = bpinfo->_at, 
+								._instr_byte = ((uint8_t*)bpinfo->_at)[0], 
+								._active = bpinfo->_edc == _BREAKPOINT_STATUS_ENABLED 
+							};
+							if (new_bp._active) {
+								((uint8_t*)bpinfo->_at)[0] = _BREAKPOINT_INSTR;
+							}							
+							vector_push_back(&updated_breakpoints, &new_bp);
+							_JOS_KTRACE_CHANNEL(kDebuggerChannel, "adding new breakpoint @ 0x%llx", bpinfo->_at);
+						}
+					}
+					
+					vector_swap(&updated_breakpoints, &_breakpoints);
+					vector_destroy(&updated_breakpoints);
+					_allocator->free(_allocator, packet_buffer);
+					_JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoints updated");
+				}
+            }
+            break;
             case kDebuggerPacket_ReadTargetMemory:
             {                
                 //_JOS_KTRACE_CHANNEL("debugger", "kDebuggerPacket_ReadTargetMemory");
@@ -444,14 +541,19 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
     // else: trigger assert?       
 }
 
-_JOS_API_FUNC void debugger_initialise(void) {
+_JOS_API_FUNC void debugger_initialise(jos_allocator_t* allocator) {
+
+	// we're good with a 2MB heap for now
+#define _DEBUGGER_HEAP_SIZE 2*1024*1024
+	_allocator = (jos_allocator_t*)arena_allocator_create(allocator->alloc(allocator, _DEBUGGER_HEAP_SIZE), _DEBUGGER_HEAP_SIZE);
 
     _last_rt_bp._active = false;
-
     // we "enter" the debugger with int 3 so we need to register this from the start
     interrupts_set_isr_handler(&(isr_handler_def_t){ ._isr_number=0x3, ._handler=_debugger_isr_handler });
     
     ZydisDecoderInit(&_zydis_decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
+
+	vector_create(&_breakpoints, 16, sizeof(debugger_breakpoint_t), _allocator);
 
     output_console_output_string(L"debug handler initialised\n");
 }

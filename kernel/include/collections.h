@@ -29,10 +29,35 @@ _JOS_API_FUNC void vector_set_at(vector_t* vec, size_t i, void* element);
 // get element at index n
 _JOS_API_FUNC void* vector_at(vector_t* vec, size_t n);
 
+_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE void vector_create_like(vector_t* vec, const vector_t* original) {
+	vector_create(vec, original->_capacity, original->_element_size, original->_allocator);
+}
+
 _JOS_INLINE_FUNC _JOS_ALWAYS_INLINE void vector_destroy(vector_t* vec)
 {
 	vec->_allocator->free(vec->_allocator, vec->_data);
 	memset(vec, 0, sizeof(vector_t));
+}
+
+_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE void vector_swap(vector_t* veca, vector_t* vecb) {
+#if defined(_JOS_SWAP_PTR)
+	_JOS_SWAP_PTR(veca->_allocator, vecb->_allocator);
+	_JOS_SWAP_PTR(veca->_data, vecb->_data);
+#else
+	uintptr_t tmp_a = (uintptr_t)veca->_allocator;
+	uintptr_t tmp_b = (uintptr_t)vecb->_allocator;
+	_JOS_SWAP(tmp_a, tmp_b);
+	veca->_allocator = (jos_allocator_t*)tmp_a;
+	vecb->_allocator = (jos_allocator_t*)tmp_b;
+	tmp_a = (uintptr_t)veca->_data;
+	tmp_b = (uintptr_t)vecb->_data;
+	_JOS_SWAP(tmp_a, tmp_b);
+	veca->_data = (void*)tmp_a;
+	vecb->_data = (void*)tmp_b;
+#endif
+	_JOS_SWAP(veca->_capacity, vecb->_capacity);
+	_JOS_SWAP(veca->_size, vecb->_size);
+	_JOS_SWAP(veca->_element_size, vecb->_element_size);
 }
 
 _JOS_INLINE_FUNC _JOS_ALWAYS_INLINE size_t vector_size(vector_t* vec)

@@ -20,6 +20,7 @@ typedef enum _debugger_packet_id {
     kDebuggerPacket_Assert,
     kDebuggerPacket_RDMSR,
     kDebuggerPacket_UD,
+    kDebuggerPacket_UpdateBreakpoints,
     
     // response packets have a high bit set so that they can be filtered in the debugger
     kDebuggerPacket_Response_Mask = 0x800,
@@ -31,7 +32,7 @@ typedef enum _debugger_packet_id {
 } debugger_packet_id_t;
 
 // to be called after early initialisation of interrupts
-_JOS_API_FUNC void debugger_initialise(void);
+_JOS_API_FUNC void debugger_initialise(jos_allocator_t* allocator);
 // outputs disassembly to the console 
 _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length);
 

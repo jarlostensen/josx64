@@ -73,7 +73,7 @@ jo_status_t kernel_uefi_init(kernel_uefi_init_args_t* args) {
 
 jo_status_t kernel_runtime_init(void) {
     interrupts_initialise_early();
-    debugger_initialise();
+	debugger_initialise((jos_allocator_t*)_kernel_allocator);
     clock_initialise();
     keyboard_initialise();    
     tasks_initialise((jos_allocator_t*)_kernel_allocator);

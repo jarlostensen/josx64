@@ -80,6 +80,7 @@ _JOS_INLINE_FUNC uint64_t x86_64_read_cr4(void)
 
 // (safe) dummy write to POST port, this usually provides a ~usecond delay
 #define x86_64_io_wait() x86_64_outb(0x80, 0)
+#define x86_64_debugbreak() __asm__ volatile( "int $03" )
 
 extern uint16_t x86_64_get_cs(void);
 extern uint16_t x86_64_get_ss(void);

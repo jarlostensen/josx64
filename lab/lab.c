@@ -551,8 +551,6 @@ static void ui_test_loop(void) {
 
 
 
-
-
 // ==============================================================================================================
 
 int main(void)
@@ -583,19 +581,33 @@ int main(void)
         0,
         "enabled"
         );
-
+*/
     HMODULE this_module = GetModuleHandle(0);
     hex_dump_mem((void*)this_module, 64, k8bitInt);
     peutil_pe_context_t pe_ctx;
     peutil_bind(&pe_ctx, (const void*)this_module, kPe_Relocated);
     uintptr_t entry = peutil_entry_point(&pe_ctx);
-*/
+    bool is_executable = peutil_phys_is_executable(&pe_ctx, entry);
+    is_executable = peutil_phys_is_executable(&pe_ctx, entry-0x100);
+    is_executable = peutil_phys_is_executable(&pe_ctx, (uintptr_t)(this_module) + 0x6c008);
+
+    void* heap = malloc(1024*1024);
+	jos_allocator_t* allocator = (jos_allocator_t*)arena_allocator_create(heap, 1024 * 1024);
+
+    vector_t a;
+    vector_t b;
+    vector_create(&a, 16, sizeof(int), allocator);
+    vector_create_like(&b, &a);
+    int e = 1;
+    vector_push_back(&b, (void*)&e);
+    vector_swap(&a, &b);
+    vector_destroy(&b);
         
-    test_fixed_allocator();
+    /*test_fixed_allocator();
     test_linear_allocator();
     test_arena_allocator_allocator();
 
-    test_json();
+    test_json();*/
 
 #if TODO
     //dump_index(pdb_index_load_from_pdb_yml(), 0);

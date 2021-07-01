@@ -40,6 +40,17 @@ typedef struct _rect {
     size_t      right;
 } rect_t;
 
+#define _JOS_SWAP(a,b)\
+(a) ^= (b);\
+(b) ^= (a); \
+(a) ^= (b)
+#if !defined(__clang__)
+#define _JOS_SWAP_PTR(a,b)\
+((uintptr_t)(a)) ^= ((uintptr_t)(b));\
+((uintptr_t)(b)) ^= ((uintptr_t)(a));\
+((uintptr_t)(a)) ^= ((uintptr_t)(b))
+#endif
+
 #ifdef _JOS_KERNEL_BUILD
 
 // NOTE: this ties us in with the debugger module which may not be something we want longer term

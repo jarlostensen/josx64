@@ -217,8 +217,6 @@ static jo_status_t main_task(void* ptr) {
     
     _JOS_KTRACE_CHANNEL("main_task", "starting");
     output_console_output_string(L"any key or ESC...\n");
-
-    debugger_set_breakpoint((uintptr_t)_read_input);
         
     scroller_initialise(&(rect_t){
         .top = 250,
