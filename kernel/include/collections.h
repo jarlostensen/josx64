@@ -33,6 +33,11 @@ _JOS_INLINE_FUNC _JOS_ALWAYS_INLINE void vector_create_like(vector_t* vec, const
 	vector_create(vec, original->_capacity, original->_element_size, original->_allocator);
 }
 
+_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE void vector_reset(vector_t* vec) {
+	// simply reset, no clearing of memory!
+	vec->_size = 0;
+}
+
 _JOS_INLINE_FUNC _JOS_ALWAYS_INLINE void vector_destroy(vector_t* vec)
 {
 	vec->_allocator->free(vec->_allocator, vec->_data);

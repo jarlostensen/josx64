@@ -88,6 +88,12 @@ x86_64_task_switch:
     ; save current context on this stack
     ; cs:_task_switch_resume for our return to this task
 
+    cli
+    xor     rax, rax
+    mov     ax, ss
+    push    rax
+    mov     rax, rsp
+    push    rax
     pushfq
     pop     rax
     ; make sure IF=1 always so that tasks never resume with it off
@@ -103,8 +109,7 @@ x86_64_task_switch:
     push    0
     PUSHAQ
 
-    cli
-    ; save current task's stack
+    ; save current task's switching stack
     mov     [rcx+0], rsp
     xor     rax, rax
     mov     ax, ss
@@ -113,7 +118,7 @@ x86_64_task_switch:
 ._task_switch_next:
     
     cli
-    ; switch to new task's stack
+    ; switch to new task's switching stack
     mov     rsp, [rdx+0]
     mov     rax, [rdx+8]
     mov     ss, ax          ;< this isn't really needed, since we never change ss but kept for good measure    

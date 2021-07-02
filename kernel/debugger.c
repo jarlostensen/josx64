@@ -385,8 +385,12 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
                     
                     static vector_t callstack;
                     static bool callstack_initialised = false;
-                    if (!callstack_initialised) {
+                    if (callstack_initialised) {
+                        // re-use
+                        vector_reset(&callstack);
+                    } else {
                         vector_create(&callstack, 16, sizeof(uint64_t), _allocator);
+                        callstack_initialised = true;
                     }
                     while (rsp < stack_end) {
                         if (peutil_phys_is_executable(_pe_ctx, *rsp, 0)) {

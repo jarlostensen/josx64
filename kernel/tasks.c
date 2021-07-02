@@ -113,7 +113,6 @@ static task_context_t*  _select_next_task_to_run(void) {
     }
 
     // if we get here the only task left to run is idle
-    _JOS_KTRACE_CHANNEL(kTaskChannel, "idle task only candidate");
     return 0;
 }
 
@@ -125,16 +124,17 @@ static void _yield_to_next_task(void) {
     task_context_t* next_task = _select_next_task_to_run();
     if( next_task ) {
         _JOS_KTRACE_CHANNEL(kTaskChannel, "switching from \"%s\" to \"%s\"", 
-            prev ? prev->_name : "(0)", cpu_ctx->_running_task->_name);
-        
+            prev ? prev->_name : "(0)", cpu_ctx->_running_task->_name);        
         x86_64_task_switch(prev ? prev->_stack : 0, cpu_ctx->_running_task->_stack);
     }
     // else we're now idling
-    //NOISE: 
-    _JOS_KTRACE_CHANNEL(kTaskChannel, "back to idling on cpu %d", per_cpu_this_cpu_id());
-    if ( prev != cpu_ctx->_cpu_idle ) {
+    if ( prev != cpu_ctx->_cpu_idle ) {        
         cpu_ctx->_running_task = cpu_ctx->_cpu_idle;
-        x86_64_task_switch(0, cpu_ctx->_cpu_idle->_stack);
+        //_JOS_KTRACE_CHANNEL(kTaskChannel, "back to \"%s\" on cpu %d, switch stack: 0x%llx", 
+        //    cpu_ctx->_running_task->_name, per_cpu_this_cpu_id(), 
+        //   cpu_ctx->_running_task->_stack[0]
+        //);
+        x86_64_task_switch(0, cpu_ctx->_running_task->_stack);
     }
 }
 
@@ -145,11 +145,10 @@ static void _yield_to_next_task(void) {
 //  happen because no other code can run. For that reason this task is only run at startup and 
 //  as the last thing when all other tasks are done.
 //
-static jo_status_t _idle_task(void* ptr) {    
-    _JOS_KTRACE_CHANNEL(kTaskChannel, "idle starting");
+static jo_status_t _idle_task(void* ptr) {        
     //ZZZ: not so much "true" as wait for a kernel shutdown signal   
     while(true) {
-        _yield_to_next_task();        
+        _yield_to_next_task();
         x86_64_pause_cpu();
     }
     _JOS_UNREACHABLE();
@@ -275,13 +274,12 @@ void tasks_initialise(jos_allocator_t * allocator) {
 void tasks_start_idle(void) {
     
     cpu_task_context_t* ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
-    // add idle task to this CPU
-    ctx->_running_task = ctx->_cpu_idle = _create_task_context(_idle_task, 0, "cpu_idle");
+    ctx->_running_task = 0;
+    ctx->_cpu_idle = _create_task_context(_idle_task, 0, "cpu_idle");
     //NOTE: idle priority is special, and lower than anything else
     ctx->_cpu_idle->_pri = kTaskPri_NumPris;
-    // we call this directly to kick things off and the first thing it will do 
-    // is to find another (higher priorrity) task to switch to
-    _idle_task(0);
+    // start the first task
+    _yield_to_next_task();
     _JOS_UNREACHABLE();
 }
 
