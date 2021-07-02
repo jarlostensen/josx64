@@ -74,7 +74,8 @@ static debugger_breakpoint_t* _set_breakpoint(uintptr_t at) {
 	for ( size_t bpi = 0; bpi < num_bps; ++bpi ) {
 		if ( bp->_at == at ) {
 			// re-activate
-			_JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint re-activated at 0x%llx", at);
+			//_JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint re-activated at 0x%llx", at);
+
 			uint8_t instr_byte = ((uint8_t*)at)[0];
 			if ( instr_byte!=_BREAKPOINT_INSTR ) {
 				bp->_instr_byte = instr_byte;
@@ -88,7 +89,8 @@ static debugger_breakpoint_t* _set_breakpoint(uintptr_t at) {
 		++bp;
 	}
 	if ( !existing ) {
-		_JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint set at 0x%llx", at);
+		//_JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint set at 0x%llx", at);
+
 		debugger_breakpoint_t new_bp = { ._at = at, ._instr_byte = ((uint8_t*)at)[0], ._active = true };
 		((uint8_t*)at)[0] = _BREAKPOINT_INSTR;
 		vector_push_back(&_breakpoints, &new_bp);
@@ -189,7 +191,7 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
 					debugger_read_packet_body(&packet, packet_buffer, packet._length);
 					debugger_packet_breakpoint_info_t* bpinfo = (debugger_packet_breakpoint_info_t*)packet_buffer;
 					
-					_JOS_KTRACE_CHANNEL(kDebuggerChannel, "updating %d breakpoints", num_packets);
+					// _JOS_KTRACE_CHANNEL(kDebuggerChannel, "updating %d breakpoints", num_packets);
 					
 					while (num_packets-- > 0) {
 
@@ -222,12 +224,12 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
 								((uint8_t*)bpinfo->_at)[0] = _BREAKPOINT_INSTR;
 							}							
 							vector_push_back(&_breakpoints, &new_bp);
-							_JOS_KTRACE_CHANNEL(kDebuggerChannel, "adding new breakpoint @ 0x%llx", bpinfo->_at);
+							
+							//_JOS_KTRACE_CHANNEL(kDebuggerChannel, "adding new breakpoint @ 0x%llx", bpinfo->_at);
 						}
 					}
 					
-					_allocator->free(_allocator, packet_buffer);
-					_JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoints updated");
+					_allocator->free(_allocator, packet_buffer);					
 				}
             }
             break;
@@ -298,13 +300,12 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
 							// this is a TRANSIENT breakpoint, i.e. it will be removed as soon as it's hit
 							bp->_transient = true;
                             _CLEAR_TF(isr_stack);
-
-							_JOS_KTRACE_CHANNEL(kDebuggerChannel, "step over call");
                         }
 						else {
-							// if it's not a CALL we just treat it as a normal single instruction step
+							// if it's not a CALL we just treat it as a normal single instruction step (and we will in fact pretend it is)							
+							_last_command = kDebuggerPacket_TraceStep;
 							_SET_TF(isr_stack);
-						}						
+						}
 						continue_run = true;
                     }
                 }
@@ -362,6 +363,7 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
 				bp = _debugger_breakpoint_at(stack->rip - 1);
 				if ( bp && bp->_active ) {
 					//_JOS_KTRACE_CHANNEL(kDebuggerChannel, "hit programmatic bp @ 0x%llx", bp->_at);
+
 					// re-set instruction
 					((uint8_t*)bp->_at)[0] = bp->_instr_byte;
 					// go back so that we'll execute the original instruction next
