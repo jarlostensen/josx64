@@ -34,9 +34,12 @@ static const char* kDebuggerChannel = "debugger";
 
 typedef struct _debugger_breakpoint {
 
-    bool        _active;
     uintptr_t   _at;
-    uint8_t     _instr_byte;    
+    uint8_t     _instr_byte;
+	bool        _active:1;
+	// a transient breakpoint is one which is known to the kernel only and 
+	// which will be removed as soon as it's hit. we use this for step-over functionality
+	bool 		_transient:1;
 
 } debugger_breakpoint_t;
 
@@ -45,6 +48,7 @@ static vector_t _breakpoints;
 static jos_allocator_t*  _allocator = 0;
 // tracks the last runtime bp we've hit so that we can restore it after a trap
 static debugger_breakpoint_t _last_rt_bp;
+static debugger_packet_id_t _last_command = kDebuggerPacket_End;
 
 
 #define _CLEAR_TF(isr_stack) isr_stack->rflags &= ~(1<<8)
@@ -61,32 +65,48 @@ if (!bp->_active) {\
 			bp->_active = true;\
 }
 
-_JOS_API_FUNC void debugger_set_breakpoint(uintptr_t at) {    
-    // first check if the breakpoint is already set
-    bool existing = false;
-    const size_t num_bps = vector_size(&_breakpoints);
+// create a new or update existing breakpoint to ACTIVE
+static debugger_breakpoint_t* _set_breakpoint(uintptr_t at) {
+	// first check if the breakpoint is already set
+	bool existing = false;
+	const size_t num_bps = vector_size(&_breakpoints);
 	debugger_breakpoint_t* bp = vector_data(&_breakpoints);
-    for ( size_t bpi = 0; bpi < num_bps; ++bpi ) {
-        if ( bp->_at == at ) {
-            // re-activate
-            _JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint re-activated at 0x%llx", at);
-            uint8_t instr_byte = ((uint8_t*)at)[0];
-            if ( instr_byte!=_BREAKPOINT_INSTR ) {
-                bp->_instr_byte = instr_byte;
-                ((uint8_t*)at)[0] = _BREAKPOINT_INSTR;
-            }            
-            bp->_active = true;
-            existing = true;
-            break;
-        }
+	for ( size_t bpi = 0; bpi < num_bps; ++bpi ) {
+		if ( bp->_at == at ) {
+			// re-activate
+			_JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint re-activated at 0x%llx", at);
+			uint8_t instr_byte = ((uint8_t*)at)[0];
+			if ( instr_byte!=_BREAKPOINT_INSTR ) {
+				bp->_instr_byte = instr_byte;
+				((uint8_t*)at)[0] = _BREAKPOINT_INSTR;
+			}            
+			bp->_active = true;
+			bp->_transient = false;
+			existing = true;
+			break;
+		}
 		++bp;
-    }
-    if ( !existing ) {
-        _JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint set at 0x%llx", at);
+	}
+	if ( !existing ) {
+		_JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint set at 0x%llx", at);
 		debugger_breakpoint_t new_bp = { ._at = at, ._instr_byte = ((uint8_t*)at)[0], ._active = true };
 		((uint8_t*)at)[0] = _BREAKPOINT_INSTR;
 		vector_push_back(&_breakpoints, &new_bp);
-    }
+		bp = vector_at(&_breakpoints, vector_size(&_breakpoints)-1);
+	}
+	return bp;
+}
+
+_JOS_API_FUNC void debugger_set_breakpoint(uintptr_t at) {    
+	_set_breakpoint(at);
+}
+
+static size_t _remove_breakpoint(debugger_breakpoint_t* bp_to_remove) {
+	// swap in last element to remove this one	
+	debugger_breakpoint_t* bps = vector_data(&_breakpoints);
+	const size_t end = vector_size(&_breakpoints);
+	memcpy(bp_to_remove, bps + end - 1, sizeof(debugger_breakpoint_t));
+	return end - 1;
 }
 
 static debugger_breakpoint_t* _debugger_breakpoint_at(uintptr_t at)  {
@@ -103,16 +123,43 @@ static debugger_breakpoint_t* _debugger_breakpoint_at(uintptr_t at)  {
     return 0;
 }
 
+static void _decode_instruction(const void* at, void* buffer) {
+	// decode the instruction @ rip so that we can send it to the debugger for display
+	ZydisDecodedInstruction instruction;
+	if (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&_zydis_decoder, at, INTEL_AMD_MAX_INSTRUCTION_LENGTH, &instruction)) ) {
+		memcpy(buffer, (const void*)at, instruction.length);
+	}
+	else {
+		// shouldn't really ever happen...
+		memset(buffer, 0, INTEL_AMD_MAX_INSTRUCTION_LENGTH);
+	}
+}
+
+static void _fill_in_debugger_packet(debugger_packet_bp_t* bp_info, interrupt_stack_t * isr_stack) {
+	memcpy(&bp_info->_stack, isr_stack, sizeof(interrupt_stack_t));
+	_decode_instruction((const void*)isr_stack->rip, bp_info->_instruction);
+	bp_info->_cr0 = x86_64_read_cr0();
+	bp_info->_cr2 = x86_64_read_cr2();
+	bp_info->_cr3 = x86_64_read_cr3();
+	bp_info->_cr4 = x86_64_read_cr4();
+	bp_info->_call_stack_size = 0;
+}
+
 // wait for debugger commands.
 // if isr_stack == 0 this will not allow continuing or single stepping (used by asserts)
-static void _debugger_loop(interrupt_stack_t * isr_stack) {
+static void _debugger_loop(interrupt_stack_t * isr_stack) {	
+
     if ( !debugger_is_connected() )
         return;
+
+	//_JOS_KTRACE_CHANNEL(kDebuggerChannel, "entering debugger, stack is 0x%llx", isr_stack);
    
     bool continue_run = false;
     while(!continue_run) {
         debugger_serial_packet_t packet;
         debugger_read_packet_header(&packet);
+		_last_command = packet._id;
+
         switch(packet._id) {
             case kDebuggerPacket_UpdateBreakpoints:
             {
@@ -158,11 +205,7 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
 								case _BREAKPOINT_STATUS_CLEARED:
 								{
 									_DISABLE_BP_IF_ACTIVE(bp);
-									debugger_breakpoint_t* bps = (debugger_breakpoint_t*)vector_data(&_breakpoints);
-									// swap in last element to remove this one
-									const size_t end = vector_size(&_breakpoints);
-									memcpy(bp, bps + end-1, sizeof(debugger_breakpoint_t));
-									--num_packets;
+									_remove_breakpoint(bp);
 								}
 								break;
 								default:;
@@ -221,11 +264,6 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
                 debugger_send_packet(kDebuggerPacket_TraversePageTable_Resp, (void*)&resp_packet, sizeof(resp_packet));
             }
             break;
-            case kDebuggerPacket_Get_TaskList:
-            {
-                //TODO:
-            }
-            break;
             case kDebuggerPacket_RDMSR:
             {
                 debugger_packet_rdmsr_t rdmsr_packet;
@@ -239,7 +277,7 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
                 debugger_send_packet(kDebuggerPacket_RDMSR_Resp, (void*)&resp_packet, sizeof(resp_packet));
             }
             break;
-            case kDebuggerPacket_SingleStep:
+            case kDebuggerPacket_TraceStep:
             {
                 if ( isr_stack ) {
                     // switch on the trap flag so that it will trigger on the next instruction after our iret
@@ -248,22 +286,30 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
                 }
             }
             break;
-			// WIP:
-            // case kDebuggerPacket_StepOver:
-            // {
-            //     if ( isr_stack ) {
-            //         // check if the next instruction is indeed something to skip, i.e. a call
-            //         ZydisDecodedInstruction instruction;
-            //         if (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&_zydis_decoder, isr_stack->rip, INTEL_AMD_MAX_INSTRUCTION_LENGTH, &instruction)) ) {
-            //             if ( instruction.mnemonic == ZYDIS_MNEMONIC_CALL ) {
-            //                 // we can skip this instruction so we'll set a bp after it and continue execution
-            //                 debugger_set_breakpoint(isr_stack->rip + instruction.length);
-            //                 _CLEAR_TF(isr_stack);
-            //             }
-            //         }
-            //     }
-            // }
-            // break;
+			case kDebuggerPacket_SingleStep:
+            {
+                if ( isr_stack ) {
+                    // check if the next instruction is indeed something to skip, i.e. a call
+                    ZydisDecodedInstruction instruction;
+                    if (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&_zydis_decoder, (void*)isr_stack->rip, INTEL_AMD_MAX_INSTRUCTION_LENGTH, &instruction)) ) {
+                        if ( instruction.mnemonic == ZYDIS_MNEMONIC_CALL ) {
+                            // we can skip this instruction so we'll set a bp after it and continue execution
+                            debugger_breakpoint_t* bp = _set_breakpoint(isr_stack->rip + instruction.length);
+							// this is a TRANSIENT breakpoint, i.e. it will be removed as soon as it's hit
+							bp->_transient = true;
+                            _CLEAR_TF(isr_stack);
+
+							_JOS_KTRACE_CHANNEL(kDebuggerChannel, "step over call");
+                        }
+						else {
+							// if it's not a CALL we just treat it as a normal single instruction step
+							_SET_TF(isr_stack);
+						}						
+						continue_run = true;
+                    }
+                }
+            }
+            break;
             case kDebuggerPacket_Continue:
             {
                 if ( isr_stack ) {
@@ -274,11 +320,131 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
             break;
             default:
             {
-                _JOS_KTRACE_CHANNEL("debugger", "unhandled packet id %d, length %d", packet._id, packet._length);
+                _JOS_KTRACE_CHANNEL(kDebuggerChannel, "unhandled packet id %d, length %d", packet._id, packet._length);
             }
             break;
         }
     }
+}
+
+
+//NOTE: this is the core of the debugger and handles int3, int1, and faults.
+static void _debugger_isr_handler(interrupt_stack_t * stack) {
+	
+	if ( debugger_is_connected() ) {
+		
+		debugger_breakpoint_t* bp = 0;
+		
+		// -------------------------------------- running in debugger
+		switch ( stack->handler_id ) {
+			case 1: // TRAP 
+			case 3: // breakpoint
+			{   				
+				// first clean up previous bp if there was one
+				if ( _last_rt_bp._active ) {
+
+					uint8_t instr = ((uint8_t*)_last_rt_bp._at)[0];
+					_JOS_ASSERT(instr!=_BREAKPOINT_INSTR);
+					_last_rt_bp._instr_byte = instr;
+					// reset to int 3
+					((uint8_t*)_last_rt_bp._at)[0] = _BREAKPOINT_INSTR;
+					_last_rt_bp._active = false;
+
+					// if we're not in the middle of a genuine trace we can clear TF
+					if (_last_command != kDebuggerPacket_TraceStep) {
+						_CLEAR_TF(stack);
+						// we're done here
+						return;
+					}
+				}
+				
+				// check if we've hit a programmatic breakpoint
+				bp = _debugger_breakpoint_at(stack->rip - 1);
+				if ( bp && bp->_active ) {
+					//_JOS_KTRACE_CHANNEL(kDebuggerChannel, "hit programmatic bp @ 0x%llx", bp->_at);
+					// re-set instruction
+					((uint8_t*)bp->_at)[0] = bp->_instr_byte;
+					// go back so that we'll execute the original instruction next
+					--stack->rip;
+				}
+				
+				if ( !bp || bp->_active ) {
+					//_JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint hit at 0x%016llx", bp->_at);
+					
+					debugger_packet_bp_t bp_info;
+					_fill_in_debugger_packet(&bp_info, stack);
+					
+					// unwind the call stack
+					// here we just look up stack entries to see if they point to executable code.
+					// the debugger will check these for actual call sites
+					task_context_t* this_task = tasks_this_task();
+					uint64_t* rsp = (uint64_t*)stack->rsp;
+					const uint64_t* stack_end = (const uint64_t*)this_task->_stack_top;
+					
+					static vector_t callstack;
+					static bool callstack_initialised = false;
+					if (!callstack_initialised) {
+						vector_create(&callstack, 16, sizeof(uint64_t), _allocator);
+					}
+					while (rsp < stack_end) {
+						if (peutil_phys_is_executable(_pe_ctx, *rsp, 0)) {
+							vector_push_back(&callstack, (void*)rsp);
+						}
+						++rsp;
+					}
+					
+					bp_info._call_stack_size = (uint16_t)vector_size(&callstack);
+					debugger_send_packet(kDebuggerPacket_Breakpoint, &bp_info, sizeof(bp_info));
+					
+					if (bp_info._call_stack_size) {
+						debugger_send_packet(kDebuggerPacket_BreakpointCallstack, vector_data(&callstack), bp_info._call_stack_size * sizeof(uint64_t));
+					}
+				}
+			}
+			break;
+			case 6: // UD#
+			{
+				debugger_packet_bp_t bp_info;
+				_fill_in_debugger_packet(&bp_info, stack);
+				debugger_send_packet(kDebuggerPacket_UD, &bp_info, sizeof(bp_info));
+			}
+			break;
+			case 13: // #GPF
+			{
+				debugger_packet_bp_t bp_info;
+				_fill_in_debugger_packet(&bp_info, stack);
+				debugger_send_packet(kDebuggerPacket_GPF, &bp_info, sizeof(bp_info));
+			}
+			break;
+			case 14: // #PF
+			{
+				_JOS_KTRACE_CHANNEL(kDebuggerChannel, "PF# at 0x%016llx", stack->rip);
+				//TODO:
+			}
+			break;
+			default:;
+		}
+		
+		// enter loop waiting for further instructions
+		_debugger_loop(stack);
+		
+		if ( bp && bp->_active && !bp->_transient ) {
+			// if we are coming out of a runtime breakpoint that's still active we need to re-set it
+			_last_rt_bp._active = true;
+			_last_rt_bp._at = stack->rip;
+			_last_rt_bp._instr_byte = bp->_instr_byte;
+			// make sure we trap immediately after this instruction again so that we can restore it
+			_SET_TF(stack);
+		}
+		else {
+			if (bp->_transient) {
+				// the bp was transient; remove it completely
+				_remove_breakpoint(bp);
+			}
+			_last_rt_bp._active = false;
+		}
+	}
+	// else: trigger assert?       
 }
 
 _JOS_API_FUNC void debugger_trigger_assert(const char* cond, const char* file, int line) {
@@ -306,28 +472,6 @@ _JOS_API_FUNC void debugger_trigger_assert(const char* cond, const char* file, i
     uint32_t json_size = (uint32_t)ftell(&stream);
     debugger_send_packet(kDebuggerPacket_Assert, (void*)json_buffer, json_size);
     _debugger_loop(0);
-}
-
-static void _decode_instruction(const void* at, void* buffer) {
-    // decode the instruction @ rip so that we can send it to the debugger for display
-    ZydisDecodedInstruction instruction;
-    if (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&_zydis_decoder, at, INTEL_AMD_MAX_INSTRUCTION_LENGTH, &instruction)) ) {
-        memcpy(buffer, (const void*)at, instruction.length);
-    }
-    else {
-        // shouldn't really ever happen...
-        memset(buffer, 0, INTEL_AMD_MAX_INSTRUCTION_LENGTH);
-    }
-}
-
-static void _fill_in_debugger_packet(debugger_packet_bp_t* bp_info, interrupt_stack_t * isr_stack) {
-    memcpy(&bp_info->_stack, isr_stack, sizeof(interrupt_stack_t));
-    _decode_instruction((const void*)isr_stack->rip, bp_info->_instruction);
-    bp_info->_cr0 = x86_64_read_cr0();
-    bp_info->_cr2 = x86_64_read_cr2();
-    bp_info->_cr3 = x86_64_read_cr3();
-    bp_info->_cr4 = x86_64_read_cr4();
-	bp_info->_call_stack_size = 0;
 }
 
 _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length) {
@@ -390,119 +534,6 @@ _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffe
     }
 
     output_buffer[output_buffer_length-1] = 0;
-}
-
-//NOTE: this is the core of the debugger and handles int3, int1, and faults.
-static void _debugger_isr_handler(interrupt_stack_t * stack) {
-    
-    if ( debugger_is_connected() ) {
-
-        debugger_breakpoint_t* bp = 0;
-
-        // -------------------------------------- running in debugger
-        switch ( stack->handler_id ) {
-            case 1: // TRAP 
-            case 3: // breakpoint
-            {       
-                if ( _last_rt_bp._active ) {
-                    // we're trapping after a runtime bp instruction
-                    // we now need to restore it by poking back in the 0xcc byte and continue
-
-                    uint8_t instr = ((uint8_t*)_last_rt_bp._at)[0];
-                    _JOS_ASSERT(instr!=_BREAKPOINT_INSTR);
-                    _last_rt_bp._instr_byte = instr;
-                    // reset to int 3
-                    ((uint8_t*)_last_rt_bp._at)[0] = _BREAKPOINT_INSTR;
-                    _last_rt_bp._active = false;
-                    _CLEAR_TF(stack);
-
-                    // we're done here
-                    return;
-                }
-                else {
-                    // first check if we've hit a programmatic breakpoint
-                    bp = _debugger_breakpoint_at(stack->rip - 1);
-                    if ( bp && bp->_active ) {
-                        //_JOS_KTRACE_CHANNEL(kDebuggerChannel, "hit programmatic bp @ 0x%llx", bp->_at);
-                        // re-set instruction
-                        ((uint8_t*)bp->_at)[0] = bp->_instr_byte;
-                        // go back so that we'll execute the original instruction next
-                        --stack->rip;                                            
-                    }
-
-                    if ( !bp || bp->_active ) {
-                        // _JOS_KTRACE_CHANNEL("debugger", "breakpoint hit at 0x%016llx", context->rip);
-                        debugger_packet_bp_t bp_info;
-                        _fill_in_debugger_packet(&bp_info, stack);
-
-						// unwind the call stack
-						// here we just look up stack entries to see if they point to executable code.
-						// the debugger will check these for actual call sites
-						task_context_t* this_task = tasks_this_task();
-						uint64_t* rsp = (uint64_t*)stack->rsp;
-						const uint64_t* stack_end = (const uint64_t*)this_task->_stack_top;
-
-						static vector_t callstack;
-						static bool callstack_initialised = false;
-						if (!callstack_initialised) {
-							vector_create(&callstack, 16, sizeof(uint64_t), _allocator);
-						}
-						while (rsp < stack_end) {
-							if (peutil_phys_is_executable(_pe_ctx, *rsp, 0)) {
-								vector_push_back(&callstack, (void*)rsp);
-							}
-							++rsp;
-						}
-
-						bp_info._call_stack_size = (uint16_t)vector_size(&callstack);
-						debugger_send_packet(kDebuggerPacket_Breakpoint, &bp_info, sizeof(bp_info));
-
-						if (bp_info._call_stack_size) {
-							debugger_send_packet(kDebuggerPacket_BreakpointCallstack, vector_data(&callstack), bp_info._call_stack_size * sizeof(uint64_t));
-						}
-                    }
-                }
-            }
-            break;
-            case 6: // UD#
-            {
-                debugger_packet_bp_t bp_info;
-                _fill_in_debugger_packet(&bp_info, stack);
-                debugger_send_packet(kDebuggerPacket_UD, &bp_info, sizeof(bp_info));
-            }
-            break;
-            case 13: // #GPF
-            {
-                debugger_packet_bp_t bp_info;
-                _fill_in_debugger_packet(&bp_info, stack);
-                debugger_send_packet(kDebuggerPacket_GPF, &bp_info, sizeof(bp_info));
-            }
-            break;
-            case 14: // #PF
-            {
-                _JOS_KTRACE_CHANNEL(kDebuggerChannel, "PF# at 0x%016llx", stack->rip);
-                //TODO:
-            }
-            break;
-            default:;
-        }
-
-        // enter loop waiting for further instructions
-        _debugger_loop(stack);
-
-        if ( bp && bp->_active ) {
-            // if we are coming out of a runtime breakpoint that's still active we need to re-set it
-            _last_rt_bp._active = true;
-            _last_rt_bp._at = stack->rip;
-            _last_rt_bp._instr_byte = bp->_instr_byte;
-            // make sure we trap immediately after this instruction again so that we can restore it
-            _SET_TF(stack);
-        }
-        else {
-            _last_rt_bp._active = false;
-        }
-    }
-    // else: trigger assert?       
 }
 
 _JOS_API_FUNC void debugger_initialise(jos_allocator_t* allocator) {
