@@ -158,7 +158,7 @@ static jo_status_t _idle_task(void* ptr) {
 
 static void _task_wrapper(task_context_t* ctx) {
 
-	jo_status_t status _JOS_MAYBE_UNUSED = ctx->_func(ctx->_ptr);
+    jo_status_t status _JOS_MAYBE_UNUSED = ctx->_func(ctx->_ptr);
 
     // post-amble: remove this task and switch to a new one
     cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
@@ -217,7 +217,7 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
     ctx->_stack[0] = (uint64_t)interrupt_frame;
     ctx->_stack[1] = interrupt_frame->ss;
     
-	// this is as far up as a stack unwind can go, beyond this there is no sensible information
+    // this is as far up as a stack unwind can go, beyond this there is no sensible information
     ctx->_stack_top = interrupt_frame->rsp;
 
     return ctx;
@@ -226,8 +226,8 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
 // ------------------------------------------------------
 
 _JOS_API_FUNC task_context_t* tasks_this_task(void) {
-	cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);    
-	return cpu_ctx->_running_task;
+    cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);    
+    return cpu_ctx->_running_task;
 }
 
 task_handle_t   tasks_create(task_create_args_t* args) {

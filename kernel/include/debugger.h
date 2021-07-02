@@ -21,8 +21,8 @@ typedef enum _debugger_packet_id {
     kDebuggerPacket_RDMSR,
     kDebuggerPacket_UD,
     kDebuggerPacket_UpdateBreakpoints,
-	kDebuggerPacket_BreakpointCallstack,
-	kDebuggerPacket_SingleStep,
+    kDebuggerPacket_BreakpointCallstack,
+    kDebuggerPacket_SingleStep,
     
     // response packets have a high bit set so that they can be filtered in the debugger
     kDebuggerPacket_Response_Mask = 0x800,
@@ -30,8 +30,8 @@ typedef enum _debugger_packet_id {
     kDebuggerPacket_Get_TaskList_Resp = (kDebuggerPacket_Get_TaskList + kDebuggerPacket_Response_Mask),
     kDebuggerPacket_TraversePageTable_Resp = (kDebuggerPacket_TraversePageTable + kDebuggerPacket_Response_Mask),
     kDebuggerPacket_RDMSR_Resp = (kDebuggerPacket_RDMSR + kDebuggerPacket_Response_Mask),
-	
-	kDebuggerPacket_End,
+    
+    kDebuggerPacket_End,
     
 } debugger_packet_id_t;
 
