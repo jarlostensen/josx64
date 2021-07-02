@@ -23,76 +23,10 @@
 #include <stdio.h>
 #include <output_console.h>
 
+#include <internal/_debugger.h>
+
 static bool _debugger_connected = false;
 #define FLAGS_TRAP_FLAG 0x100
-
-typedef struct _debugger_packet_rw_target_memory {
-
-    uint64_t    _address;
-    uint32_t    _length;
-
-} _JOS_PACKED debugger_packet_rw_target_memory_t;
-
-#define INTEL_AMD_MAX_INSTRUCTION_LENGTH 15
-typedef struct _debugger_packet_bp {
-    interrupt_stack_t   _stack;
-    // MAX 15 bytes for Intel/AMD instructions
-    uint8_t             _instruction[INTEL_AMD_MAX_INSTRUCTION_LENGTH];
-    uint64_t            _cr0;
-    uint64_t            _cr2;
-    uint64_t            _cr3;
-    uint64_t            _cr4;
-
-	// NOTE: an array of _stack_size of 8 byte pointers follows this packet if a call stack is present
-	uint16_t _call_stack_size;
-
-} _JOS_PACKED debugger_packet_bp_t;
-
-typedef struct _debugger_packet_page_info {
-
-    uintptr_t   _address;    
-
-} _JOS_PACKED debugger_packet_page_info_t;
-
-typedef struct _debugger_packet_page_info_resp {
-
-    uintptr_t   _address;
-    //NOTE: assumes 4 level paging!
-    uintptr_t   _entries[4];
-
-} _JOS_PACKED debugger_packet_page_info_resp_t;
-
-typedef struct _debugger_task_info_header {
-    
-    uint32_t    _num_tasks;
-    uint32_t    _task_context_size;
-
-} _JOS_PACKED debugger_task_info_header_t;
-
-typedef struct _debugger_task_info {
-    // truncated name, 0 terminated
-    char                _name[MAX_TASK_NAME_LENGTH+1];
-    uint64_t            _entry_pt;
-    interrupt_stack_t    _stack;
-} _JOS_PACKED debugger_task_info_t;
-
-typedef struct _debugger_packet_rdmsr {
-    uint32_t _msr;
-} _JOS_PACKED debugger_packet_rdmsr_t;
-
-typedef struct _debugger_packet_rdmsr_resp {
-    uint32_t    _msr;
-    uint32_t    _lo;
-    uint32_t    _hi;
-} _JOS_PACKED debugger_packet_rdmsr_resp_t;
-
-#define _BREAKPOINT_STATUS_ENABLED  0
-#define _BREAKPOINT_STATUS_DISABLED 1
-#define _BREAKPOINT_STATUS_CLEARED  2
-typedef struct _debugger_packet_breakpoint_info {
-    uint64_t    _at;
-    uint8_t     _edc;
-} _JOS_PACKED debugger_packet_breakpoint_info_t;
 
 static peutil_pe_context_t* _pe_ctx = 0;
 static ZydisDecoder _zydis_decoder;
@@ -189,7 +123,7 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
 				// to be addressed later - if at all required.
 
                 debugger_packet_breakpoint_info_t info;
-                size_t num_packets = packet._length / sizeof(info);
+                int num_packets = packet._length / sizeof(info);
 				if (num_packets == 0) {
 					// clear all breakpoints
 
@@ -207,27 +141,30 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
 					_JOS_ASSERT(packet_buffer);
 					debugger_read_packet_body(&packet, packet_buffer, packet._length);
 					debugger_packet_breakpoint_info_t* bpinfo = (debugger_packet_breakpoint_info_t*)packet_buffer;
-					vector_t updated_breakpoints;			
-					vector_create_like(&updated_breakpoints, &_breakpoints);
-
+					
 					_JOS_KTRACE_CHANNEL(kDebuggerChannel, "updating %d breakpoints", num_packets);
 					
-					while (num_packets--) {
+					while (num_packets-- > 0) {
 
 						debugger_breakpoint_t* bp = _debugger_breakpoint_at(bpinfo->_at);
 						if (bp) {
 							switch (bpinfo->_edc) {
 								case _BREAKPOINT_STATUS_ENABLED:
 									_RESTORE_BP_IF_INACTIVE(bp);
-									vector_push_back(&updated_breakpoints, (void*)bp);
 									break;
 								case _BREAKPOINT_STATUS_DISABLED:
 									_DISABLE_BP_IF_ACTIVE(bp);
-									vector_push_back(&updated_breakpoints, (void*)bp);
 									break;
 								case _BREAKPOINT_STATUS_CLEARED:
+								{
 									_DISABLE_BP_IF_ACTIVE(bp);
-									break;
+									debugger_breakpoint_t* bps = (debugger_breakpoint_t*)vector_data(&_breakpoints);
+									// swap in last element to remove this one
+									const size_t end = vector_size(&_breakpoints);
+									memcpy(bp, bps + end-1, sizeof(debugger_breakpoint_t));
+									--num_packets;
+								}
+								break;
 								default:;
 							}
 						}
@@ -241,13 +178,11 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
 							if (new_bp._active) {
 								((uint8_t*)bpinfo->_at)[0] = _BREAKPOINT_INSTR;
 							}							
-							vector_push_back(&updated_breakpoints, &new_bp);
+							vector_push_back(&_breakpoints, &new_bp);
 							_JOS_KTRACE_CHANNEL(kDebuggerChannel, "adding new breakpoint @ 0x%llx", bpinfo->_at);
 						}
 					}
 					
-					vector_swap(&updated_breakpoints, &_breakpoints);
-					vector_destroy(&updated_breakpoints);
 					_allocator->free(_allocator, packet_buffer);
 					_JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoints updated");
 				}
@@ -313,6 +248,7 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
                 }
             }
             break;
+			// WIP:
             // case kDebuggerPacket_StepOver:
             // {
             //     if ( isr_stack ) {
@@ -456,7 +392,7 @@ _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffe
     output_buffer[output_buffer_length-1] = 0;
 }
 
-//NOTE: this handles both int 3 and GPFs if a debugger is connected
+//NOTE: this is the core of the debugger and handles int3, int1, and faults.
 static void _debugger_isr_handler(interrupt_stack_t * stack) {
     
     if ( debugger_is_connected() ) {
