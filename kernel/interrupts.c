@@ -282,6 +282,6 @@ void interrupts_initialise_early(void) {
     x86_64_load_idt(&_idt_desc);
 
     _JOS_KTRACE_CHANNEL(kInterruptsChannel, "initialised");
-    output_console_output_string(L"interrupts initialised\n");    
+    output_console_output_string(L"interrupts initialised\n");
 }
 

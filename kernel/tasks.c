@@ -111,9 +111,9 @@ static task_context_t*  _select_next_task_to_run(void) {
             return cpu_ctx->_running_task;
         }
     }
-
-    // if we get here the only task left to run is idle
-    return 0;
+    
+    // if we get here the only task left to run is either idle (running_task=0) or just continue 
+    return cpu_ctx->_running_task;
 }
 
 static void _task_wrapper(task_context_t* ctx);
@@ -122,6 +122,11 @@ static void _yield_to_next_task(void) {
     cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     task_context_t* prev = cpu_ctx->_running_task;
     task_context_t* next_task = _select_next_task_to_run();
+    if (next_task && next_task == prev) {
+        // just keep the currently running task doing it's thing
+        return;
+    }
+
     if( next_task ) {
         _JOS_KTRACE_CHANNEL(kTaskChannel, "switching from \"%s\" to \"%s\"", 
             prev ? prev->_name : "(0)", cpu_ctx->_running_task->_name);        
@@ -130,11 +135,8 @@ static void _yield_to_next_task(void) {
     // else we're now idling
     if ( prev != cpu_ctx->_cpu_idle ) {        
         cpu_ctx->_running_task = cpu_ctx->_cpu_idle;
-        //_JOS_KTRACE_CHANNEL(kTaskChannel, "back to \"%s\" on cpu %d, switch stack: 0x%llx", 
-        //    cpu_ctx->_running_task->_name, per_cpu_this_cpu_id(), 
-        //   cpu_ctx->_running_task->_stack[0]
-        //);
-        x86_64_task_switch(0, cpu_ctx->_running_task->_stack);
+        _JOS_KTRACE_CHANNEL(kTaskChannel, "back to \"%s\" on cpu %d", cpu_ctx->_running_task->_name, per_cpu_this_cpu_id());
+        x86_64_task_switch(prev->_stack, cpu_ctx->_running_task->_stack);
     }
 }
 
@@ -163,6 +165,7 @@ static void _task_wrapper(task_context_t* ctx) {
     cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);
     _JOS_ASSERT(cpu_ctx->_running_task == ctx);
     // pick a fresh task, or idle
+    // TODO: remove the task, i.e. destroy it properly (this is a LEAK)
     cpu_ctx->_running_task = 0;
     _yield_to_next_task();
 }

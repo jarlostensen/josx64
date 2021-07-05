@@ -237,10 +237,8 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
             {                
                 //_JOS_KTRACE_CHANNEL("debugger", "kDebuggerPacket_ReadTargetMemory");
                 debugger_packet_rw_target_memory_t rt_packet;
-                debugger_read_packet_body(&packet, (void*)&rt_packet, packet._length);
-                //_JOS_KTRACE_CHANNEL("debugger", "kDebuggerPacket_ReadTargetMemory 0x%llx, %d bytes", rt_packet._address, rt_packet._length);
+                debugger_read_packet_body(&packet, (void*)&rt_packet, packet._length);                
                 if( rt_packet._length ) {                    
-                    // serialise directly from memory
                     debugger_send_packet(kDebuggerPacket_ReadTargetMemory_Resp, (void*)rt_packet._address, rt_packet._length);
                 }
             }
@@ -329,7 +327,7 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
 }
 
 
-//NOTE: this is the core of the debugger and handles int3, int1, and faults.
+//this is the core of the debugger and handles int3, int1, faults, and breakpoints.
 static void _debugger_isr_handler(interrupt_stack_t * stack) {
     
     if ( debugger_is_connected() ) {
@@ -341,17 +339,21 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
             case 1: // TRAP 
             case 3: // breakpoint
             {   				
-                // first clean up previous bp if there was one
+                // see below: we have to restore breakpoint instructions 
+                // whenever we pass a dynamic (runtime) breakpoint and that is done here.
+                // _last_rt_bp is set to the last bp location and used to restore it
                 if ( _last_rt_bp._active ) {
 
                     uint8_t instr = ((uint8_t*)_last_rt_bp._at)[0];
-                    _JOS_ASSERT(instr!=_BREAKPOINT_INSTR);
                     _last_rt_bp._instr_byte = instr;
                     // reset to int 3
                     ((uint8_t*)_last_rt_bp._at)[0] = _BREAKPOINT_INSTR;
                     _last_rt_bp._active = false;
 
                     // if we're not in the middle of a genuine trace we can clear TF
+                    // if we don't do this then a runtime bp followed by a trace/single-step command 
+                    // will result in the program continuning execution immediately, instead 
+                    // of waiting in the debugger loop. 
                     if (_last_command != kDebuggerPacket_TraceStep) {
                         _CLEAR_TF(stack);
                         // we're done here
@@ -364,12 +366,12 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
                 if ( bp && bp->_active ) {
                     //_JOS_KTRACE_CHANNEL(kDebuggerChannel, "hit programmatic bp @ 0x%llx", bp->_at);
 
-                    // re-set instruction
+                    // re-set instruction byte
                     ((uint8_t*)bp->_at)[0] = bp->_instr_byte;
-                    // go back so that we'll execute the original instruction next
+                    // back up so that we'll execute the full original instruction next
                     --stack->rip;
                 }
-                
+
                 if ( !bp || bp->_active ) {
                     //_JOS_KTRACE_CHANNEL(kDebuggerChannel, "breakpoint hit at 0x%016llx", bp->_at);
                     
@@ -424,14 +426,15 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
             break;
             case 14: // #PF
             {
-                _JOS_KTRACE_CHANNEL(kDebuggerChannel, "PF# at 0x%016llx", stack->rip);
-                //TODO:
+                debugger_packet_bp_t bp_info;
+                _fill_in_debugger_packet(&bp_info, stack);
+                debugger_send_packet(kDebuggerPacket_PF, &bp_info, sizeof(bp_info));
             }
             break;
             default:;
         }
         
-        // enter loop waiting for further instructions
+        // enter loop waiting for further instructions from the debugger, exit when we get kDebuggerPacket_Continue 
         _debugger_loop(stack);
         
         if ( bp && bp->_active && !bp->_transient ) {
@@ -449,8 +452,7 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
             }
             _last_rt_bp._active = false;
         }
-    }
-    // else: trigger assert?       
+    }    
 }
 
 _JOS_API_FUNC void debugger_trigger_assert(const char* cond, const char* file, int line) {
@@ -556,7 +558,7 @@ _JOS_API_FUNC void debugger_initialise(jos_allocator_t* allocator) {
 
     vector_create(&_breakpoints, 16, sizeof(debugger_breakpoint_t), _allocator);
 
-    output_console_output_string(L"debug handler initialised\n");
+    output_console_output_string(L"debug handler initialised\n");    
 }
 
 _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uint64_t image_base) {
@@ -627,6 +629,9 @@ _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uin
 
     uint32_t json_size = (uint32_t)ftell(&stream);
     debugger_send_packet(kDebuggerPacket_KernelConnectionInfo, json_buffer, json_size);
+
+    
+    _JOS_KTRACE_CHANNEL(kDebuggerChannel, "connected, _breakpoints is @ 0x%llx", &_breakpoints);
 }
 
 _JOS_API_FUNC bool debugger_is_connected(void) {

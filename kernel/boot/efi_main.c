@@ -213,28 +213,42 @@ static bool _read_input(void) {
     return false;
 }
 
+static jo_status_t scroller_task(void* ptr) {
+    (void)ptr;
+    _JOS_KTRACE_CHANNEL("scroller_task", "starting");
+
+    scroller_initialise(&(rect_t){
+        .top = 250,
+        .left = 32,
+        .bottom = 400,
+        .right = 632
+    });
+
+    uint64_t t0 = clock_ms_since_boot();     
+    while (true) {
+        uint64_t t1 = clock_ms_since_boot();
+        if (t1 - t0 >= 33) {
+            t0 = t1;
+            scroller_render_field();
+        }
+    }
+}
+
 static jo_status_t main_task(void* ptr) {
     
     _JOS_KTRACE_CHANNEL("main_task", "starting");
     output_console_output_string(L"any key or ESC...\n");
-        
-    scroller_initialise(&(rect_t){
-        .top = 250,
-        .left = 8,
-        .bottom = 400,
-        .right = 600
-    });
     
-    bool done = false;    
-    uint64_t t0 = clock_ms_since_boot(); 
-    while(!done) {                            
-        uint64_t t1 = clock_ms_since_boot();
-        if( t1 - t0 >= 33 ) {
-            t0 = t1;
-            scroller_render_field();            
-        }
-        done = _read_input();
-    }
+    //tasks_create(&(task_create_args_t) {
+      //  .func = scroller_task,
+      //  .pri = kTaskPri_Normal,
+      //  .name = "scroller_task"
+    //});
+    
+    do {        
+        tasks_yield();
+    } while(!_read_input());
+
     output_console_line_break();
     output_console_set_colour(video_make_color(0xff,0,0));
     wchar_t buf[128];

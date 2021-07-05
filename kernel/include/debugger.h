@@ -23,6 +23,7 @@ typedef enum _debugger_packet_id {
     kDebuggerPacket_UpdateBreakpoints,
     kDebuggerPacket_BreakpointCallstack,
     kDebuggerPacket_SingleStep,
+    kDebuggerPacket_PF,
     
     // response packets have a high bit set so that they can be filtered in the debugger
     kDebuggerPacket_Response_Mask = 0x800,
