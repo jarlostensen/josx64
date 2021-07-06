@@ -36,10 +36,19 @@ static void cpu_context_initialise(cpu_task_context_t* cpu_ctx) {
     memset(cpu_ctx, 0, sizeof(cpu_task_context_t));
     for ( int pri = (int)kTaskPri_Highest; pri < (int)kTaskPri_NumPris; ++pri) {        
         cpu_ctx->_ready_queues[pri]._tail = &cpu_ctx->_ready_queues[pri]._head;
+        cpu_ctx->_ready_queues[pri]._head._next = 0;
     }
 }
 
 static void cpu_context_push_task(cpu_task_context_t* cpu_ctx, size_t pri, task_context_t* task) {
+
+    if (cpu_ctx->_ready_queues[pri]._head._next == 0
+        &&
+        cpu_ctx->_ready_queues[pri]._tail != &cpu_ctx->_ready_queues[pri]._head) {
+            while (true) {
+                x86_64_pause_cpu();
+            }
+        }
 
     x86_64_cli();
     cpu_ctx->_ready_queues[pri]._tail->_next = task;
@@ -56,6 +65,9 @@ static task_context_t* cpu_context_try_pop_task(cpu_task_context_t* cpu_ctx, siz
     if( cpu_ctx->_ready_queues[pri]._head._next) {
         task = cpu_ctx->_ready_queues[pri]._head._next;
         cpu_ctx->_ready_queues[pri]._head._next = task->_next;
+        if (cpu_ctx->_ready_queues[pri]._head._next == 0) {
+            cpu_ctx->_ready_queues[pri]._tail = &cpu_ctx->_ready_queues[pri]._head;
+        }
     }
     
     x86_64_sti();
@@ -130,13 +142,17 @@ static void _yield_to_next_task(void) {
     if( next_task ) {
         _JOS_KTRACE_CHANNEL(kTaskChannel, "switching from \"%s\" to \"%s\"", 
             prev ? prev->_name : "(0)", cpu_ctx->_running_task->_name);        
+
+        _JOS_ASSERT((cpu_ctx->_running_task->_stack[0] & 0x7) == 0);
+
         x86_64_task_switch(prev ? prev->_stack : 0, cpu_ctx->_running_task->_stack);
-    }
-    // else we're now idling
-    if ( prev != cpu_ctx->_cpu_idle ) {        
-        cpu_ctx->_running_task = cpu_ctx->_cpu_idle;
-        _JOS_KTRACE_CHANNEL(kTaskChannel, "back to \"%s\" on cpu %d", cpu_ctx->_running_task->_name, per_cpu_this_cpu_id());
-        x86_64_task_switch(prev->_stack, cpu_ctx->_running_task->_stack);
+    } else {
+        // else we're now idling
+        if (prev != cpu_ctx->_cpu_idle) {
+            cpu_ctx->_running_task = cpu_ctx->_cpu_idle;
+            _JOS_KTRACE_CHANNEL(kTaskChannel, "back to \"%s\" on cpu %d", cpu_ctx->_running_task->_name, per_cpu_this_cpu_id());
+            x86_64_task_switch(prev->_stack, cpu_ctx->_running_task->_stack);
+        }
     }
 }
 
@@ -240,15 +256,16 @@ task_handle_t   tasks_create(task_create_args_t* args) {
     task_context_t* ctx = _create_task_context(args->func, args->ptr, args->name);
     cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)_JOS_PER_CPU_THIS_PTR(_per_cpu_ctx);    
 
-    //ZZZ: this should probably be done in a separate "start" function?
+    //ZZZ: this should probably be done in a separate "start" function?    
     cpu_context_push_task(cpu_ctx, args->pri, ctx);
-
+    
     return (task_handle_t)ctx;
 }
 
 void tasks_yield(void) {
     //ZZZ: this is not pre-emptive safe yet!
     _yield_to_next_task();
+    x86_64_pause_cpu();
 }
 
 void tasks_initialise(jos_allocator_t * allocator) {
@@ -264,12 +281,11 @@ void tasks_initialise(jos_allocator_t * allocator) {
     _tasks_allocator = linear_allocator_create(allocator_arena, idle_task_pool_size);
     
     for(size_t cpu = 0; cpu < smp_get_processor_count(); ++cpu ) {
-
-        _JOS_KTRACE_CHANNEL(kTaskChannel, "initialising for ap %d", cpu);
-        cpu_task_context_t* ctx = (cpu_task_context_t*)linear_allocator_alloc(_tasks_allocator, sizeof(cpu_task_context_t));
-        _JOS_ASSERT(ctx);
-        cpu_context_initialise(ctx);        
-        _JOS_PER_CPU_PTR(_per_cpu_ctx, cpu) = (uintptr_t)ctx;
+        
+        cpu_task_context_t* cpu_ctx = (cpu_task_context_t*)linear_allocator_alloc(_tasks_allocator, sizeof(cpu_task_context_t));
+        cpu_context_initialise(cpu_ctx);
+        _JOS_KTRACE_CHANNEL(kTaskChannel, "initialising for ap %d (ctx 0x%llx)", cpu, cpu_ctx);
+        _JOS_PER_CPU_PTR(_per_cpu_ctx, cpu) = (uintptr_t)cpu_ctx;        
     }
 }
 

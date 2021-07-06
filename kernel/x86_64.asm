@@ -89,11 +89,15 @@ x86_64_task_switch:
     ; cs:_task_switch_resume for our return to this task
 
     cli
-    xor     rax, rax
-    mov     ax, ss
-    push    rax
+    ; we need to juggle the stack a bit here so that RSP 
+    ; will be restored to it's value on entering this function
     mov     rax, rsp
+    push    qword 0           ; save a slot for ss (below) 
     push    rax
+    xor     rax, rax
+    mov     rax, ss
+    mov     [rsp+8], rax
+
     pushfq
     pop     rax
     ; make sure IF=1 always so that tasks never resume with it off
@@ -101,12 +105,13 @@ x86_64_task_switch:
     push    rax
     xor     rax, rax
     mov     ax, cs
-    push    ax
+    push    rax
     ; we'll continue here when we next switch back to this task
     lea     rax,[._task_switch_resume]
     push    rax
-    push    0
-    push    0
+
+    push    qword 0
+    push    qword 0
     PUSHAQ
 
     ; save current task's switching stack
