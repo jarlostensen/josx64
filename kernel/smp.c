@@ -156,6 +156,10 @@ static void collect_this_cpu_information(processor_information_t* info) {
     if (info->_xsave) {
         __get_cpuid_count(0xd, 0, &eax, &ebx, &ecx, &edx);
         info->_xsave_area_size = ebx;
+
+        // enable OSXSAVE in cr4 so that we can XSAVE/XRESTORE        
+        x86_64_write_cr4(x86_64_read_cr4() | (1 << 18));
+
     } else {
         info->_xsave_area_size = 0;
     }

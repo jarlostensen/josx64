@@ -144,14 +144,17 @@ static void _yield_to_next_task(void) {
     if( next_task ) {
         //_JOS_KTRACE_CHANNEL(kTaskChannel, "switching from \"%s\" to \"%s\"", 
         //    prev ? prev->_name : "(0)", cpu_ctx->_running_task->_name);        
-        
+        //TESTING:
+        if (prev && prev->_xsave_area) {
+            __asm__ volatile ("xsave64  %0" : : "m" (prev->_xsave_area));
+        }
         x86_64_task_switch(prev ? prev->_stack : 0, cpu_ctx->_running_task->_stack);
     } else {
         // else we're now idling
         if (prev != cpu_ctx->_cpu_idle) {
             cpu_ctx->_running_task = cpu_ctx->_cpu_idle;
             // _JOS_KTRACE_CHANNEL(kTaskChannel, "back to \"%s\" on cpu %d", cpu_ctx->_running_task->_name, per_cpu_this_cpu_id());
-            // x86_64_task_switch(prev->_stack, cpu_ctx->_running_task->_stack);
+            x86_64_task_switch(prev->_stack, cpu_ctx->_running_task->_stack);
         }
     }
 }
@@ -206,6 +209,16 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
     */
     task_context_t* ctx = (task_context_t*)_tasks_allocator->_super.alloc((jos_allocator_t*)_tasks_allocator, TASK_STACK_CONTEXT_SIZE);
     _JOS_ASSERT(ctx);
+
+    // set aside space for XSAVE if we use it
+    processor_information_t* this_cpu_info = per_cpu_this_cpu_info();
+    if (this_cpu_info->_xsave && this_cpu_info->_xsave_area_size) {
+        ctx->_xsave_area = _tasks_allocator->_super.alloc((jos_allocator_t*)_tasks_allocator, this_cpu_info->_xsave_area_size);
+        _JOS_ASSERT(ctx->_xsave_area);
+    } else {
+        ctx->_xsave_area = 0;
+    }
+
     ctx->_func = func;
     ctx->_ptr = ptr ? ptr : (void*)ctx;    //< we can also pass in "self"...
     ctx->_name = name;
