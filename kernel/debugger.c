@@ -12,6 +12,7 @@
 #include <extensions/base64.h>
 #include <smp.h>
 #include <pagetables.h>
+#include <cpuid.h>
 #include <memory.h>
 #include <tasks.h>
 #include <pe.h>
@@ -262,6 +263,18 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
                 resp_packet._address = page_info_packet._address;
                 pagetables_traverse_tables((void*)page_info_packet._address, resp_packet._entries, 4);
                 debugger_send_packet(kDebuggerPacket_TraversePageTable_Resp, (void*)&resp_packet, sizeof(resp_packet));
+            }
+            break;
+            case kDebuggerPacket_CPUID:
+            {
+                uint32_t leaf_subleaf[2];
+                debugger_read_packet_body(&packet, (void*)leaf_subleaf, sizeof(leaf_subleaf));
+                uint32_t leaf_and_regs[6] = { 0, 0, 0, 0, 0, 0 };
+                leaf_and_regs[0] = leaf_subleaf[0];
+                leaf_and_regs[1] = leaf_subleaf[1];
+                __get_cpuid_count(leaf_and_regs[0], leaf_and_regs[1],
+                                 leaf_and_regs + 2, leaf_and_regs + 3, leaf_and_regs + 4, leaf_and_regs + 5);
+                debugger_send_packet(kDebuggerPacket_CPUID_Resp, (void*)leaf_and_regs, sizeof(leaf_and_regs));
             }
             break;
             case kDebuggerPacket_RDMSR:
@@ -601,6 +614,8 @@ _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uin
     json_writer_context_t ctx;
     json_initialise_writer(&ctx, &stream);
 
+    processor_information_t* this_cpu_info = per_cpu_this_cpu_info();
+
     json_write_object_start(&ctx);
         json_write_key(&ctx, "version");
             json_write_object_start(&ctx);
@@ -624,6 +639,22 @@ _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uin
                 json_write_number(&ctx, smp_get_processor_count());
                 json_write_key(&ctx, "memory");
                 json_write_number(&ctx, memory_get_total());
+                json_write_key(&ctx, "vendor");
+                json_write_string(&ctx, this_cpu_info->_vendor_string);
+                if (this_cpu_info->_has_hypervisor) {
+                    json_write_key(&ctx, "hypervisor");
+                        json_write_object_start(&ctx);
+                        json_write_key(&ctx, "id");
+                        json_write_string(&ctx, this_cpu_info->_hypervisor_id);                        
+                        json_write_object_end(&ctx);
+                }
+                if (this_cpu_info->_xsave) {
+                    json_write_key(&ctx, "xsave");
+                        json_write_object_start(&ctx);
+                            json_write_key(&ctx, "size");
+                            json_write_number(&ctx, this_cpu_info->_xsave_area_size);
+                        json_write_object_end(&ctx);
+                }
             json_write_object_end(&ctx);
     json_write_object_end(&ctx);
 

@@ -229,8 +229,9 @@ static jo_status_t scroller_task(void* ptr) {
         uint64_t t1 = clock_ms_since_boot();
         if (t1 - t0 >= 33) {
             t0 = t1;
-            scroller_render_field();
+            scroller_render_field();            
         }
+        tasks_yield();
     }
 }
 
@@ -239,14 +240,16 @@ static jo_status_t main_task(void* ptr) {
     _JOS_KTRACE_CHANNEL("main_task", "starting");
     output_console_output_string(L"any key or ESC...\n");
     
-    //tasks_create(&(task_create_args_t) {
-      //  .func = scroller_task,
-      //  .pri = kTaskPri_Normal,
-      //  .name = "scroller_task"
-    //});
+    tasks_create(&(task_create_args_t) {
+        .func = scroller_task,
+        .pri = kTaskPri_Normal,
+        .name = "scroller_task"
+    });
     
-    do {        
+    do {
+        
         tasks_yield();
+
     } while(!_read_input());
 
     output_console_line_break();

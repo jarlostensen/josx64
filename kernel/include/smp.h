@@ -37,12 +37,19 @@ typedef struct _processor_information {
     bool                            _is_good : 1;
     bool                            _intel_64_arch : 1;
     bool                            _has_1GB_pages : 1;
+    bool                            _xsave : 1;
+
+    uint32_t                        _xsave_area_size;
     
 } processor_information_t;
 
 // ==================================================================================================
 // per cpu structures are just arrays of N items, where N is the number of processors in the system.
 // the unique ID of each CPU is stored in gs:0 and used to index these structures
+
+#define _JOS_K_IA32_FS_BASE             0xc0000100
+#define _JOS_K_IA32_GS_BASE             0xc0000101
+#define _JOS_K_IA32_KERNEL_GS_BASE      0xc0000102
 
 typedef queue_t*        per_cpu_queue_t;
 typedef uintptr_t*      per_cpu_ptr_t;
@@ -56,6 +63,12 @@ _JOS_INLINE_FUNC    size_t per_cpu_this_cpu_id(void) {
     uint64_t val;
     x86_64_read_gs(0,&val);
     return val;
+}
+
+_JOS_INLINE_FUNC    processor_information_t* per_cpu_this_cpu_info(void) {
+    uint32_t lo, hi;
+    x86_64_rdmsr(_JOS_K_IA32_GS_BASE, &lo, &hi);
+    return (processor_information_t*)((uintptr_t)lo | ((uintptr_t)hi << 32));
 }
 
 #define _JOS_PER_CPU_THIS_QUEUE(queue)\

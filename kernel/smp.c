@@ -21,9 +21,6 @@ static size_t   _num_enabled_processors = 0;
 
 static processor_information_t* _processors = 0;
 
-#define _JOS_K_IA32_FS_BASE             0xc0000100
-#define _JOS_K_IA32_GS_BASE             0xc0000101
-#define _JOS_K_IA32_KERNEL_GS_BASE      0xc0000102
 
 static const char* kSmpChannel = "smp";
 
@@ -121,6 +118,8 @@ jo_status_t    intitialise_acpi() {
 
 // ==================================================================================================
 
+#define CPUID_FEATURE_FLAG_ENABLED(reg, index) (((reg) & (1<<(index))) == (1<<(index)))
+
 static void collect_this_cpu_information(processor_information_t* info) {
 
     info->_max_basic_cpuid = __get_cpuid_max(0, NULL);
@@ -134,28 +133,36 @@ static void collect_this_cpu_information(processor_information_t* info) {
     memcpy(info->_vendor_string + 8, &ecx, sizeof(ecx));
     info->_vendor_string[12] = 0;
 
-    __get_cpuid(0x1, &eax, &ebx, &ecx, &edx);
-    info->_has_hypervisor = (ecx & (1<<31))!=0;
+    __get_cpuid_count(0x1, 0, &eax, &ebx, &ecx, &edx);
+    info->_has_hypervisor = CPUID_FEATURE_FLAG_ENABLED(ecx, 31);
     if(info->_has_hypervisor) {
         unsigned int regs[4];
-        __cpuid(0x40000000, regs[0], regs[1], regs[2], regs[3]);
+        __get_cpuid_count(0x40000000, 0, regs+0, regs+1, regs+2, regs+3);
         info->_hypervisor_id[12] = 0;
         memcpy(info->_hypervisor_id, regs + 1, 3 * sizeof(regs[0]));
     }
     
-    info->_has_tsc = (edx & 0x10);
-    info->_has_msr = (edx & 0x20);
+    info->_has_tsc = CPUID_FEATURE_FLAG_ENABLED(edx, 5);
+    info->_has_msr = CPUID_FEATURE_FLAG_ENABLED(edx, 6);
+    info->_xsave = CPUID_FEATURE_FLAG_ENABLED(ecx, 26);
 
     //NOTE: this should ALWAYS be true for x64
-    info->_has_local_apic = (edx & (1<<9)) == (1<<9);
+    info->_has_local_apic = CPUID_FEATURE_FLAG_ENABLED(edx, 9);
     if (info->_has_local_apic) {
         apic_collect_this_cpu_information(info);
-        info->_local_apic_info._has_x2apic = (ecx & (1<<21)) == (1<<21);
+        info->_local_apic_info._has_x2apic = CPUID_FEATURE_FLAG_ENABLED(ecx, 21);
     }
     
-    __get_cpuid(0x80000001, &eax, &ebx, &ecx, &edx);
-    info->_intel_64_arch = (edx & (1<<29));
-    info->_has_1GB_pages = (edx & (1<<26));
+    if (info->_xsave) {
+        __get_cpuid_count(0xd, 0, &eax, &ebx, &ecx, &edx);
+        info->_xsave_area_size = ebx;
+    } else {
+        info->_xsave_area_size = 0;
+    }
+    
+    __get_cpuid_count(0x80000001, 0, &eax, &ebx, &ecx, &edx);
+    info->_intel_64_arch = CPUID_FEATURE_FLAG_ENABLED(edx, 29);
+    info->_has_1GB_pages = CPUID_FEATURE_FLAG_ENABLED(edx, 26);
     
     //NOTE: if x2APIC is supported we can use 1b or b CPUID functions for topology information as well
     

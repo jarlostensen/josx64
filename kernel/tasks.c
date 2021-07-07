@@ -105,7 +105,8 @@ static task_context_t*  _select_next_task_to_run(void) {
         // anything on this queue? 
         task_context_t* task = cpu_context_try_pop_task(cpu_ctx, pri);
         if ( task ) {
-            _JOS_KTRACE_CHANNEL(kTaskChannel, "next task \"%s\" ready at pri level %d", task->_name, pri);
+            // _JOS_KTRACE_CHANNEL(kTaskChannel, "next task \"%s\" ready at pri level %d", task->_name, pri);
+
             // check if we need to swap out the currently running task
             if(cpu_ctx->_running_task!=0
                 &&
@@ -113,7 +114,8 @@ static task_context_t*  _select_next_task_to_run(void) {
                 cpu_ctx->_running_task->_pri!=kTaskPri_NumPris
                 ) {
                 
-                _JOS_KTRACE_CHANNEL(kTaskChannel, "switching out \"%s\"", cpu_ctx->_running_task->_name);
+                //_JOS_KTRACE_CHANNEL(kTaskChannel, "switching out \"%s\"", cpu_ctx->_running_task->_name);
+
                 // move currently running back to the end of the queue
                 cpu_context_push_task(cpu_ctx, pri, cpu_ctx->_running_task);
             }
@@ -140,18 +142,16 @@ static void _yield_to_next_task(void) {
     }
 
     if( next_task ) {
-        _JOS_KTRACE_CHANNEL(kTaskChannel, "switching from \"%s\" to \"%s\"", 
-            prev ? prev->_name : "(0)", cpu_ctx->_running_task->_name);        
-
-        _JOS_ASSERT((cpu_ctx->_running_task->_stack[0] & 0x7) == 0);
-
+        //_JOS_KTRACE_CHANNEL(kTaskChannel, "switching from \"%s\" to \"%s\"", 
+        //    prev ? prev->_name : "(0)", cpu_ctx->_running_task->_name);        
+        
         x86_64_task_switch(prev ? prev->_stack : 0, cpu_ctx->_running_task->_stack);
     } else {
         // else we're now idling
         if (prev != cpu_ctx->_cpu_idle) {
             cpu_ctx->_running_task = cpu_ctx->_cpu_idle;
-            _JOS_KTRACE_CHANNEL(kTaskChannel, "back to \"%s\" on cpu %d", cpu_ctx->_running_task->_name, per_cpu_this_cpu_id());
-            x86_64_task_switch(prev->_stack, cpu_ctx->_running_task->_stack);
+            // _JOS_KTRACE_CHANNEL(kTaskChannel, "back to \"%s\" on cpu %d", cpu_ctx->_running_task->_name, per_cpu_this_cpu_id());
+            // x86_64_task_switch(prev->_stack, cpu_ctx->_running_task->_stack);
         }
     }
 }
