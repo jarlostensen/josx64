@@ -19,9 +19,12 @@ typedef struct _task_context {
     void*           _ptr;
     // 'tis helpful 
     const char*     _name;
-
+    
     // next task in priority queue
     struct _task_context*   _next;
+    
+    // points to the area used to save/restore FP state
+    void*                   _xsave_area;
 
 } _JOS_PACKED_ task_context_t;
 

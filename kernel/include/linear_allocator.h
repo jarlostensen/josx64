@@ -19,6 +19,10 @@ _JOS_INLINE_FUNC void linear_allocator_clear(linear_allocator_t* linalloc) {
     linalloc->_ptr = (char*)((char*)linalloc->_begin + sizeof(linear_allocator_t));
 }
 
+_JOS_INLINE_FUNC size_t linear_allocator_available(linear_allocator_t* linalloc) {
+    return (size_t)linalloc->_end - (size_t)linalloc->_ptr;
+}
+
 #if defined(_JOS_IMPLEMENT_ALLOCATORS) && !defined(_JOS_LINEAR_ALLOCATOR_IMPLEMENTED)
 #define _JOS_LINEAR_ALLOCATOR_IMPLEMENTED
 

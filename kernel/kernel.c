@@ -1,6 +1,8 @@
 
 #include <jos.h>
 
+#include <c-efi.h>
+
 #include <kernel.h>
 #include <memory.h>
 #include <video.h>
@@ -31,7 +33,11 @@ _JOS_NORETURN void halt_cpu() {
 // management themselves
 static linear_allocator_t*  _kernel_allocator = 0;
 
-jo_status_t kernel_uefi_init(kernel_uefi_init_args_t* args) {
+_JOS_API_FUNC size_t kernel_memory_available(void) {
+    return linear_allocator_available(_kernel_allocator);
+}
+
+_JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiBootServices* boot_services) {
 
     _JOS_KTRACE_CHANNEL(kKernelChannel, "uefi init");
 
@@ -40,7 +46,7 @@ jo_status_t kernel_uefi_init(kernel_uefi_init_args_t* args) {
     //STRICTLY assumes this doesn't need any memory, video, or SMP functionality
     serial_initialise();
 
-    jo_status_t status = memory_uefi_init(&_kernel_allocator);
+    jo_status_t status = memory_uefi_init(boot_services, &_kernel_allocator);
     if ( !_JO_SUCCEEDED(status) ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel, "***FATAL ERROR: memory initialise returned 0x%x", status);
         return status;
@@ -59,19 +65,20 @@ jo_status_t kernel_uefi_init(kernel_uefi_init_args_t* args) {
         _JOS_KTRACE_CHANNEL(kKernelChannel,"***FATAL ERROR: video initialise returned 0x%x", status);
         return status;
     }
-
-    // provide memory to the caller, i.e. the outer UEFI application, if it requires it
-    if (args->application_memory_size_required) {
-        *args->application_allocated_memory = _kernel_allocator->_super.alloc((jos_allocator_t*)_kernel_allocator, args->application_memory_size_required);
-    }
-
+    
     // =====================================================================
 
     _JOS_KTRACE_CHANNEL(kKernelChannel, "uefi init ok");
     return _JO_STATUS_SUCCESS;
 }
 
-jo_status_t kernel_runtime_init(void) {
+_JOS_API_FUNC jo_status_t kernel_runtime_init(CEfiHandle h, CEfiBootServices* boot_services) {
+    
+    jo_status_t k_stat = memory_runtime_init(h, boot_services);
+    if ( _JO_FAILED(k_stat) ) {
+        return k_stat;
+    }
+
     interrupts_initialise_early();
 	debugger_initialise((jos_allocator_t*)_kernel_allocator);
     clock_initialise();

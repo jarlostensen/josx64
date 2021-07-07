@@ -26,7 +26,36 @@ static const char* kMemoryChannel = "memory";
 
 // 1GB minimum (NOTE: the UEFI pool allocator always works on 4K pages)
 #define UEFI_POOL_PAGE_SIZE 0x1000
-#define MINIMUM_MEMORY_AVAILABLE_PAGES (4*1024*1024)/UEFI_POOL_PAGE_SIZE
+#define MINIMUM_MEMORY_AVAILABLE_PAGES (4*1024*1024) / UEFI_POOL_PAGE_SIZE
+
+_JOS_API_FUNC void _memory_debugger_dump_map(void) {
+    CEfiMemoryDescriptor* desc = _boot_service_memory_map;    
+    _boot_service_memory_map_entries = _boot_service_memory_map_size / _descriptor_size;
+    _JOS_KTRACE_CHANNEL(kMemoryChannel, "%d memory descriptors found", _boot_service_memory_map_entries);
+    
+    for ( unsigned i = 0; i < _boot_service_memory_map_entries; ++i )
+    {        
+        if ( desc[i].type != C_EFI_RESERVED_MEMORY_TYPE 
+            &&  
+            desc[i].type != C_EFI_UNUSABLE_MEMORY) {
+                
+                switch(desc[i].type)
+                {
+                    case C_EFI_CONVENTIONAL_MEMORY:
+                    {
+                        _JOS_KTRACE_CHANNEL(kMemoryChannel, "CONV: %d pages", desc[i].number_of_pages);
+                    }
+                    break;
+                    case C_EFI_BOOT_SERVICES_CODE:
+                    case C_EFI_BOOT_SERVICES_DATA:
+                    {
+                        _JOS_KTRACE_CHANNEL(kMemoryChannel, "BOOTSERVICES: %d pages", desc[i].number_of_pages);
+                    }
+                    default:;
+                }         
+            }
+    }
+}
 
 static jo_status_t _refresh_memory_map(void) {
     

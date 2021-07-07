@@ -3,6 +3,7 @@
 
 #include <atomic.h>
 #include <x86_64.h>
+#include <c-efi.h>
 
 _JOS_NORETURN void halt_cpu();
 
@@ -27,16 +28,10 @@ _JO_INLINE_FUNC void lock_unlock(lock_t* lock) {
     atomic_store(&lock->atomic_val, 0);
 }
 
-
-typedef struct _kernel_uefi_init_args {
-
-    size_t      application_memory_size_required;
-    void**      application_allocated_memory;
-
-} kernel_uefi_init_args_t;
-
-jo_status_t kernel_uefi_init(kernel_uefi_init_args_t* args);
-jo_status_t kernel_runtime_init(void);
+_JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiBootServices* boot_services);
+_JOS_API_FUNC jo_status_t kernel_runtime_init(CEfiHandle h, CEfiBootServices *boot_services);
 _JOS_NORETURN void  kernel_runtime_start(void);
+
+_JOS_API_FUNC size_t kernel_memory_available(void);
 
 #endif // _JOS_KERNEL_KERNEL_H

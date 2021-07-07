@@ -277,6 +277,13 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
                 debugger_send_packet(kDebuggerPacket_CPUID_Resp, (void*)leaf_and_regs, sizeof(leaf_and_regs));
             }
             break;
+            case kDebuggerPacket_MemoryMap:
+            {
+                //TODO: for now this just traces info
+                _JOS_KTRACE_CHANNEL("memory", "free kernel memory %d bytes", kernel_memory_available());
+                _memory_debugger_dump_map();
+            }
+            break;
             case kDebuggerPacket_RDMSR:
             {
                 debugger_packet_rdmsr_t rdmsr_packet;

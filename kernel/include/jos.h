@@ -4,6 +4,12 @@
 
 #include <joBase/joBase.h>
 
+#if defined(__clang__) || defined(__GNUC__)
+    #define ASM_SYNTAX_ATNT
+#else 
+    #define ASM_SYNTAX_INTEL
+#endif
+
 #if defined(_JO_BARE_METAL_BUILD) && !defined(_JOS_KERNEL_BUILD)
 // for backwards compatibility
 #define _JOS_KERNEL_BUILD

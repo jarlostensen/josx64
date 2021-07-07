@@ -52,17 +52,8 @@ g_st->con_out->output_string(g_st->con_out, s)
 // ==============================================================
 void exit_boot_services(CEfiHandle h) {
 
-    memory_refresh_boot_service_memory_map();
-    CEfiStatus status = g_boot_services->exit_boot_services(h, memory_boot_service_get_mapkey());    
-    if ( C_EFI_ERROR(status )) {
-        output_console_set_colour(video_make_color(0xff,0,0));        
-        output_console_output_string(L"***FATAL ERROR: Unable to exit boot services. Halting.\n");
-        halt_cpu();
-    }    
-    g_boot_services = 0;    
-
-    jo_status_t k_stat = memory_runtime_init();
-    if ( _JO_FAILED(k_stat) ) {
+    // everything needed to run anything; interrupts, clocks, keyboard...etc...
+    if (_JO_FAILED(kernel_runtime_init(h, g_boot_services))) {
         output_console_set_colour(video_make_color(0xff,0,0));        
         output_console_output_string(L"***FATAL ERROR: post memory exit failed. Halting.\n");
         halt_cpu();
@@ -83,9 +74,6 @@ static void dump_image_info(CEfiStatus (*_efi_main)(CEfiHandle, CEfiSystemTable 
     }
 }
 
-#define EFI_APP_MEMORY_POOL_SIZE 4*1024*1024
-static linear_allocator_t*  _efi_allocator = NULL;
-
 void uefi_init(CEfiHandle h) {
     
     kJosKernelCS = x86_64_get_cs();
@@ -102,18 +90,11 @@ void uefi_init(CEfiHandle h) {
     // initialise memory manager, serial comms, video, and any modules that require access 
     // to uefi boot services
     // here we also request a bit of memory for use by this efi application
-    void* efi_app_memory = NULL;
-    jo_status_t status = kernel_uefi_init(&(kernel_uefi_init_args_t){
-        .application_memory_size_required = EFI_APP_MEMORY_POOL_SIZE,
-        .application_allocated_memory = &efi_app_memory,
-    });
+    jo_status_t status = kernel_uefi_init(g_boot_services);
     if ( _JO_FAILED(status) ) {
         halt_cpu();
     }
-
-    // we'll use this allocator for various incidentals
-    _efi_allocator = linear_allocator_create(efi_app_memory, EFI_APP_MEMORY_POOL_SIZE);
-
+    
     video_clear_screen(0x6495ed);
     output_console_initialise();
     output_console_set_font((const uint8_t*)font8x8_basic, 8,8);
@@ -344,33 +325,17 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 #ifdef _JOS_KERNEL_BUILD
     output_console_output_string(L"\n\nkernel build\n");
 #endif
-
-    // after this point we can no longer use boot services (only runtime)
-    
-    _JOS_KTRACE_CHANNEL("efi_main","exiting boot services...");
+        
     exit_boot_services(h);
-    _JOS_KTRACE_CHANNEL("efi_main","boot services exited");
-
-    _JOS_KTRACE_CHANNEL("efi_main","kernel setup");
-
-    // everything needed to run anything; interrupts, clocks, keyboard...etc...
-    kernel_runtime_init();
-
-   
-    // ================================================================
-
+    start_debugger(); 
+    
     tasks_create(&(task_create_args_t){
          .func = main_task,
-         .pri = kTaskPri_Normal,
-         .name = "main_task"
+            .pri = kTaskPri_Normal,
+            .name = "main_task"
     });
 
-    start_debugger();    
-
-    output_console_output_string(L"starting idle task...\n");
-    // this never actually returns...
     kernel_runtime_start();
-
     return C_EFI_SUCCESS;
 }
  

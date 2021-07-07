@@ -288,7 +288,10 @@ void tasks_initialise(jos_allocator_t * allocator) {
     _per_cpu_ctx = per_cpu_create_ptr();
 
     // fixed pool of memory for the per-cpu IDLE tasks, this is all we allocate up front    
-    const size_t idle_task_pool_size = sizeof(linear_allocator_t) + smp_get_processor_count() * (sizeof(cpu_task_context_t) + TASK_STACK_CONTEXT_SIZE);
+    size_t idle_task_pool_size = sizeof(linear_allocator_t) + smp_get_processor_count() * (sizeof(cpu_task_context_t) + TASK_STACK_CONTEXT_SIZE);
+    //TODO: we need enough memory to allocate and manage tasks!
+    idle_task_pool_size += 8*1024*1024;
+
     void* allocator_arena = allocator->alloc(allocator, idle_task_pool_size);
     _JOS_ASSERT(allocator_arena);
     _tasks_allocator = linear_allocator_create(allocator_arena, idle_task_pool_size);
