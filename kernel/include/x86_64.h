@@ -83,6 +83,12 @@ _JOS_INLINE_FUNC void x86_64_write_cr4(uint64_t val)
     __asm__ volatile ( "mov %0, %%cr4" : : "r" (val) );
 }
 
+_JOS_INLINE_FUNC uint64_t x86_64_read_dr6(void) {
+    uint64_t val;
+    __asm__ volatile ( "mov %%dr6, %0" : "=r"(val) );
+    return val;
+}
+
 // (safe) dummy write to POST port, this usually provides a ~usecond delay
 #define x86_64_io_wait() x86_64_outb(0x80, 0)
 #define x86_64_debugbreak() __asm__ volatile( "int $03" )

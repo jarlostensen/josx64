@@ -32,9 +32,11 @@ _JOS_NORETURN void halt_cpu() {
 // NOTE: this memory is never freed, each module is expected to deal with the details of memory resource 
 // management themselves
 static linear_allocator_t*  _kernel_allocator = 0;
+static size_t _initial_memory = 0;
 
-_JOS_API_FUNC size_t kernel_memory_available(void) {
-    return linear_allocator_available(_kernel_allocator);
+_JOS_API_FUNC void kernel_memory_available(size_t* on_boot, size_t* now) {
+    *on_boot = _initial_memory;
+    *now = linear_allocator_available(_kernel_allocator);
 }
 
 _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiBootServices* boot_services) {
@@ -46,11 +48,15 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiBootServices* boot_services) {
     //STRICTLY assumes this doesn't need any memory, video, or SMP functionality
     serial_initialise();
 
+    //NOTE: we can initialise the kernel allocator here because we never exit back to the EFI firmware, otherwise 
+    //      this memory would have to be freed at that point
     jo_status_t status = memory_uefi_init(boot_services, &_kernel_allocator);
     if ( !_JO_SUCCEEDED(status) ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel, "***FATAL ERROR: memory initialise returned 0x%x", status);
         return status;
     }
+
+    _initial_memory = linear_allocator_available(_kernel_allocator);
 
     status = smp_initialise((jos_allocator_t*)_kernel_allocator);
     if ( !_JO_SUCCEEDED(status) ) {

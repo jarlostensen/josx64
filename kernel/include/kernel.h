@@ -32,6 +32,6 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiBootServices* boot_services);
 _JOS_API_FUNC jo_status_t kernel_runtime_init(CEfiHandle h, CEfiBootServices *boot_services);
 _JOS_NORETURN void  kernel_runtime_start(void);
 
-_JOS_API_FUNC size_t kernel_memory_available(void);
+_JOS_API_FUNC void kernel_memory_available(size_t* on_boot, size_t* now);
 
 #endif // _JOS_KERNEL_KERNEL_H

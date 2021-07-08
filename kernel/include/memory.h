@@ -7,8 +7,6 @@
 
 // used by the kernel UEFI Init code 
 _JOS_API_FUNC jo_status_t     memory_uefi_init(CEfiBootServices* boot_services, linear_allocator_t** main_allocator);
-_JOS_API_FUNC CEfiUSize       memory_boot_service_get_mapkey(void);
-_JOS_API_FUNC jo_status_t     memory_refresh_boot_service_memory_map(CEfiBootServices* boot_services);
 _JOS_API_FUNC jo_status_t     memory_runtime_init(CEfiHandle h, CEfiBootServices* boot_services);
 _JOS_API_FUNC size_t          memory_get_total(void);
 _JOS_API_FUNC void            _memory_debugger_dump_map(void);

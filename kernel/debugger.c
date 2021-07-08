@@ -280,7 +280,22 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
             case kDebuggerPacket_MemoryMap:
             {
                 //TODO: for now this just traces info
-                _JOS_KTRACE_CHANNEL("memory", "free kernel memory %d bytes", kernel_memory_available());
+                size_t on_boot;
+                size_t now;
+                kernel_memory_available(&on_boot, &now);
+                _JOS_KTRACE_CHANNEL("memory", "free kernel memory on startup %d bytes", on_boot);
+                _JOS_KTRACE_CHANNEL("memory", "free kernel memory now %d bytes", now);
+
+                unsigned short total;
+                unsigned char lowmem, highmem;
+                
+                x86_64_outb(0x70, 0x30);
+                lowmem = x86_64_inb(0x71);
+                x86_64_outb(0x70, 0x31);
+                highmem = x86_64_inb(0x71);                
+                total = lowmem | highmem << 8;
+                _JOS_KTRACE_CHANNEL("memory", "CMOS reports %d MB", total>>20);
+
                 _memory_debugger_dump_map();
             }
             break;
@@ -359,6 +374,10 @@ static void _debugger_isr_handler(interrupt_stack_t * stack) {
             case 1: // TRAP 
             case 3: // breakpoint
             {   				
+                //TODO: check debugger condition
+                //  Intel dev manual 17.2
+                uint64_t _JOS_MAYBE_UNUSED dr6 = x86_64_read_dr6();
+                
                 // see below: we have to restore breakpoint instructions 
                 // whenever we pass a dynamic (runtime) breakpoint and that is done here.
                 // _last_rt_bp is set to the last bp location and used to restore it
@@ -632,6 +651,8 @@ _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uin
                 json_write_number(&ctx, 1);
                 json_write_key(&ctx, "patch");
                 json_write_number(&ctx, 0);
+                //TODO: json_write_key(&ctx, "git");
+                //TODO: json_write_number(&ctx, GIT_VERSION);
             json_write_object_end(&ctx);
         json_write_key(&ctx, "image_info");
             json_write_object_start(&ctx);
@@ -669,7 +690,7 @@ _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uin
     debugger_send_packet(kDebuggerPacket_KernelConnectionInfo, json_buffer, json_size);
 
     
-    _JOS_KTRACE_CHANNEL(kDebuggerChannel, "connected, _breakpoints is @ 0x%llx", &_breakpoints);
+    _JOS_KTRACE_CHANNEL(kDebuggerChannel, "connected");
 }
 
 _JOS_API_FUNC bool debugger_is_connected(void) {
