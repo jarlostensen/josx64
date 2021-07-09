@@ -52,7 +52,7 @@ typedef struct _memory_region {
 static memory_region_t _regions[MAX_MEMORY_REGIONS];
 static size_t _num_regions = 0;
 
-static void add_memory_region(uintptr_t start, size_t size, memory_region_type_t type, CEfiU32 uefi_type) {
+static void _add_memory_region(uintptr_t start, size_t size, memory_region_type_t type, CEfiU32 uefi_type) {
     _JOS_ASSERT(_num_regions < MAX_MEMORY_REGIONS);
     _regions[_num_regions]._start = start;
     _regions[_num_regions]._size = size;
@@ -126,6 +126,7 @@ static jo_status_t _build_memory_map(void) {
     _boot_service_memory_map_entries = _boot_service_memory_map_size / _descriptor_size;    
     _JOS_KTRACE_CHANNEL(kMemoryChannel, "%d memory descriptors found", _boot_service_memory_map_entries);
     
+    memory_region_t* prev = 0;
     for ( unsigned i = 0; i < _boot_service_memory_map_entries; ++i )
     {        
         if ( desc->number_of_pages==0 )
@@ -135,42 +136,51 @@ static jo_status_t _build_memory_map(void) {
         {
             case C_EFI_RESERVED_MEMORY_TYPE:
             {
-                add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_Reserved, desc->type);
+                _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_Reserved, desc->type);
             }
             break;
             case C_EFI_UNUSABLE_MEMORY:
             {
-                add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_Unusable, desc->type);
+                _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_Unusable, desc->type);
             }
             break;
             case C_EFI_ACPI_RECLAIM_MEMORY:
             {
-                add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_ACPI, desc->type);
+                _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_ACPI, desc->type);
             }
             break;
             case C_EFI_ACPI_MEMORY_NVS:
             {
-                add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_NVS, desc->type);
+                _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_NVS, desc->type);
             }
             break;
             case C_EFI_BOOT_SERVICES_CODE:
             case C_EFI_BOOT_SERVICES_DATA:
-            case C_EFI_LOADER_CODE:
-            case C_EFI_LOADER_DATA:
+            //case C_EFI_LOADER_CODE:
+            //case C_EFI_LOADER_DATA:
             case C_EFI_CONVENTIONAL_MEMORY:
-            {
+            {                
                 if (desc->attribute & C_EFI_MEMORY_WB) {
-                    add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_RAM, desc->type);
+                    if (prev 
+                        && 
+                        (prev->_start + prev->_size) >= desc->physical_start) {
+                            // merge by growing previous region to encompass this one
+                            size_t delta = (prev->_start + prev->_size) - desc->physical_start;
+                            prev->_size += (desc->number_of_pages * UEFI_POOL_PAGE_SIZE) - delta;
+                    }
+                    else {
+                        _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_RAM, desc->type);
+                    }
                 }
                 else {
-                    add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_Reserved, desc->type);
-                }                
+                    _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_Reserved, desc->type);
+                }
             }
             break;
             default:;
         }
         
-        //NOTE: regions *may* overlap and we should check for it but so far none have been seen in the wild...
+        prev = _regions + _num_regions - 1;
         desc = (CEfiMemoryDescriptor*)((uintptr_t)desc + _descriptor_size);
     }
     
