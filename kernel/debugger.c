@@ -283,8 +283,8 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
                 size_t on_boot;
                 size_t now;
                 kernel_memory_available(&on_boot, &now);
-                _JOS_KTRACE_CHANNEL("memory", "free kernel memory on startup %d bytes", on_boot);
-                _JOS_KTRACE_CHANNEL("memory", "free kernel memory now %d bytes", now);
+                _JOS_KTRACE_CHANNEL("memory", "free kernel memory on startup %lld MB", on_boot>>20);
+                _JOS_KTRACE_CHANNEL("memory", "free kernel memory now %lld MB", now>>20);
 
                 unsigned short total;
                 unsigned char lowmem, highmem;
