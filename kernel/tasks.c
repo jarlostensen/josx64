@@ -144,10 +144,12 @@ static void _yield_to_next_task(void) {
     if( next_task ) {
         //_JOS_KTRACE_CHANNEL(kTaskChannel, "switching from \"%s\" to \"%s\"", 
         //    prev ? prev->_name : "(0)", cpu_ctx->_running_task->_name);        
+        
         //TESTING:
         if (prev && prev->_xsave_area) {
             __asm__ volatile ("xsave64  %0" : : "m" (prev->_xsave_area));
         }
+
         x86_64_task_switch(prev ? prev->_stack : 0, cpu_ctx->_running_task->_stack);
     } else {
         // else we're now idling
@@ -213,7 +215,9 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
     // set aside space for XSAVE if we use it
     processor_information_t* this_cpu_info = per_cpu_this_cpu_info();
     if (this_cpu_info->_xsave && this_cpu_info->_xsave_area_size) {
-        ctx->_xsave_area = _tasks_allocator->_super.alloc((jos_allocator_t*)_tasks_allocator, this_cpu_info->_xsave_area_size);
+        //TODO: LEAKING
+        void* base_alloc_ptr;
+        aligned_alloc((jos_allocator_t*)_tasks_allocator, this_cpu_info->_xsave_area_size, kAllocAlign_64, &base_alloc_ptr, &ctx->_xsave_area);
         _JOS_ASSERT(ctx->_xsave_area);
     } else {
         ctx->_xsave_area = 0;

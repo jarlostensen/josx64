@@ -204,7 +204,7 @@ static jo_status_t _get_boot_service_memory_map(CEfiBootServices* boot_services)
     return _JO_STATUS_SUCCESS;
 }
 
-_JOS_API_FUNC jo_status_t memory_uefi_init(CEfiBootServices* boot_services, linear_allocator_t** main_allocator) {
+_JOS_API_FUNC jo_status_t memory_uefi_init(CEfiBootServices* boot_services) {
     _JOS_KTRACE_CHANNEL(kMemoryChannel, "uefi init");
     _get_boot_service_memory_map(boot_services);
     jo_status_t status = _build_memory_map();
@@ -212,6 +212,7 @@ _JOS_API_FUNC jo_status_t memory_uefi_init(CEfiBootServices* boot_services, line
         size_t max_r = 0;
         size_t max_region = 0;
         for (size_t r = 0; r < _num_regions; ++r) {
+            //TODO: use linked regions instead
             if (_regions[r]._type == kMemoryRegion_RAM) {
                 if (_regions[r]._size > max_region) {
                     max_region = _regions[r]._size;
@@ -220,7 +221,6 @@ _JOS_API_FUNC jo_status_t memory_uefi_init(CEfiBootServices* boot_services, line
             }
         }
         _main_allocator = linear_allocator_create((void*)_regions[max_r]._start, _regions[max_r]._size);
-        *main_allocator = _main_allocator;
         _JOS_KTRACE_CHANNEL(kMemoryChannel, "uefi init succeeded");
     }
     return status;
@@ -228,6 +228,10 @@ _JOS_API_FUNC jo_status_t memory_uefi_init(CEfiBootServices* boot_services, line
 
 _JOS_API_FUNC size_t      memory_get_total(void) {
     return (size_t)_main_allocator->_end - (size_t)_main_allocator->_begin;
+}
+
+_JOS_API_FUNC size_t memory_get_available(void) {
+    return linear_allocator_available(_main_allocator);
 }
 
 _JOS_API_FUNC jo_status_t memory_runtime_init(CEfiHandle h, CEfiBootServices* boot_services) {
@@ -238,4 +242,29 @@ _JOS_API_FUNC jo_status_t memory_runtime_init(CEfiHandle h, CEfiBootServices* bo
         return _JO_STATUS_UNAVAILABLE;        
     }
     return _JO_STATUS_SUCCESS;
+}
+
+_JOS_API_FUNC jos_allocator_t*  memory_allocate_pool(memory_pool_type_t type, size_t size) {
+    
+    switch (type) {
+        case kMemoryPoolType_Dynamic:
+        {
+            // standard arena allocator
+            size += sizeof(arena_allocator_t);
+            void* pool = _main_allocator->_super.alloc((jos_allocator_t*)_main_allocator, size);
+            return (jos_allocator_t*)arena_allocator_create(pool, size);
+        }
+        break;
+        case kMemoryPoolType_Static:
+        {
+            // basic linear allocator
+            size += sizeof(linear_allocator_t);
+            void* pool = _main_allocator->_super.alloc((jos_allocator_t*)_main_allocator, size);
+            return (jos_allocator_t*)linear_allocator_create(pool, size);
+        }
+        break;
+        default:;
+    }
+
+    return 0;
 }

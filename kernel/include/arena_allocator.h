@@ -79,10 +79,14 @@ _JOS_API_FUNC void* arena_allocator_realloc(arena_allocator_t* arena, void* bloc
 #if defined(_JOS_IMPLEMENT_ALLOCATORS) && !defined(_JOS_arena_allocator_ALLOCATOR_IMPLEMENTED)
 #define _JOS_arena_allocator_ALLOCATOR_IMPLEMENTED
 
-#define _JOS_arena_allocator_ALLOC_OVERHEAD (sizeof(vmem_block_head_t)+sizeof(vmem_block_tail_t))
+#define _JOS_arena_allocator_ALLOC_OVERHEAD (sizeof(vmem_block_head_t) + sizeof(vmem_block_tail_t))
 #define _JOS_VMEM_ABS_BLOCK_SIZE(size) ((size) & ~kVmemBlockFree)
-#define _JOS_VMEM_BLOCK_MIN_SIZE _JOS_arena_allocator_ALLOC_OVERHEAD+16
-#define _JOS_arena_allocator_MIN_SIZE (sizeof(arena_allocator_t)+_JOS_arena_allocator_ALLOC_OVERHEAD)
+#define _JOS_VMEM_BLOCK_MIN_SIZE _JOS_arena_allocator_ALLOC_OVERHEAD + 16
+#define _JOS_arena_allocator_MIN_SIZE (sizeof(arena_allocator_t) + _JOS_arena_allocator_ALLOC_OVERHEAD)
+
+_JOS_INLINE_FUNC size_t arena_allocator_available(arena_allocator_t* arena) {
+    return arena->_size - _JOS_arena_allocator_ALLOC_OVERHEAD;
+}
 
 _JOS_INLINE_FUNC vmem_block_tail_t* _vmem_tail_from_head(const vmem_block_head_t* head)
 {	
@@ -203,6 +207,7 @@ _JOS_API_FUNC arena_allocator_t*   arena_allocator_create(void* mem, size_t size
 	arena->_super.alloc = (jos_allocator_alloc_func_t)arena_allocator_alloc;
 	arena->_super.free = (jos_allocator_free_func_t)arena_allocator_free;
 	arena->_super.realloc = (jos_allocator_realloc_func_t)arena_allocator_realloc;
+    arena->_super.available = (jos_allocator_avail_func_t)arena_allocator_available;
 
     return arena;
 }

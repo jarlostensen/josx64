@@ -549,6 +549,27 @@ static void ui_test_loop(void) {
     }
 }
 
+//void aligned_alloc(jos_allocator_t* allocator, size_t bytes, alloc_alignment_t alignment,
+//	void** out_alloc_base, void** out_alloc_aligned) {
+//	if (!allocator || !bytes) {
+//		*out_alloc_base = *out_alloc_aligned = 0;
+//		return;
+//	}
+//	void* ptr = allocator->alloc(allocator, bytes + (size_t)alignment - 1);
+//	*out_alloc_base = ptr;
+//	*out_alloc_aligned = (void*)(((uintptr_t)ptr + ((uintptr_t)alignment - 1)) & ~((uintptr_t)alignment - 1));
+//}
+
+void alloc_tests(void) {
+
+	char register_buffer[1024];
+	linear_allocator_t* buffer_allocator = linear_allocator_create(register_buffer+1, sizeof(register_buffer)-1);
+
+    void *base_ptr, *ptr;
+    alloc_alignment_t alignment = kAllocAlign_128;
+    aligned_alloc((jos_allocator_t*)buffer_allocator, 42, alignment, &base_ptr, &ptr);
+    _JOS_ASSERT(((uintptr_t)ptr & ((uintptr_t)alignment) - 1) == 0);
+}
 
 
 // ==============================================================================================================
@@ -582,14 +603,22 @@ int main(void)
         "enabled"
         );
 */
+    alloc_tests();
+
+    char buffer[512];
+    uintptr_t total = 0xddd2ce90;
+    uintptr_t pages = 35;
+    _JOS_LIBC_FUNC_NAME(snprintf)(buffer, sizeof(buffer), "total %lld", total);
+
     HMODULE this_module = GetModuleHandle(0);
     hex_dump_mem((void*)this_module, 64, k8bitInt);
     peutil_pe_context_t pe_ctx;
     peutil_bind(&pe_ctx, (const void*)this_module, kPe_Relocated);
     uintptr_t entry = peutil_entry_point(&pe_ctx);
-    bool is_executable = peutil_phys_is_executable(&pe_ctx, entry);
-    is_executable = peutil_phys_is_executable(&pe_ctx, entry-0x100);
-    is_executable = peutil_phys_is_executable(&pe_ctx, (uintptr_t)(this_module) + 0x6c008);
+    uintptr_t out_rva;
+    bool is_executable = peutil_phys_is_executable(&pe_ctx, entry, &out_rva);
+    is_executable = peutil_phys_is_executable(&pe_ctx, entry-0x100, 0);
+    is_executable = peutil_phys_is_executable(&pe_ctx, (uintptr_t)(this_module) + 0x6c008, 0);
 
     void* heap = malloc(1024*1024);
 	jos_allocator_t* allocator = (jos_allocator_t*)arena_allocator_create(heap, 1024 * 1024);

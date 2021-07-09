@@ -21,11 +21,13 @@ struct _jos_allocator;
 typedef void* (*jos_allocator_alloc_func_t)(struct _jos_allocator*, size_t);
 typedef void  (*jos_allocator_free_func_t)(struct _jos_allocator*, void*);
 typedef void* (*jos_allocator_realloc_func_t)(struct _jos_allocator*, void*, size_t);
+typedef size_t (*jos_allocator_avail_func_t)(struct _jos_allocator*);
 
 typedef struct _jos_allocator {
     jos_allocator_alloc_func_t      alloc;
     jos_allocator_free_func_t       free;
     jos_allocator_realloc_func_t    realloc;
+    jos_allocator_avail_func_t      available;
 
 } jos_allocator_t;
 
@@ -142,7 +144,34 @@ if(!(cond))\
 #else
 #define _JOS_ASSERT(cond)
 #endif
-#define _JOS_ALIGN(type,name,alignment) __declspec(align(alignment)) type name
+#define _JOS_ALIGN(type, name, alignment) __declspec(align(alignment)) type name
 #endif
+
+
+typedef enum _alloc_alignment {
+
+    kAllocAlign_4 = 4,
+    kAllocAlign_8 = 8,
+    kAllocAlign_16 = 16,
+    kAllocAlign_32 = 32,
+    kAllocAlign_64 = 64,
+    kAllocAlign_128 = 128,
+    kAllocAlign_256 = 256,
+    kAllocAlign_4k = 0x1000,
+
+    kAllocAlign_Max
+
+} alloc_alignment_t;
+
+_JOS_INLINE_FUNC void aligned_alloc(jos_allocator_t* allocator, size_t bytes, alloc_alignment_t alignment, 
+                                    void** out_alloc_base, void** out_alloc_aligned) {
+    if (!allocator || !bytes) {
+        *out_alloc_base = *out_alloc_aligned = 0;
+        return;
+    }
+    void* ptr = allocator->alloc(allocator, bytes + (size_t)alignment - 1);
+    *out_alloc_base = ptr;
+    *out_alloc_aligned = (void*)(((uintptr_t)ptr + ((uintptr_t)alignment-1)) & ~ ((uintptr_t)alignment-1));
+}
 
 #endif // _JOS_H
