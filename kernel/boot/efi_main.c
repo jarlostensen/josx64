@@ -248,14 +248,15 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 {    
     g_st = st;
     g_boot_services = st->boot_services;
-
+    st->con_out->output_string(st->con_out, L"jox64\n");
+    
     uefi_init(h);
     dump_image_info(efi_main);
 
     wchar_t buf[256];
     size_t bsp_id = smp_get_bsp_id();
     swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", smp_get_processor_count(), bsp_id);    
-    output_console_output_string(buf);    
+    output_console_output_string(buf);
     
     if ( smp_has_acpi_20() ) {
         output_console_output_string(L"ACPI 2.0 configuration enabled\n");
@@ -336,6 +337,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     });
 
     kernel_runtime_start();
+
     return C_EFI_SUCCESS;
 }
  

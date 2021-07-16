@@ -19,6 +19,13 @@ typedef struct _local_apic_information {
 
 } local_apic_information_t;
 
+typedef struct _xsave_information {
+    // eax:edx from cpuid 0xd:0
+    uint64_t                        _xsave_bitmap;
+    uint32_t                        _xsave_area_size;
+} xsave_information_t;
+
+
 typedef struct _processor_information {
 
     // this is *our* ID, not dependent on any hw ID
@@ -39,7 +46,7 @@ typedef struct _processor_information {
     bool                            _has_1GB_pages : 1;
     bool                            _xsave : 1;
 
-    uint32_t                        _xsave_area_size;
+    xsave_information_t             _xsave_info;
     
 } processor_information_t;
 

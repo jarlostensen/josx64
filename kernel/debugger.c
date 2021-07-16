@@ -680,7 +680,9 @@ _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uin
                     json_write_key(&ctx, "xsave");
                         json_write_object_start(&ctx);
                             json_write_key(&ctx, "size");
-                            json_write_number(&ctx, this_cpu_info->_xsave_area_size);
+                            json_write_number(&ctx, this_cpu_info->_xsave_info._xsave_area_size);
+                            json_write_key(&ctx, "bitmap");
+                            json_write_number(&ctx, this_cpu_info->_xsave_info._xsave_bitmap);
                         json_write_object_end(&ctx);
                 }
             json_write_object_end(&ctx);

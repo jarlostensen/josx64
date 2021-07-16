@@ -214,10 +214,10 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
 
     // set aside space for XSAVE if we use it
     processor_information_t* this_cpu_info = per_cpu_this_cpu_info();
-    if (this_cpu_info->_xsave && this_cpu_info->_xsave_area_size) {
+    if (this_cpu_info->_xsave && this_cpu_info->_xsave_info._xsave_area_size) {
         //TODO: LEAKING
         void* base_alloc_ptr;
-        aligned_alloc((jos_allocator_t*)_tasks_allocator, this_cpu_info->_xsave_area_size, kAllocAlign_64, &base_alloc_ptr, &ctx->_xsave_area);
+        aligned_alloc((jos_allocator_t*)_tasks_allocator, this_cpu_info->_xsave_info._xsave_area_size, kAllocAlign_64, &base_alloc_ptr, &ctx->_xsave_area);
         _JOS_ASSERT(ctx->_xsave_area);
     } else {
         ctx->_xsave_area = 0;

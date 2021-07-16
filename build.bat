@@ -10,16 +10,14 @@ if %ERRORLEVEL% EQU 0 (
     rem output yaml version of PDB TODO: debug only
     external\LLVM\bin\llvm-pdbutil.exe pdb2yaml --all build\BOOTX64.PDB > build\BOOTX64.YML
 
-    if not exist %CD%\build\EFI mkdir %CD%\build\EFI
-    if not exist %CD%\build\EFI\BOOT mkdir %CD%\build\EFI\BOOT
-    if not exist %CD%\build\EFI\ASSETS mkdir %CD%\build\EFI\ASSETS
-    copy %CD%\build\BOOTX64.PDB %CD%\build\EFI\ASSETS
-    copy %CD%\build\BOOTX64.YML %CD%\build\EFI\ASSETS
-    copy %CD%\build\BOOTX64.EFI %CD%\build\EFI\BOOT
+    if not exist %CD%\build\disk mkdir %CD%\build\disk
+    if not exist %CD%\build\disk\EFI mkdir %CD%\build\disk\EFI
+    if not exist %CD%\build\disk\EFI\BOOT mkdir %CD%\build\disk\EFI\BOOT    
+    copy %CD%\build\BOOTX64.EFI %CD%\build\disk\EFI\BOOT
+    echo fs0:\EFI\BOOT\BOOTX64.EFI > %CD%\build\disk\startup.nsh
 
-    rem tools\efibootgen.exe -v -b build\BOOTX64.EFI -o build\boot.dd -l "josx64"
     cd %CD%\build\
-    ..\tools\efibootgen.exe -f -d EFI -o boot.dd -l "josx64"
+    ..\tools\efibootgen.exe -f -d disk -o boot.dd -l "josx64"
     cd ..
 
     if %ERRORLEVEL% equ 0 (
