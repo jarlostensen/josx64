@@ -14,7 +14,7 @@
 
 #include <windows.h>
 
-#define _JOS_IMPLEMENT_CONTAINERS
+
 #define _JOS_IMPLEMENT_JSON
 
 #include "../libc/internal/include/libc_internal.h"
@@ -33,10 +33,10 @@
 #include "../libc/include/extensions/base64.h"
 #include "../kernel/include/linear_allocator.h"
 #include "../kernel/include/arena_allocator.h"
+#include "../kernel/include/hive.h"
 
-void test_fixed_allocator(void);
-void test_linear_allocator(void);
-void test_arena_allocator_allocator(void);
+
+#include "tests.h"
 
 void slice_printf(char_array_slice_t* slice) {
     for (unsigned n = 0; n < slice->_length; ++n) {
@@ -165,11 +165,11 @@ void test_fstream_io(void) {
     out_file._buffer._size = sizeof(buffer);
     int written = _fwrite(data, 1, strlen(data) + 1, &out_file);
     
-	IO_FILE in_file = { ._buffer._begin = buffer };
-	out_file._buffer._end = out_file._buffer._begin + sizeof(buffer);
-	out_file._buffer._wp = out_file._buffer._begin;
-	out_file._buffer._rp = out_file._buffer._begin;
-	out_file._buffer._size = 8;
+    IO_FILE in_file = { ._buffer._begin = buffer };
+    out_file._buffer._end = out_file._buffer._begin + sizeof(buffer);
+    out_file._buffer._wp = out_file._buffer._begin;
+    out_file._buffer._rp = out_file._buffer._begin;
+    out_file._buffer._size = 8;
     char out_buffer[128];
     int read = _fread(out_buffer, 1, strlen(data) + 1, &out_file);
     _stdout_write(0, out_buffer, read);
@@ -205,12 +205,12 @@ static void test_json(void) {
     json_writer_context_t ctx;
     json_initialise_writer(&ctx, stdout);
 
-	char register_buffer[512];
-	linear_allocator_t* buffer_allocator = linear_allocator_create(register_buffer, sizeof(register_buffer));
-	size_t out_len = 0;
-	interrupt_stack_t stack;
-	memset(&stack, 0xcd, sizeof(stack));
-	unsigned char* encoded = base64_encode((const unsigned char*)&stack, sizeof(interrupt_stack_t), &out_len, (jos_allocator_t*)buffer_allocator);
+    char register_buffer[512];
+    linear_allocator_t* buffer_allocator = linear_allocator_create(register_buffer, sizeof(register_buffer));
+    size_t out_len = 0;
+    interrupt_stack_t stack;
+    memset(&stack, 0xcd, sizeof(stack));
+    unsigned char* encoded = base64_encode((const unsigned char*)&stack, sizeof(interrupt_stack_t), &out_len, (jos_allocator_t*)buffer_allocator);
 
     json_write_object_start(&ctx);
         json_write_key(&ctx, "version");
@@ -562,8 +562,8 @@ static void ui_test_loop(void) {
 
 void alloc_tests(void) {
 
-	char register_buffer[1024];
-	linear_allocator_t* buffer_allocator = linear_allocator_create(register_buffer+1, sizeof(register_buffer)-1);
+    char register_buffer[1024];
+    linear_allocator_t* buffer_allocator = linear_allocator_create(register_buffer+1, sizeof(register_buffer)-1);
 
     void *base_ptr, *ptr;
     alloc_alignment_t alignment = kAllocAlign_128;
@@ -571,11 +571,42 @@ void alloc_tests(void) {
     _JOS_ASSERT(((uintptr_t)ptr & ((uintptr_t)alignment) - 1) == 0);
 }
 
+jos_allocator_t _malloc_allocator;
+
+static void* malloc_alloc(jos_allocator_t* alloc, size_t size) {
+    (void)alloc;
+    return malloc(size);
+}
+
+static void* malloc_realloc(jos_allocator_t* alloc, void* ptr, size_t size) {
+    (void)alloc;
+    return realloc(ptr, size);
+}
+
+static void malloc_free(jos_allocator_t* alloc, void* ptr) {
+    (void)alloc;
+    free(ptr);
+}
+
+static size_t malloc_avail(jos_allocator_t* alloc) {
+    (void)alloc;
+    return (size_t)~0;
+}
+
+static void init_tests(void) {
+    _malloc_allocator.alloc = malloc_alloc;
+    _malloc_allocator.free = malloc_free;
+    _malloc_allocator.available = malloc_avail;
+    _malloc_allocator.realloc = malloc_realloc;
+}
+
 
 // ==============================================================================================================
 
 int main(void)
 {
+    init_tests();
+
     /*char buffer[512];
     wchar_t wbuffer[512];
 
@@ -603,34 +634,39 @@ int main(void)
         "enabled"
         );
 */
-    alloc_tests();
+    test_vector(&_malloc_allocator);
+    test_vector_aligned(&_malloc_allocator);
+    test_paged_list(&_malloc_allocator);
+    test_hive(&_malloc_allocator);
 
-    char buffer[512];
-    uintptr_t total = 0xddd2ce90;
-    uintptr_t pages = 35;
-    _JOS_LIBC_FUNC_NAME(snprintf)(buffer, sizeof(buffer), "total %lld", total);
+    /* alloc_tests();
 
-    HMODULE this_module = GetModuleHandle(0);
-    hex_dump_mem((void*)this_module, 64, k8bitInt);
-    peutil_pe_context_t pe_ctx;
-    peutil_bind(&pe_ctx, (const void*)this_module, kPe_Relocated);
-    uintptr_t entry = peutil_entry_point(&pe_ctx);
-    uintptr_t out_rva;
-    bool is_executable = peutil_phys_is_executable(&pe_ctx, entry, &out_rva);
-    is_executable = peutil_phys_is_executable(&pe_ctx, entry-0x100, 0);
-    is_executable = peutil_phys_is_executable(&pe_ctx, (uintptr_t)(this_module) + 0x6c008, 0);
+     char buffer[512];
+     uintptr_t total = 0xddd2ce90;
+     uintptr_t pages = 35;
+     _JOS_LIBC_FUNC_NAME(snprintf)(buffer, sizeof(buffer), "total %lld", total);
 
-    void* heap = malloc(1024*1024);
-	jos_allocator_t* allocator = (jos_allocator_t*)arena_allocator_create(heap, 1024 * 1024);
+     HMODULE this_module = GetModuleHandle(0);
+     hex_dump_mem((void*)this_module, 64, k8bitInt);
+     peutil_pe_context_t pe_ctx;
+     peutil_bind(&pe_ctx, (const void*)this_module, kPe_Relocated);
+     uintptr_t entry = peutil_entry_point(&pe_ctx);
+     uintptr_t out_rva;
+     bool is_executable = peutil_phys_is_executable(&pe_ctx, entry, &out_rva);
+     is_executable = peutil_phys_is_executable(&pe_ctx, entry-0x100, 0);
+     is_executable = peutil_phys_is_executable(&pe_ctx, (uintptr_t)(this_module) + 0x6c008, 0);
 
-    vector_t a;
-    vector_t b;
-    vector_create(&a, 16, sizeof(int), allocator);
-    vector_create_like(&b, &a);
-    int e = 1;
-    vector_push_back(&b, (void*)&e);
-    vector_swap(&a, &b);
-    vector_destroy(&b);
+     void* heap = malloc(1024*1024);
+     jos_allocator_t* allocator = (jos_allocator_t*)arena_allocator_create(heap, 1024 * 1024);
+
+     vector_t a;
+     vector_t b;
+     vector_create(&a, 16, sizeof(int), allocator);
+     vector_create_like(&b, &a);
+     int e = 1;
+     vector_push_back(&b, (void*)&e);
+     vector_swap(&a, &b);
+     vector_destroy(&b);*/
         
     /*test_fixed_allocator();
     test_linear_allocator();

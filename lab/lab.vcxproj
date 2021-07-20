@@ -164,6 +164,7 @@
     <ClInclude Include="..\kernel\include\arena_allocator.h" />
     <ClInclude Include="..\kernel\include\collections.h" />
     <ClInclude Include="..\kernel\include\fixed_allocator.h" />
+    <ClInclude Include="..\kernel\include\hive.h" />
     <ClInclude Include="..\kernel\include\jos.h" />
     <ClInclude Include="..\kernel\include\linear_allocator.h" />
     <ClInclude Include="..\kernel\include\output_console.h" />
@@ -173,6 +174,7 @@
     <ClInclude Include="..\libc\include\extensions\pdb_index.h" />
     <ClInclude Include="..\libc\include\extensions\slices.h" />
     <ClInclude Include="..\libc\internal\include\_file.h" />
+    <ClInclude Include="tests.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="json_data.json" />

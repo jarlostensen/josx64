@@ -119,6 +119,12 @@
     <ClInclude Include="..\kernel\include\linear_allocator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\kernel\include\hive.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="tests.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="json_data.json">
