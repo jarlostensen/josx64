@@ -30,10 +30,10 @@ _JOS_API_FUNC linear_allocator_t* linear_allocator_create(void* memory, size_t s
 
     _JOS_ASSERT(size_adjusted>sizeof(linear_allocator_t));
     linear_allocator_t* linalloc = (linear_allocator_t*)memory;
-    linalloc->_begin = memory;
+    linalloc->_begin = memory; 
     linalloc->_end = (void*)((uintptr_t)memory + size_adjusted);
-    linalloc->_ptr = (char*)((char*)memory + sizeof(linear_allocator_t));
-
+    linalloc->_ptr = (char*)_JOS_ALIGN(((char*)memory + sizeof(linear_allocator_t)), kAllocAlign_8);
+    
     linalloc->_super.alloc = (jos_allocator_alloc_func_t)linear_allocator_alloc;
     linalloc->_super.free = 0;
     linalloc->_super.realloc = 0;
@@ -43,13 +43,12 @@ _JOS_API_FUNC linear_allocator_t* linear_allocator_create(void* memory, size_t s
 }
 
 _JOS_API_FUNC void* linear_allocator_alloc(linear_allocator_t* linalloc, size_t size) {
-    size_t capacity = (size_t)linalloc->_end - (size_t)linalloc->_ptr;
+    char* ptr = (char*)_JOS_ALIGN(linalloc->_ptr, kAllocAlign_8);
+    size_t capacity = (size_t)linalloc->_end - (size_t)ptr;
     if ( capacity < size ) {
         return NULL;
     }
-
-    char* ptr = linalloc->_ptr;
-    linalloc->_ptr += size;
+    linalloc->_ptr = (ptr + size);
     return ptr;
 }
 #endif

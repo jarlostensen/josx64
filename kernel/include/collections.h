@@ -304,7 +304,7 @@ _JOS_API_FUNC void vector_create(vector_t* vec, size_t capacity, size_t element_
 	assert(vec && element_size && capacity && allocator);
 
 	vec->_allocator = allocator;
-	vec->_alignment = kAllocAlign_1;
+	vec->_alignment = kAllocAlign_None;
 	vec->_memory = vec->_data = vec->_allocator->alloc(vec->_allocator, capacity * element_size);
 	vec->_capacity = capacity;
 	vec->_stride = vec->_element_size = element_size;
@@ -337,7 +337,7 @@ _JOS_API_FUNC void vector_push_back(vector_t* vec, void* element)
 		_vector_increase_size(vec);
 	}
 	else {		
-		if (vec->_alignment == kAllocAlign_1) {
+		if (vec->_alignment == kAllocAlign_None) {
 			// optimal growth ratio if we want to stand a chance to re-use memory for future growth		
 			vec->_capacity += vec->_capacity >> 1;
 			vec->_data = vec->_memory = vec->_allocator->realloc(vec->_allocator, vec->_memory, vec->_capacity * vec->_stride);

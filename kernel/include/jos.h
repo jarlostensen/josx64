@@ -150,7 +150,7 @@ if(!(cond))\
 
 typedef enum _alloc_alignment {
 
-    kAllocAlign_1 = 1,
+    kAllocAlign_None = 1,
     kAllocAlign_2 = 2,
     kAllocAlign_4 = 4,
     kAllocAlign_8 = 8,
@@ -165,6 +165,12 @@ typedef enum _alloc_alignment {
 
 } alloc_alignment_t;
 
+#define _JOS_PTR_IS_ALIGNED(ptr, alignment)\
+    (((uintptr_t)ptr & ((uintptr_t)alignment - 1)) == 0)
+
+#define _JOS_ALIGN(val, alignment)\
+    (((uintptr_t)val + ((uintptr_t)alignment - 1)) & ~((uintptr_t)alignment - 1))
+
 _JOS_INLINE_FUNC void aligned_alloc(jos_allocator_t* allocator, size_t bytes, alloc_alignment_t alignment, 
                                     void** out_alloc_base, void** out_alloc_aligned) {
     if (!allocator || !bytes) {
@@ -173,8 +179,8 @@ _JOS_INLINE_FUNC void aligned_alloc(jos_allocator_t* allocator, size_t bytes, al
     }
     void* ptr = allocator->alloc(allocator, bytes + (size_t)alignment - 1);
     *out_alloc_base = ptr;
-    if (((uintptr_t)ptr & ((uintptr_t)alignment - 1)) != 0) {        
-        *out_alloc_aligned = (void*)(((uintptr_t)ptr + ((uintptr_t)alignment - 1)) & ~((uintptr_t)alignment - 1));
+    if (!_JOS_PTR_IS_ALIGNED(ptr, alignment)) {
+        *out_alloc_aligned = (void*)_JOS_ALIGN(ptr, alignment);
     }
     else {
         *out_alloc_aligned = ptr;
