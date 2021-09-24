@@ -71,6 +71,21 @@ section .text
 %define DBG_BREAK int 3
 
 ; --------------------------------------------------------------------------
+; misc task switching 
+; void x86_64_xsave(uint64_t xsave_bitmap, uintptr_t save_area_64_byte_aligned)
+; https://www.felixcloutier.com/x86/xsave
+global x86_64_xsave
+x86_64_xsave:
+    mov     rax, rcx
+    mov     rcx, rdx
+    mov     rdx, rax
+    shr     rdx, 31
+    and     rdx, 0xffffffff
+    and     rax, 0xffffffff
+    xsave   [rcx]
+    ret
+
+; --------------------------------------------------------------------------
 ; task handlers
 
 %define TASK_CONTEXT_T_RSP 160

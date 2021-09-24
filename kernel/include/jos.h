@@ -103,7 +103,7 @@ if(!(cond))\
     }\
 }
 
-#define _JOS_ALIGN(type,name,alignment) type name __attribute__ ((aligned (alignment)))
+#define _JOS_ALIGNED_TYPE(type,name,alignment) type name __attribute__ ((aligned (alignment)))
 
 #define _JOS_PACKED __attribute__((packed))
 #define _JOS_NORETURN __attribute__((__noreturn__))
@@ -144,7 +144,7 @@ if(!(cond))\
 #else
 #define _JOS_ASSERT(cond)
 #endif
-#define _JOS_ALIGN(type, name, alignment) __declspec(align(alignment)) type name
+#define _JOS_ALIGNED_TYPE(type, name, alignment) __declspec(align(alignment)) type name
 #endif
 
 

@@ -33,7 +33,7 @@ typedef struct _vector
 // create and initialise a vector with an initial capacity
 _JOS_API_FUNC void vector_create(vector_t* vec, size_t capacity, size_t element_size, jos_allocator_t* allocator);
 // create and initialise a vector with an initial capacity and allocation units aligned to alignment
-_JOS_API_FUNC void vector_create_aligned(vector_t* vec, size_t capacity, size_t element_size, size_t alignment, jos_allocator_t* allocator);
+_JOS_API_FUNC void vector_create_aligned(vector_t* vec, size_t capacity, size_t element_size, alloc_alignment_t alignment, jos_allocator_t* allocator);
 // add element to the end of vector
 _JOS_API_FUNC void vector_push_back(vector_t* vec, void* element);
 _JOS_API_FUNC void vector_set_at(vector_t* vec, size_t i, void* element);
@@ -252,7 +252,7 @@ _JO_INLINE_FUNC _JOS_ALWAYS_INLINE bool paged_list_iterator_has_next(paged_list_
 	return (iter && iter->_header) && (iter->_index < iter->_header->_items);
 }
 
-_JO_INLINE_FUNC _JOS_ALWAYS_INLINE * paged_list_iterator_value(paged_list_iterator_t* iter) {
+_JO_INLINE_FUNC _JOS_ALWAYS_INLINE void* paged_list_iterator_value(paged_list_iterator_t* iter) {
 	return (void*)iter->_offset;
 }
 
@@ -274,7 +274,7 @@ _JO_INLINE_FUNC size_t paged_list_size(paged_list_t* paged_list) {
 #if defined(_JOS_IMPLEMENT_CONTAINERS) && !defined(_JOS_CONTAINERS_IMPLEMENTED)
 #define _JOS_CONTAINERS_IMPLEMENTED
 
-_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE _vector_decrease_size(vector_t *vector)
+_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE void _vector_decrease_size(vector_t *vector)
 {
 	_JOS_ASSERT(vector->_size);
 	--vector->_size;
@@ -293,7 +293,7 @@ _JOS_INLINE_FUNC void _vector_set_at(vector_t* vec, size_t i, void* element)
 	memcpy((char*)vec->_data+i, element, vec->_element_size);
 }
 
-_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE * _vector_at(vector_t* vec, size_t n)
+_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE void* _vector_at(vector_t* vec, size_t n)
 {
 	return (void*)((char*)vec->_data + n*vec->_stride);
 }

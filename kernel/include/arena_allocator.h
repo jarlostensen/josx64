@@ -79,7 +79,8 @@ _JOS_API_FUNC void* arena_allocator_realloc(arena_allocator_t* arena, void* bloc
 #if defined(_JOS_IMPLEMENT_ALLOCATORS) && !defined(_JOS_arena_allocator_ALLOCATOR_IMPLEMENTED)
 #define _JOS_arena_allocator_ALLOCATOR_IMPLEMENTED
 
-#define _JOS_arena_allocator_ALLOC_OVERHEAD (sizeof(vmem_block_head_t) + sizeof(vmem_block_tail_t))
+//NOTE: +7 because we align all allocations to nearest 8 bytes
+#define _JOS_arena_allocator_ALLOC_OVERHEAD (sizeof(vmem_block_head_t) + sizeof(vmem_block_tail_t) + 7)
 #define _JOS_VMEM_ABS_BLOCK_SIZE(size) ((size) & ~kVmemBlockFree)
 #define _JOS_VMEM_BLOCK_MIN_SIZE _JOS_arena_allocator_ALLOC_OVERHEAD + 16
 #define _JOS_arena_allocator_MIN_SIZE (sizeof(arena_allocator_t) + _JOS_arena_allocator_ALLOC_OVERHEAD)
@@ -196,8 +197,8 @@ _JOS_API_FUNC arena_allocator_t*   arena_allocator_create(void* mem, size_t size
     }	
 
 	arena_allocator_t*   arena = (arena_allocator_t*)mem;
-    arena->_size = arena->_capacity = size - sizeof(arena_allocator_t);
-    arena->_free_head = (vmem_block_head_t*)(arena+1);
+	arena->_free_head = (vmem_block_head_t*)(arena+1);
+	arena->_size = arena->_capacity = size - sizeof(arena_allocator_t);
     arena->_free_head->_size = arena->_size | kVmemBlockFree;
     arena->_free_head->_links[0] = 0;
     arena->_free_head->_links[1] = 0;
@@ -219,8 +220,8 @@ _JOS_API_FUNC void* arena_allocator_alloc(arena_allocator_t* arena, size_t size)
 		return 0;
 	}
 
-	// cap to minimum size or align to 4 bytes
-	size = (size < _JOS_VMEM_BLOCK_MIN_SIZE) ? _JOS_VMEM_BLOCK_MIN_SIZE : (size+3)&~3;
+	// cap to minimum size or align to 8 bytes
+	size = (size < _JOS_VMEM_BLOCK_MIN_SIZE) ? _JOS_VMEM_BLOCK_MIN_SIZE : (size+7)&~7;
 
 	if(!arena || arena->_size<size+_JOS_arena_allocator_ALLOC_OVERHEAD )
 	{
@@ -256,9 +257,10 @@ _JOS_API_FUNC void* arena_allocator_alloc(arena_allocator_t* arena, size_t size)
 		org_size -= free->_size;
         if(org_size >= _JOS_VMEM_BLOCK_MIN_SIZE)
         {
-            vmem_block_head_t* new_head = (vmem_block_head_t*)(new_tail+1);
-			new_head->_size = org_size;
-            new_tail = _vmem_tail_from_head(new_head);            
+            vmem_block_head_t* new_head = (vmem_block_head_t*)_JOS_ALIGN(new_tail+1, kAllocAlign_8);
+			// adjust by bytes required by alignment 
+			new_head->_size = org_size - ((size_t)new_head - (size_t)(new_tail + 1));
+            new_tail = _vmem_tail_from_head(new_head);
             new_tail->_size = _vmem_tail_free_size(new_head);
 			new_head->_size |= kVmemBlockFree;
 			_arena_allocator_block_insert_as_free(arena, new_head);
@@ -267,7 +269,7 @@ _JOS_API_FUNC void* arena_allocator_alloc(arena_allocator_t* arena, size_t size)
         }
 		
 		arena->_size -= free->_size;
-		// return pointer to area betyond header
+		// return pointer to area beyond header
 		++free;
     }
 

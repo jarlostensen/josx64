@@ -77,6 +77,8 @@ static task_context_t* cpu_context_try_pop_task(cpu_task_context_t* cpu_ctx, siz
 
 // in x86_64.asm
 extern task_context_t* x86_64_task_switch(uintptr_t* curr_stack, uintptr_t* new_stack);
+extern void x86_64_xsave(uint64_t xsave_bitmap, uintptr_t save_area_64_byte_aligned);
+
 // handle to per-cpu context instances
 static per_cpu_ptr_t _per_cpu_ctx;
 
@@ -147,7 +149,8 @@ static void _yield_to_next_task(void) {
         
         //TESTING:
         if (prev && prev->_xsave_area) {
-            __asm__ volatile ("xsave64  %0" : : "m" (prev->_xsave_area));
+            processor_information_t* this_cpu_info = per_cpu_this_cpu_info();
+            x86_64_xsave(this_cpu_info->_xsave_info._xsave_bitmap, (uintptr_t)prev->_xsave_area);
         }
 
         x86_64_task_switch(prev ? prev->_stack : 0, cpu_ctx->_running_task->_stack);

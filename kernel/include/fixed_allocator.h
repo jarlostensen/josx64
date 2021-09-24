@@ -41,7 +41,7 @@ _JOS_API_FUNC fixed_allocator_t* fixed_allocator_create(void* mem, size_t size, 
     fixed_allocator_t* pool = (fixed_allocator_t*)mem;
     pool->_size_p2 = (uint8_t)allocUnitPow2;
     size -= sizeof(fixed_allocator_t);
-    pool->_count = size / (1<<allocUnitPow2);
+    pool->_count = size / ((size_t)1 << allocUnitPow2);
     pool->_free = 0;
 	pool->_end = (uintptr_t)((uintptr_t)(pool+1) + pool->_count*(1<<pool->_size_p2));
     uint32_t* block = (uint32_t*)((uint8_t*)(pool+1));

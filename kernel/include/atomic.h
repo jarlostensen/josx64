@@ -8,11 +8,11 @@
 // but won't automagically provide cache coherence in the SMP case 
 
 typedef struct _atomic_int {
-    _JOS_ALIGN(int, value, sizeof(int));
+    _JOS_ALIGNED_TYPE(int, value, sizeof(int));
 } atomic_int_t;
 
 typedef struct _atomic_long_long {
-    _JOS_ALIGN(long long, value, sizeof(long long));
+    _JOS_ALIGNED_TYPE(long long, value, sizeof(long long));
 } atomic_long_long_t;
 
 
