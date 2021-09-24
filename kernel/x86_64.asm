@@ -72,6 +72,7 @@ section .text
 
 ; --------------------------------------------------------------------------
 ; misc task switching 
+
 ; void x86_64_xsave(uint64_t xsave_bitmap, uintptr_t save_area_64_byte_aligned)
 ; https://www.felixcloutier.com/x86/xsave
 global x86_64_xsave
@@ -80,9 +81,18 @@ x86_64_xsave:
     mov     rcx, rdx
     mov     rdx, rax
     shr     rdx, 31
-    and     rdx, 0xffffffff
-    and     rax, 0xffffffff
     xsave   [rcx]
+    ret
+
+; void x86_64_xrstor(uint64_t xsave_bitmap, uintptr_t save_area_64_byte_aligned)
+; https://www.felixcloutier.com/x86/xrstor
+global x86_64_xrstor
+x86_64_xrstor:
+    mov     rax, rcx
+    mov     rcx, rdx
+    mov     rdx, rax
+    shr     rdx, 31
+    xrstor  [rcx]
     ret
 
 ; --------------------------------------------------------------------------

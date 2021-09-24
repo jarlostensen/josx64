@@ -78,6 +78,7 @@ static task_context_t* cpu_context_try_pop_task(cpu_task_context_t* cpu_ctx, siz
 // in x86_64.asm
 extern task_context_t* x86_64_task_switch(uintptr_t* curr_stack, uintptr_t* new_stack);
 extern void x86_64_xsave(uint64_t xsave_bitmap, uintptr_t save_area_64_byte_aligned);
+extern void x86_64_xrstor(uint64_t xsave_bitmap, uintptr_t save_area_64_byte_aligned);
 
 // handle to per-cpu context instances
 static per_cpu_ptr_t _per_cpu_ctx;
@@ -144,16 +145,24 @@ static void _yield_to_next_task(void) {
     }
 
     if( next_task ) {
-        //_JOS_KTRACE_CHANNEL(kTaskChannel, "switching from \"%s\" to \"%s\"", 
-        //    prev ? prev->_name : "(0)", cpu_ctx->_running_task->_name);        
-        
-        //TESTING:
-        if (prev && prev->_xsave_area) {
-            processor_information_t* this_cpu_info = per_cpu_this_cpu_info();
-            x86_64_xsave(this_cpu_info->_xsave_info._xsave_bitmap, (uintptr_t)prev->_xsave_area);
+        //ZZZ: this is not strictly correct if the task switches to another CPU...is it even a possibility 
+        //     that the XSAVE/XRSTOR flags are different..?
+        processor_information_t* this_cpu_info = per_cpu_this_cpu_info();
+        if ( this_cpu_info->_xsave ) {
+            if (prev && prev->_xsave_area) {
+                // save eXtended CPU state before switching (such as X/Y/ZMM registers)            
+                x86_64_cli();
+                x86_64_xsave(this_cpu_info->_xsave_info._xsave_bitmap, (uintptr_t)prev->_xsave_area);
+                x86_64_sti();
+            }
+            //ZZZ: this is probably not super-safe to do before we've actually switched...?
+            x86_64_cli();
+            x86_64_xrstor(this_cpu_info->_xsave_info._xsave_bitmap, (uintptr_t)next_task->_xsave_area);
+            x86_64_sti();
         }
-
+        // switch to the new task's stack and resume execution (this call only returns when we're next switched back in)
         x86_64_task_switch(prev ? prev->_stack : 0, cpu_ctx->_running_task->_stack);
+
     } else {
         // else we're now idling
         if (prev != cpu_ctx->_cpu_idle) {
