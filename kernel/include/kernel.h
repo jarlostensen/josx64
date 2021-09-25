@@ -28,8 +28,8 @@ _JO_INLINE_FUNC void lock_unlock(lock_t* lock) {
     atomic_store(&lock->atomic_val, 0);
 }
 
-_JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiBootServices* boot_services);
-_JOS_API_FUNC jo_status_t kernel_runtime_init(CEfiHandle h, CEfiBootServices *boot_services);
+_JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services);
+_JOS_API_FUNC jo_status_t kernel_runtime_init(CEfiHandle h, CEfiSystemTable* system_services);
 _JOS_NORETURN void  kernel_runtime_start(void);
 
 _JOS_API_FUNC void kernel_memory_available(size_t* on_boot, size_t* now);

@@ -15,6 +15,7 @@ target_include_directories(kernel PRIVATE
 target_sources(kernel PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/video.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/memory.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/acpi.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/output_console.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/serial.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/smp.c"

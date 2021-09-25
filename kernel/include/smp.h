@@ -93,12 +93,11 @@ _JOS_INLINE_FUNC    processor_information_t* per_cpu_this_cpu_info(void) {
 // ===============================================================================================
 
 //NOTE: called on the BSP *only*
-jo_status_t     smp_initialise(jos_allocator_t* allocator);
+jo_status_t     smp_initialise(jos_allocator_t* allocator, CEfiBootServices *boot_services);
 
 size_t          smp_get_processor_count(void);
 size_t          smp_get_bsp_id();
 jo_status_t     smp_get_processor_information(processor_information_t* out_info, size_t processor_index);
-bool            smp_has_acpi_20();
 _JOS_INLINE_FUNC jo_status_t     smp_get_this_processor_info(processor_information_t* out_info) {
     return smp_get_processor_information(out_info, per_cpu_this_cpu_id());
 }

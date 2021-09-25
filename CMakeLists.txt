@@ -82,7 +82,7 @@ set(ZYDIS_BUILD_EXAMPLES OFF CACHE BOOL "")
 set(ZYAN_NO_LIBC ON CACHE BOOL "")
 add_subdirectory("deps/zydis")
 
-add_executable(boot "${CMAKE_SOURCE_DIR}/kernel/boot/efi_main_old.c")
+add_executable(boot "${CMAKE_SOURCE_DIR}/kernel/boot/efi_boot_loader.c")
 target_include_directories(boot PRIVATE 
 "${CMAKE_SOURCE_DIR}/deps/zydis/include" 
 "${CMAKE_SYSTEM_PREFIX_PATH}" 

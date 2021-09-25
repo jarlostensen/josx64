@@ -16,6 +16,20 @@
 #include <keyboard.h>
 #include <tasks.h>
 #include <smp.h>
+#include <acpi.h>
+
+
+//https://github.com/rust-lang/rust/issues/62785/
+// TL;DR linker error we get when building with Clang on Windows 
+//       so we just need to define it somewhere
+int _fltused = 0;
+
+// make sure this has an implementation somewhere
+#define _JOS_IMPLEMENT_JSON
+#include <extensions/json.h>
+
+//ZZZ: this is a bit lame...
+uint16_t kJosKernelCS;
 
 static const char* kKernelChannel = "kernel";
 
@@ -39,9 +53,11 @@ _JOS_API_FUNC void kernel_memory_available(size_t* on_boot, size_t* now) {
     *now = _kernel_allocator->available(_kernel_allocator);
 }
 
-_JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiBootServices* boot_services) {
+_JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
 
     _JOS_KTRACE_CHANNEL(kKernelChannel, "uefi init");
+
+    kJosKernelCS = x86_64_get_cs();
 
     pagetables_initialise();    
 
@@ -50,7 +66,7 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiBootServices* boot_services) {
 
     //NOTE: we can initialise the kernel allocator here because we never exit back to the EFI firmware, otherwise 
     //      this memory would have to be freed at that point
-    jo_status_t status = memory_uefi_init(boot_services);
+    jo_status_t status = memory_uefi_init(system_services->boot_services);
     if ( !_JO_SUCCEEDED(status) ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel, "***FATAL ERROR: memory initialise returned 0x%x", status);
         return status;
@@ -60,15 +76,16 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiBootServices* boot_services) {
     _initial_memory = memory_get_available();
     _kernel_allocator = memory_allocate_pool(kMemoryPoolType_Static, memory_get_available());
     
-    status = smp_initialise((jos_allocator_t*)_kernel_allocator);
+    status = smp_initialise((jos_allocator_t*)_kernel_allocator, system_services->boot_services);
     if ( !_JO_SUCCEEDED(status) ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel, "***FATAL ERROR: SMP initialise returned 0x%x", status);
         return status;
     }
 
-    //TODO: video needs an allocator for the backbuffer (at least)
+    status = acpi_intitialise(system_services);
+
     // port it to use module register
-    status = video_initialise((jos_allocator_t*)_kernel_allocator);
+    status = video_initialise((jos_allocator_t*)_kernel_allocator, system_services->boot_services);
     if ( _JO_FAILED(status)  ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel,"***FATAL ERROR: video initialise returned 0x%x", status);
         return status;
@@ -80,9 +97,9 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiBootServices* boot_services) {
     return _JO_STATUS_SUCCESS;
 }
 
-_JOS_API_FUNC jo_status_t kernel_runtime_init(CEfiHandle h, CEfiBootServices* boot_services) {
+_JOS_API_FUNC jo_status_t kernel_runtime_init(CEfiHandle h, CEfiSystemTable* system_services) {
     
-    jo_status_t k_stat = memory_runtime_init(h, boot_services);
+    jo_status_t k_stat = memory_runtime_init(h, system_services->boot_services);
     if ( _JO_FAILED(k_stat) ) {
         return k_stat;
     }
