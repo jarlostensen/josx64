@@ -18,6 +18,8 @@
 #include <smp.h>
 #include <acpi.h>
 
+#define _JOS_IMPLEMENT_HIVE
+#include <hive.h>
 
 //https://github.com/rust-lang/rust/issues/62785/
 // TL;DR linker error we get when building with Clang on Windows 
@@ -32,6 +34,7 @@ int _fltused = 0;
 uint16_t kJosKernelCS;
 
 static const char* kKernelChannel = "kernel";
+static hive_t _hive;
 
 _JOS_NORETURN void halt_cpu() {
     serial_write_str(kCom1, "\n\nkernel halting\n");
@@ -91,6 +94,9 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
         return status;
     }
     
+    // create our hive storage
+    hive_create(&_hive, (jos_allocator_t*)_kernel_allocator);
+
     // =====================================================================
 
     _JOS_KTRACE_CHANNEL(kKernelChannel, "uefi init ok");

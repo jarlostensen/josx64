@@ -237,6 +237,9 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     if ( acpi_v2() ) {
         output_console_output_string(L"ACPI 2.0 configuration enabled\n");
     }
+    else {
+        output_console_output_string(L"ACPI 2.0 configuration NOT found\n");
+    }
     
     if ( smp_get_processor_count()==1 ) {
         processor_information_t info;    

@@ -26,7 +26,7 @@ typedef struct _task_context {
     // points to the area used to save/restore FP state
     void*                   _xsave_area;
 
-} _JOS_PACKED_ task_context_t;
+} task_context_t;
 
 // ===================================================================================
 

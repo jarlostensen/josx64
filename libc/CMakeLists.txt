@@ -4,6 +4,7 @@ target_sources(c PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/string/memmove.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/string/memset.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/string/strlen.c"    
+    "${CMAKE_CURRENT_SOURCE_DIR}/string/strcmp.c"    
     "${CMAKE_CURRENT_SOURCE_DIR}/extensions/slices.c"  
     "${CMAKE_CURRENT_SOURCE_DIR}/extensions/base64.c"  
     "${CMAKE_CURRENT_SOURCE_DIR}/internal/_vprint.c"    
@@ -16,11 +17,11 @@ target_sources(c PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/math/floor.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/math/fabs.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/math/fabsf.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/stdlib/rand.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stdlib/rand.c"    
     "${CMAKE_CURRENT_SOURCE_DIR}/internal/_toupper.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/internal/_tolower.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/internal/_isupper.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/internal/_islower.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/internal/_islower.c"    
 )
 target_include_directories(c PRIVATE 
 "${CMAKE_CURRENT_SOURCE_DIR}/internal/include"

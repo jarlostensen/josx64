@@ -1,5 +1,6 @@
 #############################################################################
 # CMakeLists for josx64 EFI kernel project
+# some useful info here https://www.vinnie.work/blog/2020-11-17-cmake-eval/
 
 cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
@@ -11,6 +12,9 @@ project(jOSx64 VERSION 1.0
       DESCRIPTION "64 bit jOS kernel - UEFI"
       LANGUAGES C ASM
 )
+
+# we HAVE to set this in order for the build to be completely host agnostic
+set(CMAKE_SYSTEM_NAME Generic)
 
 #########################################################################
 # misc defines
@@ -27,6 +31,11 @@ set(LINKER_FLAGS
     LINKER:-debug,
     LINKER:-pdb:BOOTX64.PDB
 )
+
+if(MSVC)
+  set(CMAKE_EXE_LINKER_FLAGS
+      "${CMAKE_EXE_LINKER_FLAGS} /NODEFAULTLIB")
+endif()
 
 # set the compiler flags for this directory and all descendants, i.e. the libs we're including
 add_compile_options("${COMPILER_FLAGS}")
@@ -103,5 +112,3 @@ target_link_options(boot PRIVATE "${LINKER_FLAGS}")
 
 set_target_properties(boot PROPERTIES SUFFIX "")
 set_target_properties(boot PROPERTIES OUTPUT_NAME "BOOTX64.EFI")
-
-

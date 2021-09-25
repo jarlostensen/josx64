@@ -402,7 +402,7 @@ _JOS_API_FUNC void vector_append(vector_t* dest, const vector_t* src) {
 		chunk_size = src->_size;
 	}
 	for (size_t n = 0; n < chunk_size; ++n) {
-		vector_push_back(dest, src_ptr);
+		vector_push_back(dest, (void*)src_ptr);
 		src_ptr += src->_stride;
 	}
 }
