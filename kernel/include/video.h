@@ -3,10 +3,12 @@
 
 #ifdef _JOS_KERNEL_BUILD
 #include <c-efi.h>
+jo_status_t video_initialise(jos_allocator_t* allocator, CEfiBootServices* boot_services);
+#else
+jo_status_t video_initialise(jos_allocator_t* allocator);
 #endif
-#include <wchar.h>
 
-jo_status_t video_initialise(jos_allocator_t* allocator, CEfiBootServices *boot_services);
+#include <wchar.h>
 
 uint32_t video_make_color(uint8_t r, uint8_t g, uint8_t b);
 void video_clear_screen(uint32_t colour);

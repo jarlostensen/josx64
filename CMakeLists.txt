@@ -32,11 +32,6 @@ set(LINKER_FLAGS
     LINKER:-pdb:BOOTX64.PDB
 )
 
-if(MSVC)
-  set(CMAKE_EXE_LINKER_FLAGS
-      "${CMAKE_EXE_LINKER_FLAGS} /NODEFAULTLIB")
-endif()
-
 # set the compiler flags for this directory and all descendants, i.e. the libs we're including
 add_compile_options("${COMPILER_FLAGS}")
 

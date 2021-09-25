@@ -59,6 +59,14 @@ typedef struct _rect {
 ((uintptr_t)(a)) ^= ((uintptr_t)(b))
 #endif
 
+ #define _JOS_MAX(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+    __typeof__ (b) _b = (b); \
+    _a > _b ? _a : _b; })
+#undef max
+#define max(a,b)\
+    ((a) > (b) ? (a) : (b))
+
 #ifdef _JOS_KERNEL_BUILD
 
 // NOTE: this ties us in with the debugger module which may not be something we want longer term

@@ -271,7 +271,7 @@ _JOS_API_FUNC void hive_set(hive_t* hive, const char* key, ...) {
 		}
 		else {
 			entry._size = -(int)pack_size;
-			pack = (char*)(&existing->_storage[0]);
+			pack = (char*)entry._storage;
 		}
 
 		_hive_parse_parameter_pack(&args, pack);

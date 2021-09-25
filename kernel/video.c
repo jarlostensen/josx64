@@ -53,7 +53,11 @@ static uint32_t* backbuffer_wptr(size_t top, size_t left) {
     return (uint32_t*)(_backbuffer)+top * _info.pixels_per_scan_line + left;
 }
 
-jo_status_t video_initialise(jos_allocator_t* allocator, CEfiBootServices *boot_services)
+#ifdef _JOS_KERNEL_BUILD
+jo_status_t video_initialise(jos_allocator_t* allocator, CEfiBootServices* boot_services)
+#else
+jo_status_t video_initialise(jos_allocator_t* allocator)
+#endif
 {
     jo_status_t status = _JO_STATUS_SUCCESS;
 
