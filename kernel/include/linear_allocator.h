@@ -13,7 +13,8 @@ typedef struct _linear_allocator {
 
 } linear_allocator_t;
 
-_JOS_API_FUNC linear_allocator_t* linear_allocator_create(void* memory, size_t size_adjusted);
+// NOTE: size must include sizeof(linear_allocator_t)
+_JOS_API_FUNC linear_allocator_t* linear_allocator_create(void* memory, size_t size);
 _JOS_API_FUNC void* linear_allocator_alloc(linear_allocator_t* linalloc, size_t size);
 _JOS_INLINE_FUNC void linear_allocator_clear(linear_allocator_t* linalloc) {
     linalloc->_ptr = (char*)((char*)linalloc->_begin + sizeof(linear_allocator_t));

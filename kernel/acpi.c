@@ -1,50 +1,11 @@
 #include "acpi.h"
 #include <string.h>
+#include <kernel.h>
 
 static char kRSDPSignature[8] = {'R','S','D','P',' ','P','T','R'};
 
-// https://wiki.osdev.org/RSDP
-typedef struct _rsdp_descriptor {
-    char        _signature[8];
-    uint8_t     _checksum;
-    char        _oem_id[6];
-    uint8_t     _revision;
-    uint32_t    _rsdt_address;
-} _JOS_PACKED_ rsdp_descriptor_t;
-
-typedef struct _rsdp_descriptor20 {
-
-    rsdp_descriptor_t   _rsdp_descriptor;
-    uint32_t            _length;
-    uint64_t            _xsdt_address;
-    uint8_t             _checksum;
-    uint8_t             _reserved[3];
-
-} _JOS_PACKED_ rsdp_descriptor20_t;
-
-// see for example: https://wiki.osdev.org/XSDT 
-typedef struct _acpi_sdt_header {
-
-    char        _signature[4];
-    uint32_t    _length;
-    uint8_t     _revision;
-    uint8_t     _checksum;
-    char        _oem_id[6];
-    char        _oem_table_id[8];
-    uint32_t    _oem_revision;
-    uint32_t    _creator_id;
-    uint32_t    _creator_revision;
-
-} _JOS_PACKED_ acpi_sdt_header_t;
-
-typedef struct _xsdt_header {
-
-    acpi_sdt_header_t   _std;
-    uint64_t*           _table_ptr;
-
-} _JOS_PACKED_ _xsdt_header_t;
-
 static const rsdp_descriptor20_t*  _rsdp_desc_20 = 0;
+static const rsdp_descriptor_t*  _rsdp_desc_10 = 0;
 static const _xsdt_header_t*       _xsdt = 0;
 static bool                        _acpi_2 = false;
 
@@ -74,8 +35,16 @@ _JOS_API_FUNC jo_status_t    acpi_intitialise(CEfiSystemTable* st) {
             _rsdp_desc_20 = (const rsdp_descriptor20_t*)config_tables[n].vendor_table;
             // check RSDP signature (we still need to, don't trust anyone)
             if ( memcmp(_rsdp_desc_20->_rsdp_descriptor._signature, kRSDPSignature, sizeof(kRSDPSignature))==0 ) {
-                _acpi_2 = true;
+                hive_set(kernel_hive(), "acpi:2.0", HIVE_VALUE_PTR(_rsdp_desc_20), HIVE_VALUELIST_END);
                 break;
+            }
+        }
+        else if ( memcmp(&C_EFI_ACPI_1_0_GUID, &config_tables[n].vendor_guid, sizeof(CEfiGuid))==0 ) {
+
+            _rsdp_desc_10 = (const rsdp_descriptor_t*)config_tables[n].vendor_table;
+            // check RSDP signature (we still need to, don't trust anyone)
+            if ( memcmp(_rsdp_desc_10->_signature, kRSDPSignature, sizeof(kRSDPSignature))==0 ) {
+                hive_set(kernel_hive(), "acpi:1.0", HIVE_VALUE_PTR(_rsdp_desc_10), HIVE_VALUELIST_END);
             }
         }
     }
@@ -83,6 +52,7 @@ _JOS_API_FUNC jo_status_t    acpi_intitialise(CEfiSystemTable* st) {
     if ( _rsdp_desc_20 ) {
         _xsdt = (const _xsdt_header_t*)_rsdp_desc_20->_xsdt_address;
         if ( do_checksum((const uint8_t*)&_xsdt->_std, _xsdt->_std._length) ) {
+            _acpi_2 = true;
             return _JO_STATUS_SUCCESS;
         }
         _xsdt = 0;

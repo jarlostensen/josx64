@@ -3,6 +3,7 @@
 
 #include <c-efi.h>
 
+#define _JOS_IMPLEMENT_HIVE
 #include <kernel.h>
 #include <memory.h>
 #include <video.h>
@@ -18,8 +19,6 @@
 #include <smp.h>
 #include <acpi.h>
 
-#define _JOS_IMPLEMENT_HIVE
-#include <hive.h>
 
 //https://github.com/rust-lang/rust/issues/62785/
 // TL;DR linker error we get when building with Clang on Windows 
@@ -78,7 +77,11 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
     // allocate almost all available RAM for the kernel (for now) 
     _initial_memory = memory_get_available();
     _kernel_allocator = memory_allocate_pool(kMemoryPoolType_Static, memory_get_available());
-    
+
+    // create our hive storage
+    hive_create(&_hive, (jos_allocator_t*)_kernel_allocator);
+    hive_set(&_hive, "kernel:booted", HIVE_VALUELIST_END);
+ 
     status = smp_initialise((jos_allocator_t*)_kernel_allocator, system_services->boot_services);
     if ( !_JO_SUCCEEDED(status) ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel, "***FATAL ERROR: SMP initialise returned 0x%x", status);
@@ -94,9 +97,6 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
         return status;
     }
     
-    // create our hive storage
-    hive_create(&_hive, (jos_allocator_t*)_kernel_allocator);
-
     // =====================================================================
 
     _JOS_KTRACE_CHANNEL(kKernelChannel, "uefi init ok");
@@ -121,4 +121,8 @@ _JOS_API_FUNC jo_status_t kernel_runtime_init(CEfiHandle h, CEfiSystemTable* sys
 _JOS_NORETURN void  kernel_runtime_start(void) {
     tasks_start_idle();
     _JOS_UNREACHABLE();
+}
+
+_JOS_API_FUNC hive_t* kernel_hive(void) {
+    return &_hive;
 }

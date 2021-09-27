@@ -294,7 +294,7 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
                 x86_64_outb(0x70, 0x31);
                 highmem = x86_64_inb(0x71);                
                 total = lowmem | highmem << 8;
-                _JOS_KTRACE_CHANNEL("memory", "CMOS reports %d MB", total>>20);
+                _JOS_KTRACE_CHANNEL("memory", "CMOS reports %d", total);
 
                 _memory_debugger_dump_map();
             }
@@ -312,6 +312,23 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
                 debugger_send_packet(kDebuggerPacket_RDMSR_Resp, (void*)&resp_packet, sizeof(resp_packet));
             }
             break;
+            // case kDebuggerPacket_HiveGet:
+            // {
+            //     debugger_bstr_t key_name;
+            //     debugger_read_packet_body(&packet, (void*)&key_name, sizeof(key_name));
+            //     static char key_name_buffer[128];
+            //     char* key_name_ptr = key_name_buffer;
+            //     if ( key_name._len > sizeof(key_name_buffer) ) {
+            //         key_name_ptr = _allocator->alloc(_allocator, key_name._len+1);
+            //     }
+            //     serial_read(kCom1, key_name_ptr, key_name._len);
+            //     if ( key_name_ptr != key_name_buffer ) {
+            //         _allocator->free(_allocator, key_name_ptr);
+            //     }
+            //     key_name_ptr[key_name._len] = 0;
+            //     hive_get(kernel_hive(), key_name_ptr, values);
+            // }
+            // break;
             case kDebuggerPacket_TraceStep:
             {
                 if ( isr_stack ) {

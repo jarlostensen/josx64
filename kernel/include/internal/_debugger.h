@@ -69,3 +69,7 @@ typedef struct _debugger_packet_breakpoint_info {
 	uint8_t     _edc;
 } _JOS_PACKED debugger_packet_breakpoint_info_t;
 
+typedef struct _debugger_bstr {
+	uint16_t	_len;	
+} _JOS_PACKED _debugger_bstr_t;
+

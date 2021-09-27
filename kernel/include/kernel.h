@@ -4,6 +4,7 @@
 #include <atomic.h>
 #include <x86_64.h>
 #include <c-efi.h>
+#include <hive.h>
 
 _JOS_NORETURN void halt_cpu();
 
@@ -32,6 +33,7 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services);
 _JOS_API_FUNC jo_status_t kernel_runtime_init(CEfiHandle h, CEfiSystemTable* system_services);
 _JOS_NORETURN void  kernel_runtime_start(void);
 
+_JOS_API_FUNC hive_t* kernel_hive(void);
 _JOS_API_FUNC void kernel_memory_available(size_t* on_boot, size_t* now);
 
 #endif // _JOS_KERNEL_KERNEL_H

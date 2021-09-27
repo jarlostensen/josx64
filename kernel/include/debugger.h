@@ -26,6 +26,9 @@ typedef enum _debugger_packet_id {
     kDebuggerPacket_PF,
     kDebuggerPacket_CPUID,
     kDebuggerPacket_MemoryMap,
+
+    kDebuggerPacket_HiveSet,
+    kDebuggerPacket_HiveGet,
     
     // response packets have a high bit set so that they can be filtered in the debugger
     kDebuggerPacket_Response_Mask = 0x800,
@@ -34,6 +37,7 @@ typedef enum _debugger_packet_id {
     kDebuggerPacket_TraversePageTable_Resp = (kDebuggerPacket_TraversePageTable + kDebuggerPacket_Response_Mask),
     kDebuggerPacket_RDMSR_Resp = (kDebuggerPacket_RDMSR + kDebuggerPacket_Response_Mask),
     kDebuggerPacket_CPUID_Resp = (kDebuggerPacket_CPUID + kDebuggerPacket_Response_Mask),
+    kDebuggerPacket_HiveGet_Resp = (kDebuggerPacket_HiveGet + kDebuggerPacket_Response_Mask),
     
     kDebuggerPacket_End,
     

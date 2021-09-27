@@ -20,6 +20,7 @@
 #include <debugger.h>
 #include <keyboard.h>
 #include <acpi.h>
+#include <fixed_allocator.h>
 
 static CEfiSystemTable*    _st = 0;
 static CEfiBootServices * _boot_services = 0;
@@ -219,6 +220,9 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     _EFI_PRINT(L"jox64\n");
     
     uefi_init(h);
+    if ( _JO_FAILED(hive_get(kernel_hive(), "kernel:booted", 0)) ) {
+        uefi_panic(L"KERNEL IS NOT PROPERLY BOOTED");
+    }
 
     wchar_t buf[256];
     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);        
@@ -233,12 +237,17 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     size_t bsp_id = smp_get_bsp_id();
     swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", smp_get_processor_count(), bsp_id);    
     output_console_output_string(buf);
-    
-    if ( acpi_v2() ) {
-        output_console_output_string(L"ACPI 2.0 configuration enabled\n");
+
+    char info_buffer[sizeof(fixed_allocator_t) + 8*sizeof(uintptr_t)];
+    fixed_allocator_t* info_allocator = fixed_allocator_create(info_buffer, sizeof(info_buffer), 3);
+    vector_t info;
+    vector_create(&info, 16, sizeof(hive_value_t), (jos_allocator_t*)info_allocator);
+
+    if ( _JO_SUCCEEDED(hive_get(kernel_hive(), "acpi:2.0", &info) ) ){
+        output_console_output_string(L"ACPI 2.0 configuration found\n");
     }
-    else {
-        output_console_output_string(L"ACPI 2.0 configuration NOT found\n");
+    if ( _JO_SUCCEEDED(hive_get(kernel_hive(), "acpi:1.0", &info) ) ){
+        output_console_output_string(L"ACPI 1.0 configuration found\n");
     }
     
     if ( smp_get_processor_count()==1 ) {
