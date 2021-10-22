@@ -2,7 +2,10 @@
 #include <string.h>
 #include <kernel.h>
 
-static char kRSDPSignature[8] = {'R','S','D','P',' ','P','T','R'};
+#include <stdio.h>
+#include <output_console.h>
+
+static char kRSDPSignature[8] = {'R','S','D',' ','P','T','R',' '};
 
 static const rsdp_descriptor20_t*  _rsdp_desc_20 = 0;
 static const rsdp_descriptor_t*  _rsdp_desc_10 = 0;
@@ -26,9 +29,10 @@ bool do_checksum(const uint8_t*ptr, size_t length) {
 
 _JOS_API_FUNC jo_status_t    acpi_intitialise(CEfiSystemTable* st) {
     
-    // we demand ACPI 2.0 
     CEfiConfigurationTable* config_tables = (CEfiConfigurationTable*)st->configuration_table;
-    for(size_t n=0; n < st->number_of_table_entries; ++n) {
+    hive_set(kernel_hive(), "acpi:config_table_entries", HIVE_VALUE_INT(st->number_of_table_entries), HIVE_VALUELIST_END);
+
+    for(size_t n = 0; n < st->number_of_table_entries; ++n) {
 
         if ( memcmp(&C_EFI_ACPI_2_0_GUID, &config_tables[n].vendor_guid, sizeof(CEfiGuid))==0 ) {
 
@@ -36,7 +40,6 @@ _JOS_API_FUNC jo_status_t    acpi_intitialise(CEfiSystemTable* st) {
             // check RSDP signature (we still need to, don't trust anyone)
             if ( memcmp(_rsdp_desc_20->_rsdp_descriptor._signature, kRSDPSignature, sizeof(kRSDPSignature))==0 ) {
                 hive_set(kernel_hive(), "acpi:2.0", HIVE_VALUE_PTR(_rsdp_desc_20), HIVE_VALUELIST_END);
-                break;
             }
         }
         else if ( memcmp(&C_EFI_ACPI_1_0_GUID, &config_tables[n].vendor_guid, sizeof(CEfiGuid))==0 ) {
@@ -45,7 +48,7 @@ _JOS_API_FUNC jo_status_t    acpi_intitialise(CEfiSystemTable* st) {
             // check RSDP signature (we still need to, don't trust anyone)
             if ( memcmp(_rsdp_desc_10->_signature, kRSDPSignature, sizeof(kRSDPSignature))==0 ) {
                 hive_set(kernel_hive(), "acpi:1.0", HIVE_VALUE_PTR(_rsdp_desc_10), HIVE_VALUELIST_END);
-            }
+           }
         }
     }
 
