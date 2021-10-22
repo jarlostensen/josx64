@@ -148,8 +148,37 @@ static void _fill_in_debugger_packet(debugger_packet_bp_t* bp_info, interrupt_st
     bp_info->_call_stack_size = 0;
 }
 
-static void _trace_hive_key(const char* key) {
-    _JOS_KTRACE_CHANNEL("hive", key);
+static void _trace_hive_values(const char* key, vector_t* values, void* user_data) {
+    (void)user_data;
+	const size_t num_elements = vector_size(values);
+    if ( !num_elements ) {
+        _JOS_KTRACE_CHANNEL("hive", key);
+    }
+    else {
+        _JOS_KTRACE_CHANNEL("hive", "%s : ", key);
+        for (size_t n = 0; n < num_elements; ++n) {
+            hive_value_t* hive_value = (hive_value_t*)vector_at(values, n);
+            hive_value_type_t type = hive_value->type;
+            switch (type) {
+            case kHiveValue_Int:
+            {
+                _JOS_KTRACE_CHANNEL("hive", "\t%lld", hive_value->value.as_int);
+            }
+            break;
+            case kHiveValue_Str:
+            {
+                _JOS_KTRACE_CHANNEL("hive", "\t%s", hive_value->value.as_str);
+            }
+            break;
+            case kHiveValue_Ptr:
+            {
+                _JOS_KTRACE_CHANNEL("hive", "\t0x%016llx", hive_value->value.as_ptr);
+            }
+            break;
+            default:;
+            }
+        }
+    }
 }
 
 // wait for debugger commands.
@@ -335,7 +364,10 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
             // break;
             case kDebuggerPacket_HiveDump:
             {
-                hive_visit_keys(kernel_hive(), _trace_hive_key);
+                vector_t value_storage;
+                vector_create(&value_storage, 16, sizeof(hive_value_t), _allocator);
+                hive_visit_values(kernel_hive(), _trace_hive_values, &value_storage, 0);
+                vector_destroy(&value_storage);
             }
             break;
             case kDebuggerPacket_TraceStep:

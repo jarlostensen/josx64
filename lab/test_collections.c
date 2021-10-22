@@ -130,8 +130,16 @@ static void print_hive_values(const vector_t* values) {
 	}
 }
 
-static void _print_hive_key(const char* key) {
-	printf("%s\n", key);
+static void _print_hive_key(const char* key, vector_t* values, void* user_data) {
+	(void*)user_data;
+	if (vector_size(values) == 0) {
+		printf("\t%s\n", key);
+	}
+	else {
+		printf("\t%s : ", key);
+		print_hive_values(values);
+		printf("\n");
+	}
 }
 
 void test_hive(jos_allocator_t* allocator) {
@@ -180,9 +188,13 @@ void test_hive(jos_allocator_t* allocator) {
 	vector_reset(&values);
 	hive_lget(&hive, "list1", &values);
 
+	hive_set(&hive, "acpi:config_table_entries", HIVE_VALUE_INT(42), HIVE_VALUELIST_END);
+
 	print_hive_values(&values);
 
-	hive_visit_keys(&hive, _print_hive_key);
+	printf("\n");
+	vector_reset(&values);
+	hive_visit_values(&hive, _print_hive_key, &values, 0);
 
 	hive_delete(&hive, "foo");
 	hive_delete(&hive, "list1");

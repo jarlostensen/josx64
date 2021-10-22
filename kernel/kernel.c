@@ -81,13 +81,14 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
     _initial_memory = memory_get_available();
     //ZZZ: this is not a very clever algorithm, needs refinement
     const size_t pool_size = (_initial_memory * 3) / 4;
-    _kernel_system_allocator = _kernel_heap_allocator = memory_allocate_pool(kMemoryPoolType_Dynamic, pool_size);
+    _kernel_system_allocator = memory_allocate_pool(kMemoryPoolType_Dynamic, pool_size);
     // the heap gets whatever is left
     _kernel_heap_allocator = memory_allocate_pool(kMemoryPoolType_Dynamic, 0);
 
     // create our hive storage
-    hive_create(&_hive, (jos_allocator_t*)_kernel_heap_allocator);
-    hive_set(&_hive, "kernel:booted", HIVE_VALUELIST_END);
+    hive_create(&_hive, (jos_allocator_t*)_kernel_heap_allocator);    
+    hive_set(&_hive, "kernel:pool", HIVE_VALUE_INT(_kernel_system_allocator->available(_kernel_system_allocator)), HIVE_VALUELIST_END);
+    hive_set(&_hive, "kernel:heap", HIVE_VALUE_INT(_kernel_heap_allocator->available(_kernel_heap_allocator)), HIVE_VALUELIST_END);
  
     status = smp_initialise((jos_allocator_t*)_kernel_system_allocator, system_services->boot_services);
     if ( !_JO_SUCCEEDED(status) ) {
@@ -106,6 +107,7 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
     
     // =====================================================================
 
+    hive_set(&_hive, "kernel:booted", HIVE_VALUELIST_END);
     _JOS_KTRACE_CHANNEL(kKernelChannel, "uefi init ok");
     return _JO_STATUS_SUCCESS;
 }
