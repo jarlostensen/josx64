@@ -84,6 +84,8 @@ _JOS_API_FUNC jo_status_t hive_get(hive_t* hive, const char* key, vector_t* out_
 _JOS_API_FUNC jo_status_t hive_lget(hive_t* hive, const char* key, vector_t* out_values);
 // deletes an item from the hive
 _JOS_API_FUNC jo_status_t hive_delete(hive_t* hive, const char* key);
+// iterate over each hive entry and invoke the callback
+_JOS_API_FUNC void hive_visit_keys(hive_t* hive, void (*visitor)(const char* key));
 
 #define _JOS_HIVE_VALUE_INT          (char)kHiveValue_Int
 #define _JOS_HIVE_VALUE_STR          (char)kHiveValue_Str
@@ -455,6 +457,16 @@ _JOS_API_FUNC jo_status_t hive_delete(hive_t* hive, const char* key) {
 	vector_remove(&hive->_keys, i);
 
 	return _JO_STATUS_SUCCESS;
+}
+
+_JOS_API_FUNC void hive_visit_keys(hive_t* hive, void (*visitor)(const char* key)) {
+	size_t count = hive ? vector_size(&hive->_keys) : 0;
+	if (!count)
+		return;
+	do {
+		_hive_entry_t* entry = (_hive_entry_t*)vector_at(&hive->_keys, count - 1);
+		visitor(entry->_key);
+	} while (--count);
 }
 
 #endif

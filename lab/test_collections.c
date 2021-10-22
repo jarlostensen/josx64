@@ -130,6 +130,10 @@ static void print_hive_values(const vector_t* values) {
 	}
 }
 
+static void _print_hive_key(const char* key) {
+	printf("%s\n", key);
+}
+
 void test_hive(jos_allocator_t* allocator) {
 
 	printf("test_hive...");
@@ -177,6 +181,8 @@ void test_hive(jos_allocator_t* allocator) {
 	hive_lget(&hive, "list1", &values);
 
 	print_hive_values(&values);
+
+	hive_visit_keys(&hive, _print_hive_key);
 
 	hive_delete(&hive, "foo");
 	hive_delete(&hive, "list1");

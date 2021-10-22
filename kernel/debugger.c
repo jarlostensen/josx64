@@ -148,6 +148,10 @@ static void _fill_in_debugger_packet(debugger_packet_bp_t* bp_info, interrupt_st
     bp_info->_call_stack_size = 0;
 }
 
+static void _trace_hive_key(const char* key) {
+    _JOS_KTRACE_CHANNEL("hive", key);
+}
+
 // wait for debugger commands.
 // if isr_stack == 0 this will not allow continuing or single stepping (used by asserts)
 static void _debugger_loop(interrupt_stack_t * isr_stack) {	
@@ -329,6 +333,11 @@ static void _debugger_loop(interrupt_stack_t * isr_stack) {
             //     hive_get(kernel_hive(), key_name_ptr, values);
             // }
             // break;
+            case kDebuggerPacket_HiveDump:
+            {
+                hive_visit_keys(kernel_hive(), _trace_hive_key);
+            }
+            break;
             case kDebuggerPacket_TraceStep:
             {
                 if ( isr_stack ) {

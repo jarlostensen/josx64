@@ -27,6 +27,7 @@ typedef enum _debugger_packet_id {
     kDebuggerPacket_CPUID,
     kDebuggerPacket_MemoryMap,
 
+    kDebuggerPacket_HiveDump,
     kDebuggerPacket_HiveSet,
     kDebuggerPacket_HiveGet,
     
