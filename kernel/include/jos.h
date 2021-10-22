@@ -15,11 +15,38 @@
 #define _JOS_KERNEL_BUILD
 #endif
 
+// allocation alignment in BYTES
+typedef enum _alloc_alignment {
+
+	// any byte alignment
+	kAllocAlign_None = 1,
+	// eight bytes
+	kAllocAlign_8 = 8,
+	// sixteen bytes
+	kAllocAlign_16 = 16,
+	// thirty two bytes
+	kAllocAlign_32 = 32,
+	// sixty four bytes
+	kAllocAlign_64 = 64,
+	// one hundred and twenty eight bytes
+	kAllocAlign_128 = 128,
+	// two hundred and fifty six bytes
+	kAllocAlign_256 = 256,
+	// four kilobytes
+	kAllocAlign_4k = 0x1000,
+
+	// not used
+	kAllocAlign_Max
+
+} alloc_alignment_t;
+
 // All sub-systems are provided an implementation instance of this interface
 // All allocators implement this (using this structure as a basic vtable entry)
 struct _jos_allocator;
+// allocate bytes. ALLWAYS a minimum of 8 byte aligned
 typedef void* (*jos_allocator_alloc_func_t)(struct _jos_allocator*, size_t);
 typedef void  (*jos_allocator_free_func_t)(struct _jos_allocator*, void*);
+// allocate bytes. ALLWAYS a minimum of 8 byte aligned
 typedef void* (*jos_allocator_realloc_func_t)(struct _jos_allocator*, void*, size_t);
 typedef size_t (*jos_allocator_avail_func_t)(struct _jos_allocator*);
 
@@ -154,24 +181,6 @@ if(!(cond))\
 #endif
 #define _JOS_ALIGNED_TYPE(type, name, alignment) __declspec(align(alignment)) type name
 #endif
-
-
-typedef enum _alloc_alignment {
-
-    kAllocAlign_None = 1,
-    kAllocAlign_2 = 2,
-    kAllocAlign_4 = 4,
-    kAllocAlign_8 = 8,
-    kAllocAlign_16 = 16,
-    kAllocAlign_32 = 32,
-    kAllocAlign_64 = 64,
-    kAllocAlign_128 = 128,
-    kAllocAlign_256 = 256,
-    kAllocAlign_4k = 0x1000,
-
-    kAllocAlign_Max
-
-} alloc_alignment_t;
 
 #define _JOS_PTR_IS_ALIGNED(ptr, alignment)\
     (((uintptr_t)ptr & ((uintptr_t)alignment - 1)) == 0)

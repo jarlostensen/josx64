@@ -639,6 +639,7 @@ int main(void)
     test_paged_list(&_malloc_allocator);
     test_hive(&_malloc_allocator);
     test_linear_allocator();
+    test_arena_allocator();
 
     /* alloc_tests();
 

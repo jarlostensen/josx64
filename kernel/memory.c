@@ -244,13 +244,27 @@ _JOS_API_FUNC jo_status_t memory_runtime_init(CEfiHandle h, CEfiBootServices* bo
     return _JO_STATUS_SUCCESS;
 }
 
+_JOS_API_FUNC size_t  memory_pool_overhead(memory_pool_type_t type) {
+    // overhead is size of allocator structure + max alignment
+    switch(type) {
+        case kMemoryPoolType_Dynamic:
+            return sizeof(arena_allocator_t) + kAllocAlign_8-1;
+        case kMemoryPoolType_Static:
+            return sizeof(linear_allocator_t) + kAllocAlign_8-1;
+        default:;
+    }
+    return 0;
+}
+
 _JOS_API_FUNC jos_allocator_t*  memory_allocate_pool(memory_pool_type_t type, size_t size) {
     
+    const size_t overhead = memory_pool_overhead(type); 
+    size = size ? size + overhead : memory_get_available() - kAllocAlign_8;
     switch (type) {
         case kMemoryPoolType_Dynamic:
         {
             // standard arena allocator
-            size += sizeof(arena_allocator_t);
+            _JOS_ASSERT(size<=memory_get_available());
             void* pool = _main_allocator->_super.alloc((jos_allocator_t*)_main_allocator, size);
             return (jos_allocator_t*)arena_allocator_create(pool, size);
         }
@@ -258,7 +272,7 @@ _JOS_API_FUNC jos_allocator_t*  memory_allocate_pool(memory_pool_type_t type, si
         case kMemoryPoolType_Static:
         {
             // basic linear allocator
-            size += sizeof(linear_allocator_t);
+            _JOS_ASSERT(size<=memory_get_available());
             void* pool = _main_allocator->_super.alloc((jos_allocator_t*)_main_allocator, size);
             return (jos_allocator_t*)linear_allocator_create(pool, size);
         }
