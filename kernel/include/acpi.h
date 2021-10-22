@@ -48,6 +48,4 @@ typedef struct _xsdt_header {
 
 _JOS_API_FUNC jo_status_t    acpi_intitialise(CEfiSystemTable* st);
 
-_JOS_API_FUNC bool           acpi_v2(void);
-
 #endif // _JOS_ACPI_H

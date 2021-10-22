@@ -96,14 +96,15 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
         return status;
     }
 
-    status = acpi_intitialise(system_services);
-
     // port it to use module register
     status = video_initialise((jos_allocator_t*)_kernel_system_allocator, system_services->boot_services);
     if ( _JO_FAILED(status)  ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel,"***FATAL ERROR: video initialise returned 0x%x", status);
         return status;
     }
+    
+    status = acpi_intitialise(system_services);
+    _JOS_KTRACE_CHANNEL(kKernelChannel,"ACPI initialise returned 0x%x", status);
     
     // =====================================================================
 
