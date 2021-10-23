@@ -84,7 +84,7 @@ static void initialise_this_ap(void* arg) {
     processor_information_t* proc_info = (processor_information_t*)arg;
     collect_this_cpu_information(proc_info);
 
-    // store the address of the ID field in the processor info block directory in gs:0
+    // store the address of the ID field in the processor info block directory in gs:0 on this CPU
     // i.e. 
     //
     //  | cpu0 | cpu1 | ... | cpuN |

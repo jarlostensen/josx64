@@ -55,13 +55,15 @@ _JOS_API_FUNC jo_status_t    acpi_intitialise(CEfiSystemTable* st) {
                         const uint32_t sig = *(const uint32_t*)sdt->_signature;
                         switch(sig) {
                             case ACPI_APIC_TAG:
-                                hive_set(kernel_hive(), "APIC", HIVE_VALUELIST_END);
+                                //NOTE: this is the Multiple APIC Descriptor Table (MADT)
+                                // https://wiki.osdev.org/MADT
+                                hive_set(kernel_hive(), "MADT", HIVE_VALUE_PTR(sdt), HIVE_VALUELIST_END);
                             break;
                             case ACPI_HPET_TAG:
-                                hive_set(kernel_hive(), "HPET", HIVE_VALUELIST_END);
+                                hive_set(kernel_hive(), "HPET", HIVE_VALUE_PTR(sdt), HIVE_VALUELIST_END);
                             break;
                             case ACPI_BGRT_TAG:
-                                hive_set(kernel_hive(), "BGRT", HIVE_VALUELIST_END);
+                                hive_set(kernel_hive(), "BGRT", HIVE_VALUE_PTR(sdt), HIVE_VALUELIST_END);
                             break;
                             default:;
                         }

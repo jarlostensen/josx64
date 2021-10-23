@@ -243,6 +243,12 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     vector_t info;
     vector_create(&info, 16, sizeof(hive_value_t), (jos_allocator_t*)info_allocator);
 
+    if ( _JO_SUCCEEDED(hive_get(kernel_hive(), "acpi:config_table_entries", &info)) ) {
+        swprintf(buf, bufcount, L"system configuration tables contain %d entries\n", (int)vector_at(&info, 0));
+        output_console_output_string(buf);
+    }
+    vector_reset(&info);
+
     if ( _JO_SUCCEEDED(hive_get(kernel_hive(), "acpi:2.0", &info) ) ){
         output_console_output_string(L"ACPI 2.0 configuration found\n");
     }
@@ -314,8 +320,9 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 #ifdef _JOS_KERNEL_BUILD
     output_console_output_string(L"\n\nkernel build\n");
 #endif
-        
+            
     exit_boot_services(h);
+    output_console_output_string(L"\n\nkernel started\n");
     start_debugger(); 
     
     tasks_create(&(task_create_args_t){

@@ -89,7 +89,13 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
     hive_create(&_hive, (jos_allocator_t*)_kernel_heap_allocator);    
     hive_set(&_hive, "kernel:pool", HIVE_VALUE_INT(_kernel_system_allocator->available(_kernel_system_allocator)), HIVE_VALUELIST_END);
     hive_set(&_hive, "kernel:heap", HIVE_VALUE_INT(_kernel_heap_allocator->available(_kernel_heap_allocator)), HIVE_VALUELIST_END);
- 
+    
+    status = acpi_intitialise(system_services);
+    if ( !_JO_SUCCEEDED(status) ) {
+        _JOS_KTRACE_CHANNEL(kKernelChannel, "***FATAL ERROR: ACPI initialise returned 0x%x", status);
+        return status;
+    }
+    
     status = smp_initialise((jos_allocator_t*)_kernel_system_allocator, system_services->boot_services);
     if ( !_JO_SUCCEEDED(status) ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel, "***FATAL ERROR: SMP initialise returned 0x%x", status);
@@ -102,9 +108,6 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
         _JOS_KTRACE_CHANNEL(kKernelChannel,"***FATAL ERROR: video initialise returned 0x%x", status);
         return status;
     }
-    
-    status = acpi_intitialise(system_services);
-    _JOS_KTRACE_CHANNEL(kKernelChannel,"ACPI initialise returned 0x%x", status);
     
     // =====================================================================
 
