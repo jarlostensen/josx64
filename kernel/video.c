@@ -53,7 +53,11 @@ static uint32_t* backbuffer_wptr(size_t top, size_t left) {
     return (uint32_t*)(_backbuffer)+top * _info.pixels_per_scan_line + left;
 }
 
+#ifdef _JOS_KERNEL_BUILD
+jo_status_t video_initialise(jos_allocator_t* allocator, CEfiBootServices* boot_services)
+#else
 jo_status_t video_initialise(jos_allocator_t* allocator)
+#endif
 {
     jo_status_t status = _JO_STATUS_SUCCESS;
 
@@ -66,7 +70,7 @@ jo_status_t video_initialise(jos_allocator_t* allocator)
     CEfiUSize handle_buffer_size = sizeof(handle_buffer);
     memset(handle_buffer, 0, sizeof(handle_buffer));
 
-    CEfiStatus efi_status = g_boot_services->locate_handle(C_EFI_BY_PROTOCOL, &C_EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID, 0, &handle_buffer_size, handle_buffer);
+    CEfiStatus efi_status = boot_services->locate_handle(C_EFI_BY_PROTOCOL, &C_EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID, 0, &handle_buffer_size, handle_buffer);
     if (efi_status == C_EFI_SUCCESS) {
 
         //TODO: this works but it's not science; what makes one handle a better choice than another? 
@@ -74,7 +78,7 @@ jo_status_t video_initialise(jos_allocator_t* allocator)
         size_t num_handles = handle_buffer_size / sizeof(CEfiHandle);
         for (size_t n = 0; n < num_handles; ++n)
         {
-            efi_status = g_boot_services->handle_protocol(handle_buffer[n], &C_EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID, (void**)&_gop);
+            efi_status = boot_services->handle_protocol(handle_buffer[n], &C_EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID, (void**)&_gop);
             if (efi_status == C_EFI_SUCCESS)
             {
                 break;

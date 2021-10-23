@@ -11,110 +11,15 @@
 #include <fixed_allocator.h>
 
 // in efi_main.c
-extern CEfiBootServices * g_boot_services;
 static CEfiMultiProcessorProtocol*  _mpp = 0;
 
 static size_t   _bsp_id = 0;
 //NOTE: we can't use any PER_CPU storage before smp_initialise setus up this 
 static size_t   _num_processors = 0;
 static size_t   _num_enabled_processors = 0;
-
 static processor_information_t* _processors = 0;
-
-
 static const char* kSmpChannel = "smp";
-
-// ===================================================================================================
-// TODO: move this into a separate acpi module, should be "internal"?
-
-extern CEfiSystemTable*    g_st;
-static char kRSDPSignature[8] = {'R','S','D','P',' ','P','T','R'};
-
-// https://wiki.osdev.org/RSDP
-typedef struct _rsdp_descriptor {
-    char        _signature[8];
-    uint8_t     _checksum;
-    char        _oem_id[6];
-    uint8_t     _revision;
-    uint32_t    _rsdt_address;
-} _JOS_PACKED_ rsdp_descriptor_t;
-
-typedef struct _rsdp_descriptor20 {
-
-    rsdp_descriptor_t   _rsdp_descriptor;
-    uint32_t            _length;
-    uint64_t            _xsdt_address;
-    uint8_t             _checksum;
-    uint8_t             _reserved[3];
-
-} _JOS_PACKED_ rsdp_descriptor20_t;
-
-// see for example: https://wiki.osdev.org/XSDT 
-typedef struct _acpi_sdt_header {
-
-    char        _signature[4];
-    uint32_t    _length;
-    uint8_t     _revision;
-    uint8_t     _checksum;
-    char        _oem_id[6];
-    char        _oem_table_id[8];
-    uint32_t    _oem_revision;
-    uint32_t    _creator_id;
-    uint32_t    _creator_revision;
-
-} _JOS_PACKED_ acpi_sdt_header_t;
-
-typedef struct _xsdt_header {
-
-    acpi_sdt_header_t   _std;
-    uint64_t*           _table_ptr;
-
-} _JOS_PACKED_ _xsdt_header_t;
-
-//TODO: per cpu
-const rsdp_descriptor20_t*  _rsdp_desc_20 = 0;
-const _xsdt_header_t*       _xsdt = 0;
-
 static arena_allocator_t* _smp_arena = NULL;
-
-bool do_checksum(const uint8_t*ptr, size_t length) {
-    uint8_t checksum = 0;
-    while(length) {
-        checksum += *ptr++;
-        --length;
-    }
-    return checksum==0;
-}
-
-#define C_EFI_ACPI_1_0_GUID         C_EFI_GUID(0xeb9d2d30, 0x2d88, 0x11d3, 0x9a, 0x16, 0x00, 0x90, 0x27, 0x3f, 0xc1, 0x4d)
-#define C_EFI_ACPI_2_0_GUID         C_EFI_GUID(0x8868e871, 0xe4f1, 0x11d3, 0xbc, 0x22, 0x00, 0x80, 0xc7, 0x3c, 0x88, 0x81)
-
-jo_status_t    intitialise_acpi() {
-    
-    // we require ACPI 2.0 
-    CEfiConfigurationTable* config_tables = (CEfiConfigurationTable*)g_st->configuration_table;
-    for(size_t n=0; n < g_st->number_of_table_entries; ++n) {
-
-        if ( memcmp(&C_EFI_ACPI_2_0_GUID, &config_tables[n].vendor_guid, sizeof(CEfiGuid))==0 ) {
-
-            _rsdp_desc_20 = (const rsdp_descriptor20_t*)config_tables[n].vendor_table;
-            // check RSDP signature (we still need to, don't trust anyone)
-            if ( memcmp(_rsdp_desc_20->_rsdp_descriptor._signature, kRSDPSignature, sizeof(kRSDPSignature))==0 ) {
-                break;
-            }
-        }
-    }
-
-    if ( _rsdp_desc_20 ) {
-        _xsdt = (const _xsdt_header_t*)_rsdp_desc_20->_xsdt_address;
-        if ( do_checksum((const uint8_t*)&_xsdt->_std, _xsdt->_std._length) ) {
-            return _JO_STATUS_SUCCESS;
-        }
-        _xsdt = 0;
-    }
-
-    return _JO_STATUS_NOT_FOUND;
-}
 
 // ==================================================================================================
 
@@ -179,7 +84,7 @@ static void initialise_this_ap(void* arg) {
     processor_information_t* proc_info = (processor_information_t*)arg;
     collect_this_cpu_information(proc_info);
 
-    // store the address of the ID field in the processor info block directory in gs:0
+    // store the address of the ID field in the processor info block directory in gs:0 on this CPU
     // i.e. 
     //
     //  | cpu0 | cpu1 | ... | cpuN |
@@ -192,7 +97,7 @@ static void initialise_this_ap(void* arg) {
     _JOS_KTRACE_CHANNEL(kSmpChannel, "initialised ap %d, gs @ 0x%llx -> %d", proc_info->_id, proc_info_ptr, per_cpu_this_cpu_id());
 }
 
-jo_status_t    smp_initialise(jos_allocator_t* allocator) {
+jo_status_t    smp_initialise(jos_allocator_t* allocator, CEfiBootServices *boot_services) {
 
     const size_t kSMP_PER_CPU_MEMORY_ARENA_SIZE = 1024*1024;
 
@@ -200,14 +105,14 @@ jo_status_t    smp_initialise(jos_allocator_t* allocator) {
     CEfiUSize handle_buffer_size = sizeof(handle_buffer);
     memset(handle_buffer,0,sizeof(handle_buffer));
 
-    CEfiStatus efi_status = g_boot_services->locate_handle(C_EFI_BY_PROTOCOL, &C_EFI_MULTI_PROCESSOR_PROTOCOL_GUID, 0, &handle_buffer_size, handle_buffer);
+    CEfiStatus efi_status = boot_services->locate_handle(C_EFI_BY_PROTOCOL, &C_EFI_MULTI_PROCESSOR_PROTOCOL_GUID, 0, &handle_buffer_size, handle_buffer);
     if ( efi_status==C_EFI_SUCCESS ) {
         //TODO: this works but it's not science; what makes one handle a better choice than another? 
         //      
         size_t num_handles = handle_buffer_size/sizeof(CEfiHandle);
         for(size_t n = 0; n < num_handles; ++n)
         {
-            efi_status = g_boot_services->handle_protocol(handle_buffer[n], &C_EFI_MULTI_PROCESSOR_PROTOCOL_GUID, (void**)&_mpp);
+            efi_status = boot_services->handle_protocol(handle_buffer[n], &C_EFI_MULTI_PROCESSOR_PROTOCOL_GUID, (void**)&_mpp);
             if ( efi_status == C_EFI_SUCCESS )
             {
                 break;
@@ -271,12 +176,6 @@ jo_status_t    smp_initialise(jos_allocator_t* allocator) {
         _num_enabled_processors = 1;
     }
 
-    // ACPI 
-    jo_status_t status = intitialise_acpi();
-    if ( !_JO_SUCCEEDED(status) ) {
-        return status;
-    }
-
     return _JO_STATUS_SUCCESS;        
 }
 
@@ -296,11 +195,6 @@ jo_status_t        smp_get_processor_information(processor_information_t* out_in
     }
     memcpy(out_info, _processors+processor_index, sizeof(processor_information_t));
     return _JO_STATUS_SUCCESS;
-}
-
-//ZZZ: per-processor, not like this...
-bool smp_has_acpi_20() {
-    return _xsdt != 0;
 }
 
 // ====================================================================================

@@ -1,43 +1,67 @@
 #include <c-efi.h>
 #include <jos.h>
+#include <string.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <wchar.h>
+#include <stddef.h>
+
 #include <kernel.h>
+#include <clock.h>
 #include <video.h>
+#include <tasks.h>
 #include <output_console.h>
 #include <programs/scroller.h>
 #include <font8x8/font8x8_basic.h>
+#include <hex_dump.h>
+#include <smp.h>
 #include <debugger.h>
 #include <keyboard.h>
-
-//https://github.com/rust-lang/rust/issues/62785/
-// TL;DR linker error we get when building with Clang on Windows 
-int _fltused = 0;
+#include <acpi.h>
+#include <fixed_allocator.h>
 
 static CEfiSystemTable*    _st = 0;
 static CEfiBootServices * _boot_services = 0;
 static CEfiLoadedImageProtocol * _lip = 0;
+static peutil_pe_context_t _pe_ctx;
 
 #define _EFI_PRINT(s)\
 _st->con_out->output_string(_st->con_out, s)
 
 // ==============================================================
+
+static void uefi_panic(const wchar_t* panic) {
+    _EFI_PRINT((CEfiChar16*)panic);
+    halt_cpu();
+}
+
 static void exit_boot_services(CEfiHandle h) {
 
-    //TODO:
+     // everything needed to run anything; interrupts, clocks, keyboard...etc...
+    if (_JO_FAILED(kernel_runtime_init(h, _st))) {
+        output_console_set_colour(video_make_color(0xff,0,0));        
+        output_console_output_string(L"***FATAL ERROR: post memory exit failed. Halting.\n");
+        uefi_panic(L"***FATAL ERROR: post memory exit failed. Halting.\n");
+    }
 }
 
 void uefi_init(CEfiHandle h) {
 
     CEfiStatus efi_status = _boot_services->handle_protocol(h, &C_EFI_LOADED_IMAGE_PROTOCOL_GUID, (void**)&_lip);
     if ( C_EFI_ERROR(efi_status) ) {
-        halt_cpu();
+        uefi_panic(L"unable to locate image protocol!");
     }
+    // we use our PE image to look up code and provide helpful information to the debugger 
+    peutil_bind(&_pe_ctx, (const void*)_lip->image_base, kPe_Relocated); 
 
     // initialise memory manager, serial comms, video, and any modules that require access 
     // to uefi boot services
     // here we also request a bit of memory for use by this efi application
-    jo_status_t status = kernel_uefi_init(_boot_services);
+    jo_status_t status = kernel_uefi_init(_st);
     if ( _JO_FAILED(status) ) {
-        halt_cpu();
+        uefi_panic(L"failed to initialise kernel!");
     }
     
     video_clear_screen(0x6495ed);
@@ -191,20 +215,45 @@ static jo_status_t main_task(void* ptr) {
 
 CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 {    
-    g_st = st;
+    _st = st;
     _boot_services = st->boot_services;
-    st->con_out->output_string(st->con_out, L"jox64\n");
+    _EFI_PRINT(L"jox64\n");
     
     uefi_init(h);
-    dump_image_info(efi_main);
+    if ( _JO_FAILED(hive_get(kernel_hive(), "kernel:booted", 0)) ) {
+        uefi_panic(L"KERNEL IS NOT PROPERLY BOOTED");
+    }
 
     wchar_t buf[256];
+    const size_t bufcount = sizeof(buf)/sizeof(wchar_t);        
+    swprintf(buf, bufcount, L"\nimage is %llu bytes, loaded at 0x%llx, efi_main @ 0x%llx, PE entry point @ 0x%llx\n", 
+        _lip->image_size, _lip->image_base, efi_main, peutil_entry_point(&_pe_ctx));
+    output_console_output_string(buf);
+    _JOS_KTRACE_CHANNEL("image_protocol", "image is %llu bytes, loaded at 0x%llx, efi_main @ 0x%llx, PE entry point @ 0x%llx", 
+        _lip->image_size, _lip->image_base, efi_main, peutil_entry_point(&_pe_ctx));
+    hex_dump_mem((void*)_lip->image_base, 64, k8bitInt);
+    output_console_line_break();
+
     size_t bsp_id = smp_get_bsp_id();
     swprintf(buf, 256, L"%d processors detected, bsp is processor %d\n", smp_get_processor_count(), bsp_id);    
     output_console_output_string(buf);
-    
-    if ( smp_has_acpi_20() ) {
-        output_console_output_string(L"ACPI 2.0 configuration enabled\n");
+
+    char info_buffer[sizeof(fixed_allocator_t) + 8*sizeof(uintptr_t)];
+    fixed_allocator_t* info_allocator = fixed_allocator_create(info_buffer, sizeof(info_buffer), 3);
+    vector_t info;
+    vector_create(&info, 16, sizeof(hive_value_t), (jos_allocator_t*)info_allocator);
+
+    if ( _JO_SUCCEEDED(hive_get(kernel_hive(), "acpi:config_table_entries", &info)) ) {
+        swprintf(buf, bufcount, L"system configuration tables contain %d entries\n", (int)vector_at(&info, 0));
+        output_console_output_string(buf);
+    }
+    vector_reset(&info);
+
+    if ( _JO_SUCCEEDED(hive_get(kernel_hive(), "acpi:2.0", &info) ) ){
+        output_console_output_string(L"ACPI 2.0 configuration found\n");
+    }
+    if ( _JO_SUCCEEDED(hive_get(kernel_hive(), "acpi:1.0", &info) ) ){
+        output_console_output_string(L"ACPI 1.0 configuration found\n");
     }
     
     if ( smp_get_processor_count()==1 ) {
@@ -271,8 +320,9 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
 #ifdef _JOS_KERNEL_BUILD
     output_console_output_string(L"\n\nkernel build\n");
 #endif
-        
+            
     exit_boot_services(h);
+    output_console_output_string(L"\n\nkernel started\n");
     start_debugger(); 
     
     tasks_create(&(task_create_args_t){

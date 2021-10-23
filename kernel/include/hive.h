@@ -61,6 +61,7 @@ Usage example:
 #include <stdlib.h>
 #include <stdarg.h>
 #include <collections.h>
+#include <string.h>
 
 typedef struct _hive {
 	vector_t _keys;
@@ -69,6 +70,7 @@ typedef struct _hive {
 typedef enum _hive_value_type {
 	kHiveValue_Int = 1,
 	kHiveValue_Str = 2,
+	kHiveValue_Ptr = 3,	
 } hive_value_type_t;
 
 _JOS_API_FUNC  void hive_create(hive_t* hive, jos_allocator_t* allocator);
@@ -82,13 +84,20 @@ _JOS_API_FUNC jo_status_t hive_get(hive_t* hive, const char* key, vector_t* out_
 _JOS_API_FUNC jo_status_t hive_lget(hive_t* hive, const char* key, vector_t* out_values);
 // deletes an item from the hive
 _JOS_API_FUNC jo_status_t hive_delete(hive_t* hive, const char* key);
+// iterate over each hive entry and invoke the callback
+_JOS_API_FUNC void hive_visit_values(hive_t* hive, 
+	void (*visitor)(const char* key, vector_t* values, void*),
+	vector_t* values_storage,
+	void* user_data);
 
 #define _JOS_HIVE_VALUE_INT          (char)kHiveValue_Int
 #define _JOS_HIVE_VALUE_STR          (char)kHiveValue_Str
+#define _JOS_HIVE_VALUE_PTR          (char)kHiveValue_Ptr
 #define HIVE_VALUELIST_END			 (char)(~0)
 
 #define HIVE_VALUE_INT(x)       _JOS_HIVE_VALUE_INT, (long long)(x)
 #define HIVE_VALUE_STR(x)       _JOS_HIVE_VALUE_STR, (const char*)(x)
+#define HIVE_VALUE_PTR(x)       _JOS_HIVE_VALUE_PTR, (uintptr_t)(x)
 
 typedef struct _hive_value {
 
@@ -96,6 +105,7 @@ typedef struct _hive_value {
 	union {
 		long long   as_int;
 		const char* as_str;
+		uintptr_t   as_ptr;
 	} value;
 
 } hive_value_t;
@@ -125,7 +135,7 @@ typedef struct _hive_entry_impl {
 _JOS_INLINE_FUNC size_t _hive_param_pack_size(va_list* pack) {
 
 	size_t size = 0;
-	_hive_value_t param = va_arg(*pack, _hive_value_t);
+	_hive_value_t param = (_hive_value_t)va_arg(*pack, int);
 	while (param != HIVE_VALUELIST_END) {
 
 		size += sizeof(_hive_value_t);
@@ -142,17 +152,22 @@ _JOS_INLINE_FUNC size_t _hive_param_pack_size(va_list* pack) {
 			size += sizeof(const char*);
 		}
 		break;
+		case _JOS_HIVE_VALUE_PTR:
+		{
+			(void)va_arg(*pack, uintptr_t);
+			size += sizeof(uintptr_t);
+		}
+		break;
 		default:;
 		}
-
-		param = va_arg(*pack, _hive_value_t);
+		param = (_hive_value_t)va_arg(*pack, int);
 	}
 	return size;
 }
 
 _JOS_INLINE_FUNC void _hive_parse_parameter_pack(va_list* params, char* pack) {
 
-	_hive_value_t param = va_arg(*params, _hive_value_t);
+	_hive_value_t param = (_hive_value_t)va_arg(*params, int);
 	while (param != HIVE_VALUELIST_END) {
 
 		((_hive_value_t*)pack)[0] = param;
@@ -162,20 +177,27 @@ _JOS_INLINE_FUNC void _hive_parse_parameter_pack(va_list* params, char* pack) {
 		case _JOS_HIVE_VALUE_INT:
 		{
 			long long value = va_arg(*params, long long);
-			*(long long*)pack = value;
+			*(long long*)pack = value; 
 			pack += sizeof(long long);
 		}
 		break;
 		case _JOS_HIVE_VALUE_STR:
 		{
 			const char* str = va_arg(*params, const char*);
-			*(char**)pack = str;
+			*(char**)pack = (char*)str;
 			pack += sizeof(const char*);
+		}
+		break;
+		case _JOS_HIVE_VALUE_PTR:
+		{
+			uintptr_t ptr = va_arg(*params, uintptr_t);
+			*(uintptr_t*)pack = ptr;
+			pack += sizeof(uintptr_t);
 		}
 		break;
 		default:;
 		}
-		param = va_arg(*params, _hive_value_t);
+		param = (_hive_value_t)va_arg(*params, int);
 	}
 }
 
@@ -206,12 +228,6 @@ _JOS_API_FUNC void hive_set(hive_t* hive, const char* key, ...) {
 	va_list args;
 	va_start(args, key);
 	const size_t pack_size = _hive_param_pack_size(&args);
-
-	if (pack_size == 0) {
-		// nothing to store, or support empty keys?
-		return;
-	}
-
 	va_start(args, key);
 
 	_hive_entry_t* existing = _hive_find(hive, key, NULL);
@@ -239,7 +255,7 @@ _JOS_API_FUNC void hive_set(hive_t* hive, const char* key, ...) {
 				}
 				else {
 					existing->_size = -(int)pack_size;
-					pack = existing->_storage;
+					pack = (char*)(&existing->_storage[0]);
 				}
 			}
 		}		
@@ -251,7 +267,7 @@ _JOS_API_FUNC void hive_set(hive_t* hive, const char* key, ...) {
 			}
 			else {
 				existing->_size = -(int)pack_size;
-				pack = existing->_storage;
+				pack = (char*)(&existing->_storage[0]);
 			}
 		}
 
@@ -270,7 +286,7 @@ _JOS_API_FUNC void hive_set(hive_t* hive, const char* key, ...) {
 		}
 		else {
 			entry._size = -(int)pack_size;
-			pack = entry._storage;
+			pack = (char*)entry._storage;
 		}
 
 		_hive_parse_parameter_pack(&args, pack);
@@ -300,7 +316,7 @@ _JOS_API_FUNC void hive_lpush(hive_t* hive, const char* key, ...) {
 
 	va_list args;
 	va_start(args, key);
-	_hive_value_t param = va_arg(args, _hive_value_t);
+	_hive_value_t param = (_hive_value_t)va_arg(args, int);
 	while (param != HIVE_VALUELIST_END) {
 
 		hive_value_t hive_value;
@@ -318,9 +334,15 @@ _JOS_API_FUNC void hive_lpush(hive_t* hive, const char* key, ...) {
 			hive_value.value.as_str = va_arg(args, const char*);
 		}
 		break;
+		case _JOS_HIVE_VALUE_PTR:
+		{
+			hive_value.type = kHiveValue_Ptr;
+			hive_value.value.as_ptr = va_arg(args, uintptr_t);
+		}
+		break;
 		default:;
 		}
-		param = va_arg(args, _hive_value_t);
+		param = (_hive_value_t)va_arg(args, int);
 
 		vector_push_back(items, &hive_value);
 	}
@@ -333,11 +355,14 @@ _JOS_API_FUNC void hive_lpush(hive_t* hive, const char* key, ...) {
 
 _JOS_API_FUNC jo_status_t hive_get(hive_t* hive, const char* key, vector_t* out_values) {
 
-	assert(vector_element_size(out_values) == sizeof(hive_value_t));
+	assert(!out_values || vector_element_size(out_values) == sizeof(hive_value_t));
 
 	_hive_entry_t* entry = _hive_find(hive, key, NULL);
 	if (!entry) {
 		return _JO_STATUS_NOT_FOUND;
+	}
+	if (!out_values) {
+		return _JO_STATUS_SUCCESS;
 	}
 
 	const char* pack;
@@ -378,10 +403,18 @@ _JOS_API_FUNC jo_status_t hive_get(hive_t* hive, const char* key, vector_t* out_
 			pack_size -= sizeof(str);
 		}
 		break;
+		case _JOS_HIVE_VALUE_PTR:
+		{
+			uintptr_t ptr = *(uintptr_t*)pack;
+			hive_value.value.as_ptr = ptr;
+			pack += sizeof(ptr);
+			pack_size -= sizeof(ptr);
+		}
+		break;
 		default:;
 		}
 
-		vector_push_back(out_values, &hive_value);
+		vector_push_back(out_values, &hive_value);		
 	}
 	return _JO_STATUS_SUCCESS;
 }
@@ -427,6 +460,29 @@ _JOS_API_FUNC jo_status_t hive_delete(hive_t* hive, const char* key) {
 	vector_remove(&hive->_keys, i);
 
 	return _JO_STATUS_SUCCESS;
+}
+
+_JOS_API_FUNC void hive_visit_values(hive_t* hive, 
+		void (*visitor)(const char* key, vector_t* values, void*), 
+		vector_t* values_storage, 
+		void* user_data) {
+	size_t count = hive ? vector_size(&hive->_keys) : 0;
+	if (!count)
+		return;
+	do {
+		_hive_entry_t* entry = (_hive_entry_t*)vector_at(&hive->_keys, count - 1);
+		switch (entry->_type) {
+		case kHiveEntry_Key:
+			hive_get(hive, entry->_key, values_storage);
+			break;
+		case kHiveEntry_List:
+			hive_lget(hive, entry->_key, values_storage);
+			break;
+		}
+		visitor(entry->_key, values_storage, user_data);
+		vector_reset(values_storage);
+
+	} while (--count);
 }
 
 #endif

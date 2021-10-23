@@ -120,8 +120,25 @@ static void print_hive_values(const vector_t* values) {
 			printf("%s ", hive_value->value.as_str);
 		}
 		break;
+		case kHiveValue_Ptr:
+		{
+			printf("0x%016llx", hive_value->value.as_ptr);
+		}
+		break;
 		default:;
 		}
+	}
+}
+
+static void _print_hive_key(const char* key, vector_t* values, void* user_data) {
+	(void*)user_data;
+	if (vector_size(values) == 0) {
+		printf("\t%s\n", key);
+	}
+	else {
+		printf("\t%s : ", key);
+		print_hive_values(values);
+		printf("\n");
 	}
 }
 
@@ -136,6 +153,7 @@ void test_hive(jos_allocator_t* allocator) {
 		HIVE_VALUE_INT(1), HIVE_VALUE_STR("one"),
 		HIVE_VALUE_INT(2), HIVE_VALUE_STR("two"),
 		HIVE_VALUE_INT(3), HIVE_VALUE_STR("three"),
+		HIVE_VALUE_PTR(0xf00baa),
 		HIVE_VALUELIST_END);
 
 	hive_set(&hive, "foo",
@@ -143,7 +161,11 @@ void test_hive(jos_allocator_t* allocator) {
 		HIVE_VALUE_INT(5), HIVE_VALUE_STR("five"),
 		HIVE_VALUE_INT(6), HIVE_VALUE_STR("six"),
 		HIVE_VALUE_INT(7), HIVE_VALUE_STR("seven"),
+		HIVE_VALUE_PTR(0x10101010),
 		HIVE_VALUELIST_END);
+
+	hive_set(&hive, "bar", HIVE_VALUELIST_END);
+	assert(_JO_SUCCEEDED(hive_get(&hive, "bar", 0)));
 
 	vector_t values;
 	vector_create(&values, 10, sizeof(hive_value_t), allocator);
@@ -166,7 +188,13 @@ void test_hive(jos_allocator_t* allocator) {
 	vector_reset(&values);
 	hive_lget(&hive, "list1", &values);
 
+	hive_set(&hive, "acpi:config_table_entries", HIVE_VALUE_INT(42), HIVE_VALUELIST_END);
+
 	print_hive_values(&values);
+
+	printf("\n");
+	vector_reset(&values);
+	hive_visit_values(&hive, _print_hive_key, &values, 0);
 
 	hive_delete(&hive, "foo");
 	hive_delete(&hive, "list1");

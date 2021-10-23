@@ -21,6 +21,7 @@ typedef struct _fixed_allocator
 	uintptr_t	_end;		// upper memory bound for pool
 } fixed_allocator_t;
 
+// NOTE: size must include sizeof(fixed_allocator_t)
 _JOS_API_FUNC fixed_allocator_t* fixed_allocator_create(void* mem, size_t size, size_t allocUnitPow2);
 _JOS_API_FUNC void* fixed_allocator_alloc(fixed_allocator_t* pool, size_t size);
 _JOS_API_FUNC void fixed_allocator_free(fixed_allocator_t* pool, void* block);

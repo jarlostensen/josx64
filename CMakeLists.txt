@@ -1,5 +1,6 @@
 #############################################################################
 # CMakeLists for josx64 EFI kernel project
+# some useful info here https://www.vinnie.work/blog/2020-11-17-cmake-eval/
 
 cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
@@ -11,6 +12,9 @@ project(jOSx64 VERSION 1.0
       DESCRIPTION "64 bit jOS kernel - UEFI"
       LANGUAGES C ASM
 )
+
+# we HAVE to set this in order for the build to be completely host agnostic
+set(CMAKE_SYSTEM_NAME Generic)
 
 #########################################################################
 # misc defines
@@ -82,7 +86,7 @@ set(ZYDIS_BUILD_EXAMPLES OFF CACHE BOOL "")
 set(ZYAN_NO_LIBC ON CACHE BOOL "")
 add_subdirectory("deps/zydis")
 
-add_executable(boot "${CMAKE_SOURCE_DIR}/kernel/boot/efi_main_old.c")
+add_executable(boot "${CMAKE_SOURCE_DIR}/kernel/boot/efi_boot_loader.c")
 target_include_directories(boot PRIVATE 
 "${CMAKE_SOURCE_DIR}/deps/zydis/include" 
 "${CMAKE_SYSTEM_PREFIX_PATH}" 
@@ -103,5 +107,3 @@ target_link_options(boot PRIVATE "${LINKER_FLAGS}")
 
 set_target_properties(boot PROPERTIES SUFFIX "")
 set_target_properties(boot PROPERTIES OUTPUT_NAME "BOOTX64.EFI")
-
-
