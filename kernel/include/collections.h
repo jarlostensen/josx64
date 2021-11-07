@@ -13,7 +13,7 @@
 typedef struct _vector
 {
 	// when we create a vector we must assign it an allocator which will be used throughout its lifetime
-	jos_allocator_t* _allocator;
+	heap_allocator_t* _allocator;
 	// allocated memory (may be different from _data if alignment is >1)
 	void*		_memory;
 	// vector data 
@@ -31,11 +31,14 @@ typedef struct _vector
 } vector_t;
 
 // create and initialise a vector with an initial capacity
-_JOS_API_FUNC void vector_create(vector_t* vec, size_t capacity, size_t element_size, jos_allocator_t* allocator);
+_JOS_API_FUNC void vector_create(vector_t* vec, size_t capacity, size_t element_size, heap_allocator_t* allocator);
 // create and initialise a vector with an initial capacity and allocation units aligned to alignment
-_JOS_API_FUNC void vector_create_aligned(vector_t* vec, size_t capacity, size_t element_size, alloc_alignment_t alignment, jos_allocator_t* allocator);
+_JOS_API_FUNC void vector_create_aligned(vector_t* vec, size_t capacity, size_t element_size, alloc_alignment_t alignment, heap_allocator_t* allocator);
 // add element to the end of vector
 _JOS_API_FUNC void vector_push_back(vector_t* vec, void* element);
+// push one element as two packed elements (used for maps, for example)
+// NOTE: alignment is not guaranteed, unless the combined item size ensures it
+_JOS_API_FUNC void vector_push_back_pair(vector_t* vec, const void* first, size_t first_size, const void* second, size_t second_size);
 _JOS_API_FUNC void vector_set_at(vector_t* vec, size_t i, void* element);
 // get element at index n
 _JOS_API_FUNC void* vector_at(vector_t* vec, size_t n);
@@ -44,7 +47,7 @@ _JOS_API_FUNC void vector_append(vector_t* dest, const vector_t* src);
 // remove an element from the vector by swapping it with the last and shrinking the vector
 _JOS_API_FUNC jo_status_t vector_remove(vector_t* vec, const size_t at);
 
-_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE jos_allocator_t* vector_allocator(vector_t* vec) {
+_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE heap_allocator_t* vector_allocator(vector_t* vec) {
 	return vec->_allocator;
 }
 
@@ -79,8 +82,8 @@ _JOS_INLINE_FUNC _JOS_ALWAYS_INLINE void vector_swap(vector_t* veca, vector_t* v
 	uintptr_t tmp_a = (uintptr_t)veca->_allocator;
 	uintptr_t tmp_b = (uintptr_t)vecb->_allocator;
 	_JOS_SWAP(tmp_a, tmp_b);
-	veca->_allocator = (jos_allocator_t*)tmp_a;
-	vecb->_allocator = (jos_allocator_t*)tmp_b;
+	veca->_allocator = (heap_allocator_t*)tmp_a;
+	vecb->_allocator = (heap_allocator_t*)tmp_b;
 	tmp_a = (uintptr_t)veca->_data;
 	tmp_b = (uintptr_t)vecb->_data;
 	_JOS_SWAP(tmp_a, tmp_b);
@@ -137,13 +140,13 @@ _JOS_INLINE_FUNC _JOS_ALWAYS_INLINE void* vector_data(vector_t* vec) {
 
 typedef struct _queue
 {
-	jos_allocator_t* _allocator;
+	heap_allocator_t* _allocator;
 	vector_t* _elements;
 	size_t		_head;
 	size_t		_tail;
 } queue_t;
 
-_JOS_API_FUNC void queue_create(queue_t* queue, size_t capacity, size_t element_size, jos_allocator_t* allocator);
+_JOS_API_FUNC void queue_create(queue_t* queue, size_t capacity, size_t element_size, heap_allocator_t* allocator);
 _JOS_API_FUNC void queue_pop(queue_t* queue);
 _JOS_API_FUNC void queue_push(queue_t* queue, void* element);
 _JOS_API_FUNC void queue_push_ptr(queue_t* queue, void* ptr);
@@ -178,6 +181,78 @@ _JOS_API_FUNC void* queue_front_ptr(queue_t* queue);
 static const vector_t kEmptyVector = { ._data = 0, ._capacity = 0, ._size = 0, ._element_size = 0 };
 
 ////////////////////////////////////////////////////////////////////////////////
+// unordered_map
+// 
+// for example:
+// 
+// typedef struct _test_data {
+//	 int _a;
+//	 char _b;
+// } test_data_t;
+// 
+// unordered_map_t umap;
+// unordered_map_create(&umap, &(unordered_map_create_args_t){
+//	.value_size = sizeof(test_data_t),
+//		.key_size = sizeof(int),
+//		.hash_func = identity_hash_func,
+//		.cmp_func = int_cmp_func
+// },
+// & _malloc_allocator);
+//
+// int k = rand();
+// const void* value = unordered_map_find(&umap, (map_key_t)&k);
+// assert(value == NULL);
+//
+// size_t inserted = 0;
+// for (int n = 0; n < 1000; ++n) {
+//	 k = rand();
+//	 test_data_t v = (struct _test_data){ ._a = rand(), ._b = n & 0xff };
+//	 inserted += unordered_map_insert(&umap, (map_key_t)&k, (map_value_t)&v) ? 1 : 0;
+//	 value = unordered_map_find(&umap, (map_key_t)&k);
+//	 assert(value != NULL);
+//	 assert(((const test_data_t*)value)->_a == v._a);
+// }
+//
+// assert(unordered_map_size(&umap) == inserted);
+// unordered_map_destroy(&umap);
+
+typedef const void* map_key_t;
+typedef const void* map_value_t;
+
+typedef uint32_t(*map_key_hash_func)(map_key_t);
+typedef bool(*map_key_cmp_func)(map_key_t, map_key_t);
+
+typedef struct _unordered_map {
+
+	vector_t* _slots;
+	size_t  _value_size;
+	size_t  _key_size;
+	size_t  _num_slots;
+	size_t  _occupancy;
+	heap_allocator_t* _allocator;
+	map_key_hash_func _hash_func;
+	map_key_cmp_func _cmp_func;
+
+} unordered_map_t;
+
+typedef struct _unordered_map_create_args {
+
+	map_key_hash_func   hash_func;
+	map_key_cmp_func    cmp_func;
+	size_t          key_size;
+	size_t          value_size;
+
+} unordered_map_create_args_t;
+
+_JOS_API_FUNC void unordered_map_create(unordered_map_t* umap, unordered_map_create_args_t* args, heap_allocator_t* allocator);
+_JOS_API_FUNC void unordered_map_destroy(unordered_map_t* umap);
+_JOS_API_FUNC map_value_t unordered_map_find(unordered_map_t* umap, map_key_t key);
+_JOS_API_FUNC bool unordered_map_insert(unordered_map_t* umap, map_key_t key, map_value_t item);
+_JOS_INLINE_FUNC size_t unordered_map_size(unordered_map_t* umap) {
+	return umap->_occupancy;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // paged_list
 // a linked list of pages each holding N items
 
@@ -206,11 +281,11 @@ typedef struct _paged_list {
 	size_t _page_slot_count;
 	size_t _element_size;
 	size_t _items;
-	jos_allocator_t* _allocator;
+	heap_allocator_t* _allocator;
 
 } paged_list_t;
 
-_JOS_INLINE_FUNC void paged_list_create(paged_list_t* paged_list, size_t element_size, size_t items_per_page, jos_allocator_t* allocator) {
+_JOS_INLINE_FUNC void paged_list_create(paged_list_t* paged_list, size_t element_size, size_t items_per_page, heap_allocator_t* allocator) {
 	paged_list->_allocator = allocator;
 	paged_list->_element_size = element_size;
 	paged_list->_page0 = 0;
@@ -298,45 +373,9 @@ _JOS_INLINE_FUNC _JOS_ALWAYS_INLINE void* _vector_at(vector_t* vec, size_t n)
 	return (void*)((char*)vec->_data + n*vec->_stride);
 }
 
-// create a vector able to hold capacity items of element_size
-_JOS_API_FUNC void vector_create(vector_t* vec, size_t capacity, size_t element_size, jos_allocator_t* allocator)
-{
-	assert(vec && element_size && capacity && allocator);
-
-	vec->_allocator = allocator;
-	vec->_alignment = kAllocAlign_None;
-	vec->_memory = vec->_data = vec->_allocator->alloc(vec->_allocator, capacity * element_size);
-	vec->_capacity = capacity;
-	vec->_stride = vec->_element_size = element_size;
-	vec->_size = 0;	
-}
-
-_JOS_API_FUNC void vector_create_aligned(vector_t* vec, size_t capacity, size_t element_size, alloc_alignment_t alignment, jos_allocator_t* allocator) {
-	assert(vec && element_size && capacity && allocator);
-
-	vec->_allocator = allocator;	
-	vec->_capacity = capacity;
-	vec->_element_size = element_size;
-	vec->_alignment = alignment;
-	// the optimiser(s) won't cancel this, which is nice
-	// https://t.co/V2hWdUFGGJ
-	vec->_stride = (int)alignment * ((element_size + ((int)alignment - (int)1)) / (int)alignment);
-	aligned_alloc(allocator, capacity * vec->_stride, alignment, &vec->_memory, &vec->_data);	
-	vec->_size = 0;
-}
-
-// add element to the end of vector
-_JOS_API_FUNC void vector_push_back(vector_t* vec, void* element)
-{
-	_JOS_ASSERT(vec && element && vec->_capacity && vec->_element_size);
-
+_JOS_INLINE_FUNC void _vector_check_grow(vector_t* vec) {
 	// is this contrived, or really better for a branch? only profiling will show...
-	if (vec->_size < vec->_capacity) {
-		const size_t i = vec->_size * vec->_stride;
-		memcpy((char*)vec->_data + i, element, vec->_element_size);
-		_vector_increase_size(vec);
-	}
-	else {		
+	if (vec->_size == vec->_capacity) {
 		if (vec->_alignment == kAllocAlign_None) {
 			// optimal growth ratio if we want to stand a chance to re-use memory for future growth		
 			vec->_capacity += vec->_capacity >> 1;
@@ -355,11 +394,55 @@ _JOS_API_FUNC void vector_push_back(vector_t* vec, void* element)
 			vec->_memory = base;
 			vec->_data = aligned;
 		}
+	}
+}
 
-		const size_t i = vec->_size * vec->_stride;
-		memcpy((char*)vec->_data + i, element, vec->_element_size);
-		_vector_increase_size(vec);
-	}	
+// create a vector able to hold capacity items of element_size
+_JOS_API_FUNC void vector_create(vector_t* vec, size_t capacity, size_t element_size, heap_allocator_t* allocator)
+{
+	assert(vec && element_size && capacity && allocator);
+
+	vec->_allocator = allocator;
+	vec->_alignment = kAllocAlign_None;
+	vec->_memory = vec->_data = vec->_allocator->alloc(vec->_allocator, capacity * element_size);
+	vec->_capacity = capacity;
+	vec->_stride = vec->_element_size = element_size;
+	vec->_size = 0;	
+}
+
+_JOS_API_FUNC void vector_create_aligned(vector_t* vec, size_t capacity, size_t element_size, alloc_alignment_t alignment, heap_allocator_t* allocator) {
+	assert(vec && element_size && capacity && allocator);
+
+	vec->_allocator = allocator;	
+	vec->_capacity = capacity;
+	vec->_element_size = element_size;
+	vec->_alignment = alignment;
+	// the optimiser(s) won't cancel this, which is nice
+	// https://t.co/V2hWdUFGGJ
+	vec->_stride = (int)alignment * ((element_size + ((int)alignment - (int)1)) / (int)alignment);
+	aligned_alloc(allocator, capacity * vec->_stride, alignment, &vec->_memory, &vec->_data);	
+	vec->_size = 0;
+}
+
+// add element to the end of vector
+_JOS_API_FUNC void vector_push_back(vector_t* vec, void* element)
+{
+	_JOS_ASSERT(vec && element && vec->_capacity && vec->_element_size);
+	_vector_check_grow(vec);
+	const size_t i = vec->_size * vec->_stride;
+	memcpy((char*)vec->_data + i, element, vec->_element_size);
+	_vector_increase_size(vec);
+}
+
+_JOS_API_FUNC void vector_push_back_pair(vector_t* vec, 
+			const void* first, size_t first_size, const void* second, size_t second_size) {
+	_JOS_ASSERT(first_size + second_size == vec->_element_size);
+
+	_vector_check_grow(vec);
+	const size_t i = vec->_size * vec->_stride;
+	memcpy((char*)vec->_data + i, first, first_size);
+	memcpy((char*)vec->_data + i + first_size, second, second_size);
+	_vector_increase_size(vec);
 }
 
 _JOS_API_FUNC void vector_set_at(vector_t* vec, size_t i, void* element)
@@ -407,7 +490,7 @@ _JOS_API_FUNC void vector_append(vector_t* dest, const vector_t* src) {
 	}
 }
 
-_JOS_API_FUNC  void queue_create(queue_t* queue, size_t capacity, size_t element_size, jos_allocator_t* allocator)
+_JOS_API_FUNC  void queue_create(queue_t* queue, size_t capacity, size_t element_size, heap_allocator_t* allocator)
 {
 	queue->_allocator = allocator;
 	queue->_elements = (vector_t*)queue->_allocator->alloc(queue->_allocator, sizeof(vector_t));
@@ -517,6 +600,70 @@ _JOS_API_FUNC void paged_list_destroy(paged_list_t* paged_list) {
 	}
 
 	memset(paged_list, 0, sizeof(paged_list_t));
+}
+
+_JOS_API_FUNC void unordered_map_create(unordered_map_t* umap, unordered_map_create_args_t* args, heap_allocator_t* allocator) {
+
+	umap->_hash_func = args->hash_func;
+	umap->_cmp_func = args->cmp_func;
+	umap->_allocator = allocator;
+	umap->_value_size = args->value_size;
+	umap->_key_size = args->key_size;
+	umap->_num_slots = 511;
+	umap->_occupancy = 0;
+	umap->_slots = allocator->alloc(allocator, sizeof(vector_t) * umap->_num_slots);
+	_JOS_ASSERT(umap->_slots);
+	for (int i = 0; i < umap->_num_slots; ++i) {
+		vector_create(umap->_slots + i, 32, args->key_size + args->value_size, allocator);
+	}
+}
+
+_JOS_API_FUNC void unordered_map_destroy(unordered_map_t* umap) {
+	for (int i = 0; i < umap->_num_slots; ++i) {
+		vector_destroy(umap->_slots + i);
+	}
+}
+
+struct _map_slot_value {
+	vector_t* _slot;
+	void* _value;
+};
+
+struct _map_slot_value _unordered_map_find(unordered_map_t* umap, map_key_t key) {
+	uint32_t hash = umap->_hash_func(key);
+	size_t i = hash % umap->_num_slots;
+	vector_t* slot_vector = umap->_slots + i;
+	for (size_t n = 0u; n < vector_size(slot_vector); ++n) {
+		const void* pair = vector_at(slot_vector, n);
+		if (umap->_cmp_func(pair, key)) {
+			return (struct _map_slot_value) {
+				._slot = slot_vector,
+					._value = (void*)((uintptr_t)pair + umap->_key_size)
+			};
+		}
+	}
+	return (struct _map_slot_value) {
+		._slot = slot_vector,
+			._value = NULL
+	};
+}
+
+_JOS_API_FUNC map_value_t unordered_map_find(unordered_map_t* umap, map_key_t key) {
+	struct _map_slot_value sv = _unordered_map_find(umap, key);
+	return (map_value_t)sv._value;
+}
+
+_JOS_API_FUNC bool unordered_map_insert(unordered_map_t* umap, map_key_t key, map_value_t item) {
+	struct _map_slot_value sv = _unordered_map_find(umap, key);
+	if (sv._value) {
+		// found, just poke the value
+		memcpy(sv._value, item, umap->_value_size);
+		return false;
+	}
+	// otherwise we need to add it 
+	vector_push_back_pair(sv._slot, key, umap->_key_size, item, umap->_value_size);
+	umap->_occupancy++;
+	return true;
 }
 
 #endif

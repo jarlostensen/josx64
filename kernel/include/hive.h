@@ -73,7 +73,7 @@ typedef enum _hive_value_type {
 	kHiveValue_Ptr = 3,	
 } hive_value_type_t;
 
-_JOS_API_FUNC  void hive_create(hive_t* hive, jos_allocator_t* allocator);
+_JOS_API_FUNC  void hive_create(hive_t* hive, heap_allocator_t* allocator);
 // set/create a key -> value
 _JOS_API_FUNC  void hive_set(hive_t* hive, const char* key, ...);
 // create or append values to a list
@@ -219,7 +219,7 @@ _JOS_INLINE_FUNC _hive_entry_t* _hive_find(hive_t* hive, const char* key, size_t
 	return 0;
 }
 
-_JOS_API_FUNC  void hive_create(hive_t* hive, jos_allocator_t* allocator) {
+_JOS_API_FUNC  void hive_create(hive_t* hive, heap_allocator_t* allocator) {
 	vector_create(&hive->_keys, 32, sizeof(_hive_entry_t), allocator);
 }
 
@@ -238,7 +238,7 @@ _JOS_API_FUNC void hive_set(hive_t* hive, const char* key, ...) {
 		int real_size = (existing->_size < 0 ? -existing->_size : existing->_size);
 		if (real_size < pack_size) {
 
-			jos_allocator_t* allocator = vector_allocator(&hive->_keys);			
+			heap_allocator_t* allocator = vector_allocator(&hive->_keys);			
 			if (existing->_size > 0) {
 				// original data is allocated, so we need to reallocate to fit the new pack
 				pack = *(char**)&existing->_storage;
@@ -279,7 +279,7 @@ _JOS_API_FUNC void hive_set(hive_t* hive, const char* key, ...) {
 
 		// if we can store the entry in-situ instead of allocating memory we will
 		if (pack_size > _JOS_HIVE_SMALL_ENTRY_SIZE) {
-			jos_allocator_t* allocator = vector_allocator(&hive->_keys);
+			heap_allocator_t* allocator = vector_allocator(&hive->_keys);
 			pack = allocator->alloc(allocator, pack_size);
 			*(char**)&entry._storage = pack;
 			entry._size = (int)pack_size;
@@ -438,7 +438,7 @@ _JOS_API_FUNC jo_status_t hive_delete(hive_t* hive, const char* key) {
 	if (!entry)
 		return _JO_STATUS_NOT_FOUND;
 
-	jos_allocator_t* allocator = vector_allocator(&hive->_keys);
+	heap_allocator_t* allocator = vector_allocator(&hive->_keys);
 	switch (entry->_type) {
 	case kHiveEntry_Key:
 	{

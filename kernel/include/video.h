@@ -3,9 +3,9 @@
 
 #ifdef _JOS_KERNEL_BUILD
 #include <c-efi.h>
-jo_status_t video_initialise(jos_allocator_t* allocator, CEfiBootServices* boot_services);
+jo_status_t video_initialise(heap_allocator_t* allocator, CEfiBootServices* boot_services);
 #else
-jo_status_t video_initialise(jos_allocator_t* allocator);
+jo_status_t video_initialise(heap_allocator_t* allocator);
 #endif
 
 #include <wchar.h>

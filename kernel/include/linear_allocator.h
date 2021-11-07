@@ -5,7 +5,7 @@
 typedef struct _linear_allocator {
 
 	//NOTE: this must be the first entry in this struct as it is used as a super class
-	jos_allocator_t _super;
+	heap_allocator_t _super;
 
     void*       _begin;
     char*       _ptr;
@@ -35,10 +35,10 @@ _JOS_API_FUNC linear_allocator_t* linear_allocator_create(void* memory, size_t s
     linalloc->_end = (void*)((uintptr_t)memory + size_adjusted);
     linalloc->_ptr = (char*)_JOS_ALIGN(((char*)memory + sizeof(linear_allocator_t)), kAllocAlign_8);
     
-    linalloc->_super.alloc = (jos_allocator_alloc_func_t)linear_allocator_alloc;
+    linalloc->_super.alloc = (heap_allocator_alloc_func_t)linear_allocator_alloc;
     linalloc->_super.free = 0;
     linalloc->_super.realloc = 0;
-    linalloc->_super.available = (jos_allocator_avail_func_t)linear_allocator_available;
+    linalloc->_super.available = (heap_allocator_avail_func_t)linear_allocator_available;
 
     return linalloc;
 }

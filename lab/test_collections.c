@@ -15,7 +15,7 @@ typedef struct _test_item {
 
 } test_item_t;
 
-void test_vector(jos_allocator_t* allocator) {
+void test_vector(heap_allocator_t* allocator) {
 
 	printf("test_vector...");
 
@@ -43,7 +43,7 @@ void test_vector(jos_allocator_t* allocator) {
 	printf("passed\n");
 }
 
-void test_vector_aligned(jos_allocator_t* allocator) {
+void test_vector_aligned(heap_allocator_t* allocator) {
 
 	printf("test_vector_aligned...");
 
@@ -73,7 +73,7 @@ void test_vector_aligned(jos_allocator_t* allocator) {
 	printf("passed\n");
 }
 
-void test_paged_list(jos_allocator_t* allocator) {
+void test_paged_list(heap_allocator_t* allocator) {
 
 	printf("test_paged_list...");
 
@@ -142,7 +142,7 @@ static void _print_hive_key(const char* key, vector_t* values, void* user_data) 
 	}
 }
 
-void test_hive(jos_allocator_t* allocator) {
+void test_hive(heap_allocator_t* allocator) {
 
 	printf("test_hive...");
 

@@ -32,7 +32,7 @@ static const unsigned char base64_table[65] =
  * not included in out_len.
  */
 unsigned char * base64_encode(const unsigned char *src, size_t len,
-			      size_t *out_len, jos_allocator_t* allocator)
+			      size_t *out_len, heap_allocator_t* allocator)
 {
 	unsigned char *out, *pos;
 	const unsigned char *end, *in;
@@ -102,7 +102,7 @@ unsigned char * base64_encode(const unsigned char *src, size_t len,
  * Caller is responsible for freeing the returned buffer.
  */
 unsigned char * base64_decode(const unsigned char *src, size_t len,
-			      size_t *out_len, jos_allocator_t* allocator)
+			      size_t *out_len, heap_allocator_t* allocator)
 {
 	unsigned char dtable[256], *out, *pos, block[4], tmp;
 	size_t i, count, olen;

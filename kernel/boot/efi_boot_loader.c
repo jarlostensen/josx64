@@ -241,7 +241,7 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     char info_buffer[sizeof(fixed_allocator_t) + 8*sizeof(uintptr_t)];
     fixed_allocator_t* info_allocator = fixed_allocator_create(info_buffer, sizeof(info_buffer), 3);
     vector_t info;
-    vector_create(&info, 16, sizeof(hive_value_t), (jos_allocator_t*)info_allocator);
+    vector_create(&info, 16, sizeof(hive_value_t), (heap_allocator_t*)info_allocator);
 
     if ( _JO_SUCCEEDED(hive_get(kernel_hive(), "acpi:config_table_entries", &info)) ) {
         swprintf(buf, bufcount, L"system configuration tables contain %d entries\n", (int)vector_at(&info, 0));

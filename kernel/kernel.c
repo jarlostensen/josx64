@@ -47,8 +47,8 @@ _JOS_NORETURN void halt_cpu() {
 // the main allocator used by the kernel to initialise modules and provide memory for memory pools
 // NOTE: this memory is never freed, each module is expected to deal with the details of memory resource 
 // management themselves
-static jos_allocator_t*  _kernel_system_allocator = 0;
-static jos_allocator_t*  _kernel_heap_allocator = 0;
+static heap_allocator_t*  _kernel_system_allocator = 0;
+static heap_allocator_t*  _kernel_heap_allocator = 0;
 static size_t _initial_memory = 0;
 
 _JOS_API_FUNC void kernel_memory_available(size_t* on_boot, size_t* now) {
@@ -86,7 +86,7 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
     _kernel_heap_allocator = memory_allocate_pool(kMemoryPoolType_Dynamic, 0);
 
     // create our hive storage
-    hive_create(&_hive, (jos_allocator_t*)_kernel_heap_allocator);    
+    hive_create(&_hive, (heap_allocator_t*)_kernel_heap_allocator);    
     hive_set(&_hive, "kernel:pool", HIVE_VALUE_INT(_kernel_system_allocator->available(_kernel_system_allocator)), HIVE_VALUELIST_END);
     hive_set(&_hive, "kernel:heap", HIVE_VALUE_INT(_kernel_heap_allocator->available(_kernel_heap_allocator)), HIVE_VALUELIST_END);
     
@@ -96,14 +96,14 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
         return status;
     }
     
-    status = smp_initialise((jos_allocator_t*)_kernel_system_allocator, system_services->boot_services);
+    status = smp_initialise((heap_allocator_t*)_kernel_system_allocator, system_services->boot_services);
     if ( !_JO_SUCCEEDED(status) ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel, "***FATAL ERROR: SMP initialise returned 0x%x", status);
         return status;
     }
 
     // port it to use module register
-    status = video_initialise((jos_allocator_t*)_kernel_system_allocator, system_services->boot_services);
+    status = video_initialise((heap_allocator_t*)_kernel_system_allocator, system_services->boot_services);
     if ( _JO_FAILED(status)  ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel,"***FATAL ERROR: video initialise returned 0x%x", status);
         return status;
@@ -124,10 +124,10 @@ _JOS_API_FUNC jo_status_t kernel_runtime_init(CEfiHandle h, CEfiSystemTable* sys
     }
 
     interrupts_initialise_early();
-	debugger_initialise((jos_allocator_t*)_kernel_system_allocator);
+	debugger_initialise((heap_allocator_t*)_kernel_system_allocator);
     clock_initialise();
     keyboard_initialise();    
-    tasks_initialise((jos_allocator_t*)_kernel_system_allocator);
+    tasks_initialise((heap_allocator_t*)_kernel_system_allocator);
     return _JO_STATUS_SUCCESS;
 }
 

@@ -13,7 +13,7 @@
 typedef struct _fixed_allocator
 {
     //NOTE: this must be the first entry in this struct as it is used as a super class
-    jos_allocator_t _super;
+    heap_allocator_t _super;
 
     uint8_t     _size_p2;   // power of two unit allocation size
     size_t      _count;
@@ -54,8 +54,8 @@ _JOS_API_FUNC fixed_allocator_t* fixed_allocator_create(void* mem, size_t size, 
     }
     *block = ~0;
 
-    pool->_super.alloc = (jos_allocator_alloc_func_t)fixed_allocator_alloc;
-    pool->_super.free = (jos_allocator_free_func_t)fixed_allocator_free;
+    pool->_super.alloc = (heap_allocator_alloc_func_t)fixed_allocator_alloc;
+    pool->_super.free = (heap_allocator_free_func_t)fixed_allocator_free;
     pool->_super.realloc = 0;
 
     return pool;

@@ -54,9 +54,9 @@ static uint32_t* backbuffer_wptr(size_t top, size_t left) {
 }
 
 #ifdef _JOS_KERNEL_BUILD
-jo_status_t video_initialise(jos_allocator_t* allocator, CEfiBootServices* boot_services)
+jo_status_t video_initialise(heap_allocator_t* allocator, CEfiBootServices* boot_services)
 #else
-jo_status_t video_initialise(jos_allocator_t* allocator)
+jo_status_t video_initialise(heap_allocator_t* allocator)
 #endif
 {
     jo_status_t status = _JO_STATUS_SUCCESS;

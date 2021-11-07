@@ -44,19 +44,43 @@ typedef enum _alloc_alignment {
 // All allocators implement this (using this structure as a basic vtable entry)
 struct _jos_allocator;
 // allocate bytes. ALLWAYS a minimum of 8 byte aligned
-typedef void* (*jos_allocator_alloc_func_t)(struct _jos_allocator*, size_t);
-typedef void  (*jos_allocator_free_func_t)(struct _jos_allocator*, void*);
+typedef void* (*heap_allocator_alloc_func_t)(struct _jos_allocator*, size_t);
+typedef void  (*heap_allocator_free_func_t)(struct _jos_allocator*, void*);
 // allocate bytes. ALLWAYS a minimum of 8 byte aligned
-typedef void* (*jos_allocator_realloc_func_t)(struct _jos_allocator*, void*, size_t);
-typedef size_t (*jos_allocator_avail_func_t)(struct _jos_allocator*);
+typedef void* (*heap_allocator_realloc_func_t)(struct _jos_allocator*, void*, size_t);
+typedef size_t (*heap_allocator_avail_func_t)(struct _jos_allocator*);
 
 typedef struct _jos_allocator {
-    jos_allocator_alloc_func_t      alloc;
-    jos_allocator_free_func_t       free;
-    jos_allocator_realloc_func_t    realloc;
-    jos_allocator_avail_func_t      available;
+    heap_allocator_alloc_func_t      alloc;
+    heap_allocator_free_func_t       free;
+    heap_allocator_realloc_func_t    realloc;
+    heap_allocator_avail_func_t      available;
 
-} jos_allocator_t;
+} heap_allocator_t;
+
+
+#define PAGE_NOACCESS           0x01
+#define PAGE_READONLY           0x02
+#define PAGE_READWRITE          0x04
+#define PAGE_WRITECOPY          0x08
+#define PAGE_EXECUTE            0x10
+#define PAGE_EXECUTE_READ       0x20
+#define PAGE_EXECUTE_READWRITE  0x40
+#define PAGE_EXECUTE_WRITECOPY  0x80
+#define PAGE_GUARD             0x100
+#define PAGE_NOCACHE           0x200
+#define PAGE_WRITECOMBINE      0x400
+
+struct _global_allocator;
+typedef void* (*global_allocator_alloc_func_t)(struct _global_allocator*, size_t, unsigned int flags);
+typedef void* (*global_allocator_free_func_t)(struct _global_allocator*, void*);
+
+typedef struct _global_allocator {
+    global_allocator_alloc_func_t  alloc;
+    global_allocator_free_func_t   free;
+
+} global_allocator_t;
+
 
 // ========================================================================= misc types
 
@@ -188,7 +212,7 @@ if(!(cond))\
 #define _JOS_ALIGN(val, alignment)\
     (((uintptr_t)val + ((uintptr_t)alignment - 1)) & ~((uintptr_t)alignment - 1))
 
-_JOS_INLINE_FUNC void aligned_alloc(jos_allocator_t* allocator, size_t bytes, alloc_alignment_t alignment, 
+_JOS_INLINE_FUNC void aligned_alloc(heap_allocator_t* allocator, size_t bytes, alloc_alignment_t alignment, 
                                     void** out_alloc_base, void** out_alloc_aligned) {
     if (!allocator || !bytes) {
         *out_alloc_base = *out_alloc_aligned = 0;

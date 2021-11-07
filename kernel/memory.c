@@ -256,7 +256,7 @@ _JOS_API_FUNC size_t  memory_pool_overhead(memory_pool_type_t type) {
     return 0;
 }
 
-_JOS_API_FUNC jos_allocator_t*  memory_allocate_pool(memory_pool_type_t type, size_t size) {
+_JOS_API_FUNC heap_allocator_t*  memory_allocate_pool(memory_pool_type_t type, size_t size) {
     
     const size_t overhead = memory_pool_overhead(type); 
     size = size ? size + overhead : memory_get_available() - kAllocAlign_8;
@@ -265,16 +265,16 @@ _JOS_API_FUNC jos_allocator_t*  memory_allocate_pool(memory_pool_type_t type, si
         {
             // standard arena allocator
             _JOS_ASSERT(size<=memory_get_available());
-            void* pool = _main_allocator->_super.alloc((jos_allocator_t*)_main_allocator, size);
-            return (jos_allocator_t*)arena_allocator_create(pool, size);
+            void* pool = _main_allocator->_super.alloc((heap_allocator_t*)_main_allocator, size);
+            return (heap_allocator_t*)arena_allocator_create(pool, size);
         }
         break;
         case kMemoryPoolType_Static:
         {
             // basic linear allocator
             _JOS_ASSERT(size<=memory_get_available());
-            void* pool = _main_allocator->_super.alloc((jos_allocator_t*)_main_allocator, size);
-            return (jos_allocator_t*)linear_allocator_create(pool, size);
+            void* pool = _main_allocator->_super.alloc((heap_allocator_t*)_main_allocator, size);
+            return (heap_allocator_t*)linear_allocator_create(pool, size);
         }
         break;
         default:;

@@ -38,6 +38,37 @@
 
 #include "tests.h"
 
+
+heap_allocator_t _malloc_allocator;
+
+static void* malloc_alloc(heap_allocator_t* alloc, size_t size) {
+	(void)alloc;
+	return malloc(size);
+}
+
+static void* malloc_realloc(heap_allocator_t* alloc, void* ptr, size_t size) {
+	(void)alloc;
+	return realloc(ptr, size);
+}
+
+static void malloc_free(heap_allocator_t* alloc, void* ptr) {
+	(void)alloc;
+	free(ptr);
+}
+
+static size_t malloc_avail(heap_allocator_t* alloc) {
+	(void)alloc;
+	return (size_t)~0;
+}
+
+static void init_tests(void) {
+	_malloc_allocator.alloc = malloc_alloc;
+	_malloc_allocator.free = malloc_free;
+	_malloc_allocator.available = malloc_avail;
+	_malloc_allocator.realloc = malloc_realloc;
+}
+
+
 void slice_printf(char_array_slice_t* slice) {
     for (unsigned n = 0; n < slice->_length; ++n) {
         printf("%c", slice->_ptr[n]);
@@ -198,6 +229,71 @@ int _lab_getch(void) {
 }
 
 // ==============================================================================
+
+void unordered_map_dump_stats(unordered_map_t* umap) {
+    printf("unordered_map:\n");
+    for (int i = 0; i < umap->_num_slots; ++i) {
+        const size_t count = vector_size(umap->_slots + i);
+        if (count) {
+            printf("\t");
+            for (int j = 0; j < vector_size(umap->_slots + i); ++j) {
+                printf("=");
+            }
+            printf("\n");
+        }
+        else {
+            printf("\t.\n");
+        }
+    }
+}
+
+static uint32_t identity_hash_func(const void* key) {
+    return (uint32_t)(*(int*)key);
+}
+
+static bool int_cmp_func(const void* a, const void* b) {
+    return *(const int*)a == *(const int*)b;
+}
+
+typedef struct _test_data {
+    int _a;
+    char _b;
+} test_data_t;
+
+static void test_unordered_map(void) {
+
+    printf("test_unordered_map...");
+
+    unordered_map_t umap;
+    unordered_map_create(&umap, &(unordered_map_create_args_t){
+            .value_size = sizeof(test_data_t),
+            .key_size = sizeof(int),
+            .hash_func = identity_hash_func,
+            .cmp_func = int_cmp_func
+    }, 
+    &_malloc_allocator);
+
+	int k = rand();
+	const void* value = unordered_map_find(&umap, (map_key_t)&k);
+	assert(value == NULL);
+
+    size_t inserted = 0;
+    for (int n = 0; n < 1000; ++n) {
+        k = rand();
+        test_data_t v = (struct _test_data){ ._a = rand(), ._b = n & 0xff };
+        inserted += unordered_map_insert(&umap, (map_key_t)&k, (map_value_t)&v) ? 1:0;
+        value = unordered_map_find(&umap, (map_key_t)&k);
+        assert(value != NULL);
+        assert(((const test_data_t*)value)->_a == v._a);
+    }
+
+    assert(unordered_map_size(&umap) == inserted);
+    //unordered_map_dump_stats(&umap);
+    unordered_map_destroy(&umap);
+    printf("passed\n");
+}
+
+// ==============================================================================
 // JSON stuff
 
 static void test_json(void) {
@@ -210,7 +306,7 @@ static void test_json(void) {
     size_t out_len = 0;
     interrupt_stack_t stack;
     memset(&stack, 0xcd, sizeof(stack));
-    unsigned char* encoded = base64_encode((const unsigned char*)&stack, sizeof(interrupt_stack_t), &out_len, (jos_allocator_t*)buffer_allocator);
+    unsigned char* encoded = base64_encode((const unsigned char*)&stack, sizeof(interrupt_stack_t), &out_len, (heap_allocator_t*)buffer_allocator);
 
     json_write_object_start(&ctx);
         json_write_key(&ctx, "version");
@@ -243,7 +339,7 @@ static void test_json(void) {
     char_array_slice_create(&json_slice, buffer, 0, strlen(buffer));
 
     char heap[512];
-    jos_allocator_t* allocator = (jos_allocator_t*)arena_allocator_create(heap, sizeof(heap));
+    heap_allocator_t* allocator = (heap_allocator_t*)arena_allocator_create(heap, sizeof(heap));
     vector_t tokens;
     vector_create(&tokens, 12, sizeof(json_token_t), allocator);
     json_token_t* root = json_tokenise(&tokens, json_slice);
@@ -326,8 +422,6 @@ static void test_line_editor(void) {
     printf("\nWe got: \"%s\"", buffer);
 }
 
-// ==============================================================================
-
 jo_status_t basic_line_editor(char* out_buffer, size_t buffer_len, _getch_t _getch, console_interface_t* console) {
     if (!out_buffer || buffer_len < 2) {
         return _JO_STATUS_FAILED_PRECONDITION;
@@ -390,7 +484,6 @@ jo_status_t basic_line_editor(char* out_buffer, size_t buffer_len, _getch_t _get
 
 // =================================================================================================
 
-
 video_mode_info_t _info = { .vertical_resolution = 768, .pixel_format = kVideo_Pixel_Format_RBGx };
 static size_t _window_width = 1024;
 
@@ -420,7 +513,7 @@ static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         bits = (BYTE*)malloc(bm_size);
         GetDIBits(hdc_mem, bm, 0, _info.vertical_resolution, bits, (BITMAPINFO*)(&bm_info_header), DIB_RGB_COLORS);
 
-        video_initialise(&(jos_allocator_t) {
+        video_initialise(&(heap_allocator_t) {
             .alloc = malloc,
                 .free = free
         });
@@ -549,16 +642,7 @@ static void ui_test_loop(void) {
     }
 }
 
-//void aligned_alloc(jos_allocator_t* allocator, size_t bytes, alloc_alignment_t alignment,
-//	void** out_alloc_base, void** out_alloc_aligned) {
-//	if (!allocator || !bytes) {
-//		*out_alloc_base = *out_alloc_aligned = 0;
-//		return;
-//	}
-//	void* ptr = allocator->alloc(allocator, bytes + (size_t)alignment - 1);
-//	*out_alloc_base = ptr;
-//	*out_alloc_aligned = (void*)(((uintptr_t)ptr + ((uintptr_t)alignment - 1)) & ~((uintptr_t)alignment - 1));
-//}
+// ==============================================================================================================
 
 void alloc_tests(void) {
 
@@ -567,46 +651,30 @@ void alloc_tests(void) {
 
     void *base_ptr, *ptr;
     alloc_alignment_t alignment = kAllocAlign_128;
-    aligned_alloc((jos_allocator_t*)buffer_allocator, 42, alignment, &base_ptr, &ptr);
+    aligned_alloc((heap_allocator_t*)buffer_allocator, 42, alignment, &base_ptr, &ptr);
     _JOS_ASSERT(((uintptr_t)ptr & ((uintptr_t)alignment) - 1) == 0);
 }
 
-jos_allocator_t _malloc_allocator;
+#ifndef _JOS_KERNEL_BUILD
+void test_load_dll(void) {
 
-static void* malloc_alloc(jos_allocator_t* alloc, size_t size) {
-    (void)alloc;
-    return malloc(size);
+    HMODULE dll = LoadLibrary("example.dll");
+    peutil_pe_context_t ctx;
+    peutil_bind(&ctx, (const void*)dll, kPe_Relocated);
+
+    peutil_get_proc_name_address(&ctx, "eglTerminate");
+    peutil_load_dll(&ctx, NULL);
 }
-
-static void* malloc_realloc(jos_allocator_t* alloc, void* ptr, size_t size) {
-    (void)alloc;
-    return realloc(ptr, size);
-}
-
-static void malloc_free(jos_allocator_t* alloc, void* ptr) {
-    (void)alloc;
-    free(ptr);
-}
-
-static size_t malloc_avail(jos_allocator_t* alloc) {
-    (void)alloc;
-    return (size_t)~0;
-}
-
-static void init_tests(void) {
-    _malloc_allocator.alloc = malloc_alloc;
-    _malloc_allocator.free = malloc_free;
-    _malloc_allocator.available = malloc_avail;
-    _malloc_allocator.realloc = malloc_realloc;
-}
-
+#else
+void test_load_dll(void) { };
+#endif
 
 // ==============================================================================================================
 
 int main(void)
 {
     init_tests();
-
+    
     /*char buffer[512];
     wchar_t wbuffer[512];
 
@@ -634,6 +702,9 @@ int main(void)
         "enabled"
         );
 */
+    test_load_dll();
+
+    test_unordered_map();
     test_vector(&_malloc_allocator);
     test_vector_aligned(&_malloc_allocator);
     test_paged_list(&_malloc_allocator);
@@ -659,7 +730,7 @@ int main(void)
      is_executable = peutil_phys_is_executable(&pe_ctx, (uintptr_t)(this_module) + 0x6c008, 0);
 
      void* heap = malloc(1024*1024);
-     jos_allocator_t* allocator = (jos_allocator_t*)arena_allocator_create(heap, 1024 * 1024);
+     heap_allocator_t* allocator = (heap_allocator_t*)arena_allocator_create(heap, 1024 * 1024);
 
      vector_t a;
      vector_t b;

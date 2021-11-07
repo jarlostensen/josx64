@@ -1,9 +1,9 @@
 #pragma once
 
-void test_vector(jos_allocator_t* allocator);
-void test_paged_list(jos_allocator_t* allocator);
-void test_vector_aligned(jos_allocator_t* allocator);
-void test_hive(jos_allocator_t* allocator);
+void test_vector(heap_allocator_t* allocator);
+void test_paged_list(heap_allocator_t* allocator);
+void test_vector_aligned(heap_allocator_t* allocator);
+void test_hive(heap_allocator_t* allocator);
 
 void test_fixed_allocator(void);
 void test_linear_allocator(void);

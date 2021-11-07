@@ -100,7 +100,7 @@ pdb_index_match_result pdb_index_match_search(pdb_index_node_t* node, char_array
 
 #define PDB_INDEX_CHILD_INIT_CAPACITY 16
 
-static void pdb_index_add_from_node(pdb_index_node_t* node, char_array_slice_t body, const pdb_index_symbol_t* __restrict data, jos_allocator_t* allocator) {
+static void pdb_index_add_from_node(pdb_index_node_t* node, char_array_slice_t body, const pdb_index_symbol_t* __restrict data, heap_allocator_t* allocator) {
 
     if(vector_is_empty(&node->_children)) {
         vector_create(&node->_children, PDB_INDEX_CHILD_INIT_CAPACITY, sizeof(pdb_index_node_t), allocator);
@@ -122,7 +122,7 @@ static void pdb_index_add_from_node(pdb_index_node_t* node, char_array_slice_t b
 }
 
 pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice_t prefix, char_array_slice_t body, 
-        const pdb_index_symbol_t* __restrict data, pdb_index_node_t** leaf, jos_allocator_t* allocator) {
+        const pdb_index_symbol_t* __restrict data, pdb_index_node_t** leaf, heap_allocator_t* allocator) {
 
     bool is_root_node = false;
 
@@ -309,7 +309,7 @@ typedef enum _parse_state {
 
 } parse_state_t;
 
-const pdb_index_node_t* pdb_index_load_from_pdb_yml(const char* pdb_yml_file_pathname, jos_allocator_t* allocator) {
+const pdb_index_node_t* pdb_index_load_from_pdb_yml(const char* pdb_yml_file_pathname, heap_allocator_t* allocator) {
     
     pdb_index_node_initialise(&_pdb_index_root);
 

@@ -93,7 +93,7 @@ _JOS_INLINE_FUNC    processor_information_t* per_cpu_this_cpu_info(void) {
 // ===============================================================================================
 
 //NOTE: called on the BSP *only*
-jo_status_t     smp_initialise(jos_allocator_t* allocator, CEfiBootServices *boot_services);
+jo_status_t     smp_initialise(heap_allocator_t* allocator, CEfiBootServices *boot_services);
 
 size_t          smp_get_processor_count(void);
 size_t          smp_get_bsp_id();

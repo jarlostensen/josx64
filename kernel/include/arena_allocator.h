@@ -64,7 +64,7 @@ typedef struct vmem_block_tail_struct
 typedef struct arena_allocator_struct
 {
 	//NOTE: this must be the first entry in this struct as it is used as a super class
-	jos_allocator_t _super;
+	heap_allocator_t _super;
 
     size_t                  _size;
     size_t                  _capacity;
@@ -205,10 +205,10 @@ _JOS_API_FUNC arena_allocator_t*   arena_allocator_create(void* mem, size_t size
 	vmem_block_tail_t* tail = _vmem_tail_from_head(arena->_free_head);
 	tail->_size = _vmem_tail_free_size(arena->_free_head);
 
-	arena->_super.alloc = (jos_allocator_alloc_func_t)arena_allocator_alloc;
-	arena->_super.free = (jos_allocator_free_func_t)arena_allocator_free;
-	arena->_super.realloc = (jos_allocator_realloc_func_t)arena_allocator_realloc;
-    arena->_super.available = (jos_allocator_avail_func_t)arena_allocator_available;
+	arena->_super.alloc = (heap_allocator_alloc_func_t)arena_allocator_alloc;
+	arena->_super.free = (heap_allocator_free_func_t)arena_allocator_free;
+	arena->_super.realloc = (heap_allocator_realloc_func_t)arena_allocator_realloc;
+    arena->_super.available = (heap_allocator_avail_func_t)arena_allocator_available;
 
     return arena;
 }
@@ -285,11 +285,11 @@ _JOS_API_FUNC void* arena_allocator_realloc(arena_allocator_t* arena, void* bloc
 	}
 
 	if (size == 0) {
-		arena->_super.free((jos_allocator_t*)arena, block);
+		arena->_super.free((heap_allocator_t*)arena, block);
 		return 0;
 	}
 	if (block == 0) {
-		return arena->_super.alloc((jos_allocator_t*)arena, size);
+		return arena->_super.alloc((heap_allocator_t*)arena, size);
 	}
 
 	vmem_block_head_t* head = (vmem_block_head_t*)block - 1;
@@ -298,7 +298,7 @@ _JOS_API_FUNC void* arena_allocator_realloc(arena_allocator_t* arena, void* bloc
 		return block;
 	}
 
-	void* new_block = arena->_super.alloc((jos_allocator_t*)arena, size);
+	void* new_block = arena->_super.alloc((heap_allocator_t*)arena, size);
 	if (new_block) {
 		memcpy(new_block, block, _JOS_VMEM_ABS_BLOCK_SIZE(head->_size));
 	}
