@@ -97,7 +97,7 @@ static void initialise_this_ap(void* arg) {
     _JOS_KTRACE_CHANNEL(kSmpChannel, "initialised ap %d, gs @ 0x%llx -> %d", proc_info->_id, proc_info_ptr, per_cpu_this_cpu_id());
 }
 
-jo_status_t    smp_initialise(jos_allocator_t* allocator, CEfiBootServices *boot_services) {
+jo_status_t    smp_initialise(heap_allocator_t* allocator, CEfiBootServices *boot_services) {
 
     const size_t kSMP_PER_CPU_MEMORY_ARENA_SIZE = 1024*1024;
 
