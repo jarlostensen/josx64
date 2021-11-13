@@ -230,68 +230,7 @@ int _lab_getch(void) {
 
 // ==============================================================================
 
-void unordered_map_dump_stats(unordered_map_t* umap) {
-    printf("unordered_map:\n");
-    for (int i = 0; i < umap->_num_slots; ++i) {
-        const size_t count = vector_size(umap->_slots + i);
-        if (count) {
-            printf("\t");
-            for (int j = 0; j < vector_size(umap->_slots + i); ++j) {
-                printf("=");
-            }
-            printf("\n");
-        }
-        else {
-            printf("\t.\n");
-        }
-    }
-}
 
-static uint32_t identity_hash_func(const void* key) {
-    return (uint32_t)(*(int*)key);
-}
-
-static bool int_cmp_func(const void* a, const void* b) {
-    return *(const int*)a == *(const int*)b;
-}
-
-typedef struct _test_data {
-    int _a;
-    char _b;
-} test_data_t;
-
-static void test_unordered_map(void) {
-
-    printf("test_unordered_map...");
-
-    unordered_map_t umap;
-    unordered_map_create(&umap, &(unordered_map_create_args_t){
-            .value_size = sizeof(test_data_t),
-            .key_size = sizeof(int),
-            .hash_func = identity_hash_func,
-            .cmp_func = int_cmp_func
-    }, 
-    &_malloc_allocator);
-
-	int k = rand();
-	const void* value = unordered_map_find(&umap, (map_key_t)&k);
-	assert(value == NULL);
-
-    size_t inserted = 0;
-    for (int n = 0; n < 1000; ++n) {
-        k = rand();
-        test_data_t v = (struct _test_data){ ._a = rand(), ._b = n & 0xff };
-        inserted += unordered_map_insert(&umap, (map_key_t)&k, (map_value_t)&v) ? 1:0;
-        value = unordered_map_find(&umap, (map_key_t)&k);
-        assert(value != NULL);
-        assert(((const test_data_t*)value)->_a == v._a);
-    }
-
-    assert(unordered_map_size(&umap) == inserted);
-    //unordered_map_dump_stats(&umap);
-    unordered_map_destroy(&umap);
-    printf("passed\n");
-}
 
 // ==============================================================================
 // JSON stuff
@@ -704,7 +643,7 @@ int main(void)
 */
     test_load_dll();
 
-    test_unordered_map();
+    test_unordered_map(&_malloc_allocator);
     test_vector(&_malloc_allocator);
     test_vector_aligned(&_malloc_allocator);
     test_paged_list(&_malloc_allocator);

@@ -73,6 +73,7 @@ void test_vector_aligned(heap_allocator_t* allocator) {
 	printf("passed\n");
 }
 
+//TODO: change iterator to use at_end kliche from unordered_map instead of has_next
 void test_paged_list(heap_allocator_t* allocator) {
 
 	printf("test_paged_list...");
@@ -199,5 +200,69 @@ void test_hive(heap_allocator_t* allocator) {
 	hive_delete(&hive, "foo");
 	hive_delete(&hive, "list1");
 
+	printf("passed\n");
+}
+
+void unordered_map_dump_stats(unordered_map_t* umap) {
+	printf("unordered_map:\n");
+	for (int i = 0; i < umap->_num_slots; ++i) {
+		const size_t count = vector_size(umap->_slots + i);
+		if (count) {
+			printf("\t");
+			for (int j = 0; j < vector_size(umap->_slots + i); ++j) {
+				printf("=");
+			}
+			printf("\n");
+		}
+		else {
+			printf("\t.\n");
+		}
+	}
+}
+
+static bool int_cmp_func(const void* a, const void* b) {
+	return *(const int*)a == *(const int*)b;
+}
+
+static bool str_cmp_func(const void* a, const void* b) {
+	return strcmp((const char*)a, (const char*)b) == 0;
+}
+
+typedef struct _test_data {
+	int _a;
+	char _b;
+} test_data_t;
+
+void test_unordered_map(heap_allocator_t* allocator) {
+
+	printf("test_unordered_map...");
+
+	unordered_map_t umap;
+	unordered_map_create(&umap, &(unordered_map_create_args_t){
+		.value_size = sizeof(test_data_t),
+			.key_size = sizeof(const char*),
+			.hash_func = map_str_hash_func,
+			.cmp_func = str_cmp_func,
+			.key_type = kMap_Type_Pointer
+	},
+	allocator);
+
+	const void* value = unordered_map_find(&umap, (map_key_t)"foo");
+	assert(value == NULL);
+
+	size_t inserted = 0;
+	for (int n = 0; n < 1000; ++n) {
+		char key[64];
+		sprintf_s(key, sizeof(key), "foo%d", n);
+		test_data_t v = (struct _test_data){ ._a = n + 1, ._b = n & 0xff };
+		inserted += unordered_map_insert(&umap, (map_key_t)key, (map_value_t)&v) ? 1 : 0;
+		value = unordered_map_find(&umap, (map_key_t)key);
+		assert(value != NULL);
+		assert(((const test_data_t*)value)->_a == v._a);
+	}
+
+	assert(unordered_map_size(&umap) == inserted);
+	//unordered_map_dump_stats(&umap);
+	unordered_map_destroy(&umap);
 	printf("passed\n");
 }
