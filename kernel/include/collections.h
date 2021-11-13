@@ -222,6 +222,9 @@ typedef const void* map_value_t;
 typedef uint32_t(*map_key_hash_func)(map_key_t);
 typedef bool(*map_key_cmp_func)(map_key_t, map_key_t);
 
+// helper: returns 32 bit hash (Pearson) for a key as const char*
+_JOS_API_FUNC uint32_t map_str_hash_func(const void* key);
+
 typedef struct _unordered_map {
 
 	vector_t* _slots;
@@ -600,6 +603,44 @@ _JOS_API_FUNC void paged_list_destroy(paged_list_t* paged_list) {
 	}
 
 	memset(paged_list, 0, sizeof(paged_list_t));
+}
+
+_JOS_API_FUNC uint32_t map_str_hash_func(const void* key) {
+	const char* str = (const char*)key;
+	const size_t str_len = strlen(str);
+	if (!str_len)
+		return 0;
+
+	// https://en.wikipedia.org/wiki/Pearson_hashing
+
+	static unsigned char kPermutations[256] = { 0 };
+	// simple "not initialised" test
+	if (kPermutations[0] == kPermutations[1]) {
+		for (int i = 0; i < 256; ++i) {
+			kPermutations[i] = i;
+		}
+		for (int i = 0; i < 254; ++i) {
+			int idx = i + 1 + (rand() % (254 - i));
+			_JOS_SWAP(kPermutations[i], kPermutations[idx]);
+		}
+		// always swap the last two elements
+		_JOS_SWAP(kPermutations[254], kPermutations[255]);
+	}
+
+	unsigned char hash[4];
+	// 8 bit sub hashes
+	hash[0] = (str[0] + 0) % 255;
+	hash[1] = (str[0] + 1) % 255;
+	hash[2] = (str[0] + 2) % 255;
+	hash[3] = (str[0] + 3) % 255;
+	for (size_t n = 0; n < str_len; ++n) {
+		const unsigned char c = (unsigned char)str[n];
+		hash[0] = kPermutations[hash[0] ^ c];
+		hash[1] = kPermutations[hash[1] ^ c];
+		hash[2] = kPermutations[hash[2] ^ c];
+		hash[3] = kPermutations[hash[3] ^ c];
+	}
+	return *(uint32_t*)(hash);
 }
 
 _JOS_API_FUNC void unordered_map_create(unordered_map_t* umap, unordered_map_create_args_t* args, heap_allocator_t* allocator) {
