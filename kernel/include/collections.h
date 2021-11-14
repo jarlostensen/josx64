@@ -224,12 +224,26 @@ typedef bool(*map_key_cmp_func)(map_key_t, map_key_t);
 
 // helper: returns 32 bit hash (Pearson) for a key as const char*
 _JOS_API_FUNC uint32_t map_str_hash_func(const void* key);
+// helper: string compare function
+_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE bool map_str_cmp_func(const void* a, const void* b) {
+	return !strcmp((const char*)a, (const char*)b);
+}
+
+// because C: we need to specify if the map KEY is a pointer or a value 
+// to ensure it is used correctly internally in the maps
+typedef enum _map_type_trait {
+
+	kMap_Type_Value,
+	kMap_Type_Pointer,
+
+} map_type_trait_t;
 
 typedef struct _unordered_map {
 
 	vector_t* _slots;
 	size_t  _value_size;
 	size_t  _key_size;
+	map_type_trait_t _key_type;
 	size_t  _num_slots;
 	size_t  _occupancy;
 	heap_allocator_t* _allocator;
@@ -244,6 +258,7 @@ typedef struct _unordered_map_create_args {
 	map_key_cmp_func    cmp_func;
 	size_t          key_size;
 	size_t          value_size;
+	map_type_trait_t key_type;
 
 } unordered_map_create_args_t;
 
@@ -254,10 +269,65 @@ _JOS_API_FUNC bool unordered_map_insert(unordered_map_t* umap, map_key_t key, ma
 _JOS_INLINE_FUNC size_t unordered_map_size(unordered_map_t* umap) {
 	return umap->_occupancy;
 }
+_JOS_INLINE_FUNC heap_allocator_t* unordered_map_allocator(unordered_map_t* umap) {
+	return umap->_allocator;
+}
+
+/* iterator for unordered_map
+* example usage:
+*  
+* unordered_map_iterator_t iter = unordered_map_iterator_begin(&umap);
+* while (!unordered_map_iterator_at_end(&iter)) {
+*	const char* key = (const char*)unordered_map_iterator_key(&iter);
+*	some_data_t* item = (some_data_t*)unordered_map_iterator_value(&iter);
+*		...
+*	unordered_map_iterator_next(&iter);
+* }
+*/
+typedef struct _unordered_map_iterator {
+
+	unordered_map_t* _umap;
+	size_t	_i;
+	size_t	_j;
+
+} unordered_map_iterator_t;
+
+_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE bool unordered_map_iterator_at_end(unordered_map_iterator_t* iter) {
+	return iter->_i == iter->_umap->_num_slots;
+}
+
+_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE unordered_map_iterator_t unordered_map_iterator_begin(unordered_map_t* umap) {
+	unordered_map_iterator_t iter = {
+		._umap = umap
+	};
+	// make sure we're starting on a non-empty slot
+	do {
+		if (!unordered_map_iterator_at_end(&iter)
+			&&
+			vector_size(iter._umap->_slots + iter._i)) {
+			break;
+		}
+		++iter._i;
+	} while (!unordered_map_iterator_at_end(&iter));
+	return iter;
+}
+
+_JOS_API_FUNC void unordered_map_iterator_next(unordered_map_iterator_t* iter);
+
+_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE map_key_t unordered_map_iterator_key(unordered_map_iterator_t* iter) {
+	if ( iter->_umap->_key_type == kMap_Type_Value )
+		return (map_key_t)vector_at(iter->_umap->_slots + iter->_i, iter->_j);
+	return *(map_key_t**)vector_at(iter->_umap->_slots + iter->_i, iter->_j);
+}
+
+_JOS_INLINE_FUNC _JOS_ALWAYS_INLINE map_value_t unordered_map_iterator_value(unordered_map_iterator_t* iter) {
+	return (map_value_t)((uintptr_t)vector_at(iter->_umap->_slots + iter->_i, iter->_j) + iter->_umap->_key_size);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // paged_list
 // a linked list of pages each holding N items
+// ZZZ: Don't rely on this yet, it will be re-worked in the spirit of UE's FMemStack 
 
 typedef struct _paged_list_page_header {
 
@@ -317,13 +387,12 @@ typedef struct _paged_list_iterator {
 
 } paged_list_iterator_t;
 
-_JO_INLINE_FUNC paged_list_iterator_t paged_list_iterator_begin(paged_list_t* paged_list) {
-	paged_list_iterator_t iter = {
+_JO_INLINE_FUNC paged_list_iterator_t paged_list_iterator_begin(paged_list_t* paged_list) {	
+	return (struct _paged_list_iterator) {
 		._header = paged_list->_page0,
 		._list = paged_list,
-		._offset = (uintptr_t)(paged_list->_page0+1)
+		._offset = (uintptr_t)(paged_list->_page0 + 1)
 	};
-	return iter;
 }
 
 _JO_INLINE_FUNC _JOS_ALWAYS_INLINE bool paged_list_iterator_has_next(paged_list_iterator_t* iter) {
@@ -607,6 +676,8 @@ _JOS_API_FUNC void paged_list_destroy(paged_list_t* paged_list) {
 
 _JOS_API_FUNC uint32_t map_str_hash_func(const void* key) {
 	const char* str = (const char*)key;
+	if (!str)
+		return 0;
 	const size_t str_len = strlen(str);
 	if (!str_len)
 		return 0;
@@ -614,7 +685,7 @@ _JOS_API_FUNC uint32_t map_str_hash_func(const void* key) {
 	// https://en.wikipedia.org/wiki/Pearson_hashing
 
 	static unsigned char kPermutations[256] = { 0 };
-	// simple "not initialised" test
+	// first time we need to initialise with random permutations of [0..255]
 	if (kPermutations[0] == kPermutations[1]) {
 		for (int i = 0; i < 256; ++i) {
 			kPermutations[i] = i;
@@ -650,9 +721,11 @@ _JOS_API_FUNC void unordered_map_create(unordered_map_t* umap, unordered_map_cre
 	umap->_allocator = allocator;
 	umap->_value_size = args->value_size;
 	umap->_key_size = args->key_size;
+	umap->_key_type = args->key_type;
 	umap->_num_slots = 511;
 	umap->_occupancy = 0;
 	umap->_slots = allocator->alloc(allocator, sizeof(vector_t) * umap->_num_slots);
+	_JOS_ASSERT(args->key_type == kMap_Type_Value || sizeof(args->key_size) == sizeof(void*));
 	_JOS_ASSERT(umap->_slots);
 	for (int i = 0; i < umap->_num_slots; ++i) {
 		vector_create(umap->_slots + i, 32, args->key_size + args->value_size, allocator);
@@ -665,46 +738,82 @@ _JOS_API_FUNC void unordered_map_destroy(unordered_map_t* umap) {
 	}
 }
 
-struct _map_slot_value {
-	vector_t* _slot;
-	void* _value;
-};
+_JOS_INLINE_FUNC map_key_t _unordered_map_typed_key(unordered_map_t* umap, map_key_t key) {
+	return umap->_key_type == kMap_Type_Value ? key : *(map_key_t**)key;
+}
 
-struct _map_slot_value _unordered_map_find(unordered_map_t* umap, map_key_t key) {
+typedef struct _map_slot_value {
+	vector_t* _slot;
+	size_t _i;
+	void* _value;
+} _map_slot_value_t;
+_JOS_INLINE_FUNC _map_slot_value_t _unordered_map_find(unordered_map_t* umap, map_key_t key) {	
 	uint32_t hash = umap->_hash_func(key);
-	size_t i = hash % umap->_num_slots;
+	size_t i = hash % umap->_num_slots;		
 	vector_t* slot_vector = umap->_slots + i;
 	for (size_t n = 0u; n < vector_size(slot_vector); ++n) {
 		const void* pair = vector_at(slot_vector, n);
-		if (umap->_cmp_func(pair, key)) {
+		const map_key_t typed_key = _unordered_map_typed_key(umap, pair);
+		if (umap->_cmp_func(typed_key, key)) {
 			return (struct _map_slot_value) {
 				._slot = slot_vector,
+					._i = n,
 					._value = (void*)((uintptr_t)pair + umap->_key_size)
 			};
 		}
 	}
 	return (struct _map_slot_value) {
-		._slot = slot_vector,
-			._value = NULL
+		._slot = slot_vector
 	};
 }
 
-_JOS_API_FUNC map_value_t unordered_map_find(unordered_map_t* umap, map_key_t key) {
-	struct _map_slot_value sv = _unordered_map_find(umap, key);
+_JOS_API_FUNC map_value_t unordered_map_find(unordered_map_t* umap, map_key_t key) {	
+	_map_slot_value_t sv = _unordered_map_find(umap, key);
 	return (map_value_t)sv._value;
 }
 
 _JOS_API_FUNC bool unordered_map_insert(unordered_map_t* umap, map_key_t key, map_value_t item) {
-	struct _map_slot_value sv = _unordered_map_find(umap, key);
+	_map_slot_value_t sv = _unordered_map_find(umap, key);
 	if (sv._value) {
 		// found, just poke the value
 		memcpy(sv._value, item, umap->_value_size);
 		return false;
 	}
 	// otherwise we need to add it 
-	vector_push_back_pair(sv._slot, key, umap->_key_size, item, umap->_value_size);
+	if (umap->_key_type == kMap_Type_Value) {
+		vector_push_back_pair(sv._slot, key, umap->_key_size, item, umap->_value_size);
+	}
+	else {
+		vector_push_back_pair(sv._slot, &key, umap->_key_size, item, umap->_value_size);
+	}
 	umap->_occupancy++;
 	return true;
+}
+
+_JOS_API_FUNC bool unordered_map_remove(unordered_map_t* umap, map_key_t key) {
+	_map_slot_value_t sv = _unordered_map_find(umap, key);
+	if (sv._value) {
+		vector_remove(sv._slot, sv._i);
+		return true;
+	}
+	return false;
+}
+
+_JOS_API_FUNC void unordered_map_iterator_next(unordered_map_iterator_t* iter) {
+	if ((iter->_j + 1) < vector_size(iter->_umap->_slots + iter->_i)) {
+		++iter->_j;
+	}
+	else {
+		do {
+			++iter->_i;
+			if (!unordered_map_iterator_at_end(iter)
+				&&
+				vector_size(iter->_umap->_slots + iter->_i)) {
+				break;
+			}
+		} while (!unordered_map_iterator_at_end(iter));
+		iter->_j = 0;
+	}
 }
 
 #endif
