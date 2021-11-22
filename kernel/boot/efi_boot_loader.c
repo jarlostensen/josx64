@@ -1,10 +1,8 @@
 #include <c-efi.h>
-#include <jos.h>
+#include <josx64.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <wchar.h>
 #include <stddef.h>
 
@@ -13,7 +11,6 @@
 #include <video.h>
 #include <tasks.h>
 #include <output_console.h>
-#include <programs/scroller.h>
 #include <font8x8/font8x8_basic.h>
 #include <hex_dump.h>
 #include <smp.h>
@@ -73,158 +70,23 @@ void uefi_init(CEfiHandle h) {
     _JOS_KTRACE_CHANNEL("efi_main", "kernel starting");
 }
 
-static jo_status_t main_task(void* ptr);
-static void start_debugger() {
+static void start_debugger(void) {
     // start debugger
     uint32_t col = output_console_get_colour();
     output_console_set_colour(0xff2222);
     output_console_output_string(L"\n\nwaiting for debugger...");
 
     debugger_wait_for_connection(&_pe_ctx, (uint64_t)_lip->image_base);
-    debugger_set_breakpoint((uintptr_t)main_task);
+    debugger_set_breakpoint((uintptr_t)main);
 
     output_console_output_string(L"connected\n\n");
     output_console_set_colour(col);
 }
 
-static bool _read_input(void) {
-    wchar_t buf[128];
-    if ( keyboard_has_key() ) {
-        uint32_t key = keyboard_get_last_key();
-        if ( KEYBOARD_VK_PRESSED(key) ) {
-            short c = (short)KEYBOARD_VK_CHAR(key);
-            
-                switch(c) {
-                case KEYBOARD_VK_ESC:
-                    output_console_output_string(L"\ngot ESC\n");
-                    return true;
-                case KEYBOARD_VK_RIGHT:
-                    output_console_output_string(L" -> ");
-                    break;
-                case KEYBOARD_VK_LEFT:
-                    output_console_output_string(L" <- ");
-                    break;
-                case KEYBOARD_VK_UP:
-                    output_console_output_string(L" ^ ");
-                    break;
-                case KEYBOARD_VK_DOWN:
-                    output_console_output_string(L" v ");
-                    break;
-                case KEYBOARD_VK_BACKSPACE:
-                    output_console_output_string(L"bs");
-                    break;
-                case KEYBOARD_VK_CR:
-                    output_console_line_break();
-                    break;
-                case KEYBOARD_VK_F1:
-                    output_console_output_string(L" F1 ");
-                    break;
-                case KEYBOARD_VK_F2:
-                    output_console_output_string(L" F2 ");
-                    break;
-                case KEYBOARD_VK_F3:
-                    output_console_output_string(L" F3 ");
-                    break;
-                case KEYBOARD_VK_F4:
-                    output_console_output_string(L" F4 ");
-                    break;
-                case KEYBOARD_VK_F5:
-                    output_console_output_string(L" F5 ");
-                    break;
-                case KEYBOARD_VK_F6:
-                    output_console_output_string(L" F6 ");
-                    break;
-                case KEYBOARD_VK_F7:
-                    output_console_output_string(L" F7 ");
-                    break;
-                case KEYBOARD_VK_F8:
-                    output_console_output_string(L" F8 ");
-                    break;
-                case KEYBOARD_VK_F9:
-                    output_console_output_string(L" F9 ");
-                    break;
-                case KEYBOARD_VK_F10:
-                    output_console_output_string(L" F10 ");
-                    break;
-                case KEYBOARD_VK_F11:
-                    output_console_output_string(L" F11 ");
-                    break;
-                case KEYBOARD_VK_F12:
-                    output_console_output_string(L" F12 ");
-                    break;
-                default: {
-                    swprintf(buf, 128, L"0x%x ", key);
-                    output_console_output_string(buf);                
-                }
-                break;
-            }                
-        }
-    }
-    return false;
-}
+CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st);
 
-static jo_status_t scroller_task(void* ptr) {
-    (void)ptr;
-    _JOS_KTRACE_CHANNEL("scroller_task", "starting");
-
-    scroller_initialise(&(rect_t){
-        .top = 250,
-        .left = 32,
-        .bottom = 400,
-        .right = 632
-    });
-
-    uint64_t t0 = clock_ms_since_boot();     
-    while (true) {
-        uint64_t t1 = clock_ms_since_boot();
-        if (t1 - t0 >= 33) {
-            t0 = t1;
-            scroller_render_field();            
-        }
-        tasks_yield();
-    }
-}
-
-static jo_status_t main_task(void* ptr) {
-    
-    _JOS_KTRACE_CHANNEL("main_task", "starting");
-    output_console_output_string(L"any key or ESC...\n");
-    
-    tasks_create(&(task_create_args_t) {
-        .func = scroller_task,
-        .pri = kTaskPri_Normal,
-        .name = "scroller_task"
-    });
-    
-    do {
-        
-        tasks_yield();
-
-    } while(!_read_input());
-
-    output_console_line_break();
-    output_console_set_colour(video_make_color(0xff,0,0));
-    wchar_t buf[128];
-    swprintf(buf,128,L"\nmain task is done @ %dms\n", clock_ms_since_boot());
-    output_console_output_string(buf);
-    
-    _JOS_KTRACE_CHANNEL("main_task", "terminating %llu ms after boot", clock_ms_since_boot());    
-    
-    return _JO_STATUS_SUCCESS;
-}
-
-CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
-{    
-    _st = st;
-    _boot_services = st->boot_services;
-    _EFI_PRINT(L"jox64\n");
-    
-    uefi_init(h);
-    if ( _JO_FAILED(hive_get(kernel_hive(), "kernel:booted", 0)) ) {
-        uefi_panic(L"KERNEL IS NOT PROPERLY BOOTED");
-    }
-
-    wchar_t buf[256];
+static void dump_some_system_info(void) {
+ wchar_t buf[256];
     const size_t bufcount = sizeof(buf)/sizeof(wchar_t);        
     swprintf(buf, bufcount, L"\nimage is %llu bytes, loaded at 0x%llx, efi_main @ 0x%llx, PE entry point @ 0x%llx\n", 
         _lip->image_size, _lip->image_base, efi_main, peutil_entry_point(&_pe_ctx));
@@ -316,6 +178,20 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
             }
         }
     }
+}
+
+CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
+{    
+    _st = st;
+    _boot_services = st->boot_services;
+    _EFI_PRINT(L"jox64\n");
+    
+    uefi_init(h);
+    if ( _JO_FAILED(hive_get(kernel_hive(), "kernel:booted", 0)) ) {
+        uefi_panic(L"KERNEL IS NOT PROPERLY BOOTED");
+    }
+
+    dump_some_system_info();
     
 #ifdef _JOS_KERNEL_BUILD
     output_console_output_string(L"\n\nkernel build\n");
@@ -325,12 +201,6 @@ CEfiStatus efi_main(CEfiHandle h, CEfiSystemTable *st)
     output_console_output_string(L"\n\nkernel started\n");
     start_debugger(); 
     
-    tasks_create(&(task_create_args_t){
-         .func = main_task,
-            .pri = kTaskPri_Normal,
-            .name = "main_task"
-    });
-
     kernel_runtime_start();
 
     return C_EFI_SUCCESS;

@@ -1,6 +1,5 @@
 
-#include <jos.h>
-#include <scroller.h>
+#include "scroller.h"
 #include <video.h>
 #include <stdint.h>
 #include <stdlib.h>

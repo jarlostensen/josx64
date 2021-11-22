@@ -1,5 +1,5 @@
 
-#include <jos.h>
+#include <josx64.h>
 
 #include <c-efi.h>
 
@@ -131,7 +131,22 @@ _JOS_API_FUNC jo_status_t kernel_runtime_init(CEfiHandle h, CEfiSystemTable* sys
     return _JO_STATUS_SUCCESS;
 }
 
+static jo_status_t main_task(void* ptr) {
+    (void)ptr;
+    //ZZZ:
+    if ( main(0, NULL) == 0 ) {
+        return _JO_STATUS_SUCCESS;    
+    }
+    return _JO_STATUS_UNKNOWN;
+}
+
 _JOS_NORETURN void  kernel_runtime_start(void) {
+
+    tasks_create(&(task_create_args_t) {
+        .func = main_task,
+        .pri = kTaskPri_Normal,
+        .name = "main"
+    });
     tasks_start_idle();
     _JOS_UNREACHABLE();
 }
