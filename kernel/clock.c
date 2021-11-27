@@ -130,7 +130,7 @@ void clock_initialise(void) {
     _pit_interval = _make_pit_interval(HZ);
     
     swprintf(buf,128,L"PIT initialised to %dHz\n", HZ);
-    output_console_output_string(buf);
+    output_console_output_string_w(buf);
 
     i8253_start_clock(_pit_interval._divisor);
     interrupts_set_irq_handler(&(irq_handler_def_t){ 
@@ -146,7 +146,7 @@ void clock_initialise(void) {
     });
     _enable_rtc_timer();
 
-    output_console_output_string(L"waiting for about 10 MS...\n");
+    output_console_output_string_w(L"waiting for about 10 MS...\n");
 
     uint64_t ms_start = clock_ms_since_boot();
     uint64_t ms_now = clock_ms_since_boot();
@@ -159,7 +159,7 @@ void clock_initialise(void) {
     _micro_epsilon = delta/10000;
 
     swprintf(buf,128,L"clock: bsp freq estimated ~ %llu MHz, 1ue = %llu, %llu 1KHz ticks measured\n", bsp_freq/1000000, _micro_epsilon, _1khz_counter);
-    output_console_output_string(buf);
+    output_console_output_string_w(buf);
 
     _JOS_KTRACE_CHANNEL(kClockChannel, "initialised");
 }

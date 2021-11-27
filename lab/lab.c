@@ -461,7 +461,7 @@ static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         output_console_set_bg_colour(0x6495ed);
         output_console_set_font((const uint8_t*)font8x8_basic, 8, 8);
         video_clear_screen(0x6495ed);
-        output_console_output_string(L"Press CR...\n");
+        output_console_output_string_w(L"Press CR...\n");
 
         srand(1001107);
         scroller_initialise(&(rect_t) {

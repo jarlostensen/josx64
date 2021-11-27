@@ -63,7 +63,8 @@ typedef struct _video_glyp_draw_context {
 void video_create_draw_glyph_context(draw_text_segment_args_t* args, _video_glyp_draw_context_t* out_ctx);
 void video_draw_glyph(_video_glyp_draw_context_t* ctx, const wchar_t c);
 
-void video_draw_text_segment(draw_text_segment_args_t* args, const wchar_t* text);
+void video_draw_text_segment_w(draw_text_segment_args_t* args, const wchar_t* text);
+void video_draw_text_segment_a(draw_text_segment_args_t* args, const char* text);
 void video_draw_text(draw_text_segment_args_t* args, const wchar_t* text);
 
 void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t src_height, size_t src_stride,

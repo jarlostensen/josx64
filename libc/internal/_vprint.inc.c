@@ -45,7 +45,7 @@
 #define TEXT(s) __TEXT(s)
 
 
-static int WA_NAME(printdecimal)(ctx_t* ctx, long long d, int un_signed)
+static int WA_NAME(printdecimal)(_vprint_ctx_t* ctx, long long d, int un_signed)
 {
 	int written = 0;
 	if (!d)
@@ -91,7 +91,7 @@ static int WA_NAME(printdecimal)(ctx_t* ctx, long long d, int un_signed)
 	return written;
 }
 
-static int WA_NAME(printhex)(ctx_t* ctx, int width, long long d)
+static int WA_NAME(printhex)(_vprint_ctx_t* ctx, int width, long long d)
 {
 	static const CHAR* kHexDigits = TEXT("0123456789abcdef");
 	int written = 0;
@@ -191,7 +191,7 @@ static int WA_NAME(printhex)(ctx_t* ctx, int width, long long d)
 	return written;
 }
 
-static int WA_NAME(printbin)(ctx_t* ctx, unsigned long long d)
+static int WA_NAME(printbin)(_vprint_ctx_t* ctx, unsigned long long d)
 {
 	int written = 0;
 	unsigned long long dd = d;
@@ -213,7 +213,7 @@ static int WA_NAME(printbin)(ctx_t* ctx, unsigned long long d)
 	return written;
 }
 
-int WA_NAME(_vprint_impl)(ctx_t* ctx, const CHAR* __restrict format, va_list parameters)
+int WA_NAME(_vprint_impl)(_vprint_ctx_t* ctx, const CHAR* __restrict format, va_list parameters)
 {
 	int written = 0;
 
@@ -820,7 +820,7 @@ int VSXPRINTF(CHAR* __restrict buffer, size_t bufsz, const CHAR* __restrict form
 	if (!buffer || !format || !format[0])
 		return 0;
 
-	int written = WA_NAME(_vprint_impl)(&(ctx_t) {
+	int written = WA_NAME(_vprint_impl)(&(_vprint_ctx_t) {
 		.WA_NAME(_print) = (bufsz ? WA_NAME(buffer_print) : WA_NAME(buffer_print_count)),
 		.DUAL_WA_NAME(_print) = (bufsz ? DUAL_WA_NAME(buffer_print) : DUAL_WA_NAME(buffer_print_count)),
 		.DUAL_WA_NAME(_print_convert) = (bufsz ? BUFFER_PRINT_CONVERT : DUAL_WA_NAME(buffer_print_count)),

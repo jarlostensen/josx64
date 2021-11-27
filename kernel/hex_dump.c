@@ -187,7 +187,7 @@ static size_t _hex_dump_hex_line(void* mem, size_t bytes, enum hex_dump_unit_siz
 	if(read)
 	{
 #ifdef _JOS_KERNEL_BUILD
-		output_console_output_string(ctx._line);
+		output_console_output_string_w(ctx._line);
 		output_console_line_break();
 #else
 		wprintf(L"%s\n", ctx._line);

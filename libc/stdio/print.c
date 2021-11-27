@@ -5,9 +5,8 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
-#include <kernel/output_console.h>
-#include "../internal/include/libc_internal.h"
-#include "../internal/include/_stdio.h"
+#include <output_console.h>
+#include "../internal/include/_vprint.h"
 
 #ifndef _JOS_KERNEL_BUILD
 #include <intrin.h>
@@ -27,8 +26,8 @@ static void console_flush(void* ctx)
 	printf_ctx_t* printf_ctx = (printf_ctx_t*)ctx;
 	if (printf_ctx->_wp)
 	{
-		output_console_print(&_stdout, printf_ctx->_line);
-		output_console_flush(&_stdout);
+		output_console_output_string_a(printf_ctx->_line);
+		//ZZZ:output_console_flush(&_stdout);
 		printf_ctx->_wp = 0;
 	}
 }
@@ -64,12 +63,12 @@ static int console_putchar(void* ctx, int c) {
 	return 1;
 }
 
-int _JOS_LIBC_FUNC_NAME(printf)(const char* __restrict format, ...)
+extern int _JOS_LIBC_FUNC_NAME(printf)(const char* __restrict format, ...)
 {
 	va_list parameters;
 	va_start(parameters, format);
-	int count = _vprint_impl(&(ctx_t) {
-		._print = console_print,
+	int count = _vprint_impl_a(&(_vprint_ctx_t) {
+		._print_a = console_print,
 			._putchar = console_putchar,
 			._flush = console_flush,
 			._that = (void*) & (printf_ctx_t) { ._wp = 0 }

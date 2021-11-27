@@ -107,7 +107,7 @@ void output_console_line_break(void) {
     video_present();
 }
 
-void output_console_output_string(const wchar_t* text) {
+void output_console_output_string_w(const wchar_t* text) {
 
     size_t start = 0;
     size_t pos = 0;
@@ -116,7 +116,7 @@ void output_console_output_string(const wchar_t* text) {
     {
         if (c == L'\n') {
             if ((pos - start) > 1) {
-                video_draw_text_segment(&(draw_text_segment_args_t) {
+                video_draw_text_segment_w(&(draw_text_segment_args_t) {
                     .left = _active_context->_cursor_pos.x,
                         .top = _active_context->_cursor_pos.y,
                         .colour = _active_context->_colour,
@@ -138,7 +138,57 @@ void output_console_output_string(const wchar_t* text) {
     }
 
     if (start != pos) {
-        video_draw_text_segment(&(draw_text_segment_args_t) {
+        video_draw_text_segment_w(&(draw_text_segment_args_t) {
+            .left = _active_context->_cursor_pos.x,
+                .top = _active_context->_cursor_pos.y,
+                .colour = _active_context->_colour,
+                .bg_colour = _active_context->_bg_colour,
+                .font_ptr = _active_context->_font,
+                .seg_offs = start,
+                .seg_len = pos - start,
+        },
+            text);
+
+        _active_context->_cursor_pos.x += pos * CHAR_WIDTH_PIXELS;
+    }
+
+    //TODO: not sure if this is the best place to do this, but it may be...?
+    //      for substantial updates a "region" concept is obviously ideal
+    video_present();
+}
+
+void output_console_output_string_a(const char* text) {
+
+    size_t start = 0;
+    size_t pos = 0;
+    char c = *text;
+    while (c)
+    {
+        if (c == '\n') {
+            if ((pos - start) > 1) {
+                video_draw_text_segment_a(&(draw_text_segment_args_t) {
+                    .left = _active_context->_cursor_pos.x,
+                        .top = _active_context->_cursor_pos.y,
+                        .colour = _active_context->_colour,
+                        .bg_colour = _active_context->_bg_colour,
+                        .font_ptr = _active_context->_font,
+                        .seg_offs = start,
+                        .seg_len = pos - start,
+                },
+                    text);
+            }
+            ++pos;
+            start = pos;
+            output_console_line_break();
+        }
+        else {
+            ++pos;
+        }
+        c = text[pos];
+    }
+
+    if (start != pos) {
+        video_draw_text_segment_a(&(draw_text_segment_args_t) {
             .left = _active_context->_cursor_pos.x,
                 .top = _active_context->_cursor_pos.y,
                 .colour = _active_context->_colour,

@@ -7,6 +7,7 @@
 #else
 #include <windows.h>
 #endif
+#include <jos.h>
 
 typedef enum _peutil_instance_type
 {
@@ -41,11 +42,6 @@ bool peutil_bind(peutil_pe_context_t* ctx, const void* ptr, peutil_instance_type
 */
 uintptr_t peutil_entry_point(peutil_pe_context_t* ctx);
 
-/**
-* true if 64 bit PE image
-*/
-bool peutil_is_64_bit(peutil_pe_context_t* ctx);
-
 const void* peutil_image_section(peutil_pe_context_t *ctx, const size_t image_section_entry_id);
 
 const IMAGE_RESOURCE_DIRECTORY* peutil_resource_directory(peutil_pe_context_t *ctx);
@@ -59,3 +55,6 @@ const void* peutil_rva_to_phys(peutil_pe_context_t* ctx, DWORD rva);
 const IMAGE_SECTION_HEADER* peutil_section_for_rva(peutil_pe_context_t* ctx, DWORD rva);
 
 const bool peutil_phys_is_executable(peutil_pe_context_t* ctx, uintptr_t phys, uintptr_t* out_rva);
+
+const void* peutil_get_proc_name_address(peutil_pe_context_t* ctx, const char* proc_name);
+void peutil_load_dll(peutil_pe_context_t* ctx, page_allocator_t* allocator);

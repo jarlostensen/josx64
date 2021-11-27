@@ -23,65 +23,65 @@ static bool _read_input(void) {
             
                 switch(c) {
                 case KEYBOARD_VK_ESC:
-                    output_console_output_string(L"\ngot ESC\n");
+                    output_console_output_string_w(L"\ngot ESC\n");
                     return true;
                 case KEYBOARD_VK_RIGHT:
-                    output_console_output_string(L" -> ");
+                    output_console_output_string_w(L" -> ");
                     break;
                 case KEYBOARD_VK_LEFT:
-                    output_console_output_string(L" <- ");
+                    output_console_output_string_w(L" <- ");
                     break;
                 case KEYBOARD_VK_UP:
-                    output_console_output_string(L" ^ ");
+                    output_console_output_string_w(L" ^ ");
                     break;
                 case KEYBOARD_VK_DOWN:
-                    output_console_output_string(L" v ");
+                    output_console_output_string_w(L" v ");
                     break;
                 case KEYBOARD_VK_BACKSPACE:
-                    output_console_output_string(L"bs");
+                    output_console_output_string_w(L"bs");
                     break;
                 case KEYBOARD_VK_CR:
                     output_console_line_break();
                     break;
                 case KEYBOARD_VK_F1:
-                    output_console_output_string(L" F1 ");
+                    output_console_output_string_w(L" F1 ");
                     break;
                 case KEYBOARD_VK_F2:
-                    output_console_output_string(L" F2 ");
+                    output_console_output_string_w(L" F2 ");
                     break;
                 case KEYBOARD_VK_F3:
-                    output_console_output_string(L" F3 ");
+                    output_console_output_string_w(L" F3 ");
                     break;
                 case KEYBOARD_VK_F4:
-                    output_console_output_string(L" F4 ");
+                    output_console_output_string_w(L" F4 ");
                     break;
                 case KEYBOARD_VK_F5:
-                    output_console_output_string(L" F5 ");
+                    output_console_output_string_w(L" F5 ");
                     break;
                 case KEYBOARD_VK_F6:
-                    output_console_output_string(L" F6 ");
+                    output_console_output_string_w(L" F6 ");
                     break;
                 case KEYBOARD_VK_F7:
-                    output_console_output_string(L" F7 ");
+                    output_console_output_string_w(L" F7 ");
                     break;
                 case KEYBOARD_VK_F8:
-                    output_console_output_string(L" F8 ");
+                    output_console_output_string_w(L" F8 ");
                     break;
                 case KEYBOARD_VK_F9:
-                    output_console_output_string(L" F9 ");
+                    output_console_output_string_w(L" F9 ");
                     break;
                 case KEYBOARD_VK_F10:
-                    output_console_output_string(L" F10 ");
+                    output_console_output_string_w(L" F10 ");
                     break;
                 case KEYBOARD_VK_F11:
-                    output_console_output_string(L" F11 ");
+                    output_console_output_string_w(L" F11 ");
                     break;
                 case KEYBOARD_VK_F12:
-                    output_console_output_string(L" F12 ");
+                    output_console_output_string_w(L" F12 ");
                     break;
                 default: {
                     swprintf(buf, 128, L"0x%x ", key);
-                    output_console_output_string(buf);                
+                    output_console_output_string_w(buf);                
                 }
                 break;
             }                
@@ -115,7 +115,7 @@ static jo_status_t scroller_task(void* ptr) {
 static jo_status_t main_task(void* ptr) {
     
     _JOS_KTRACE_CHANNEL("main_task", "starting");
-    output_console_output_string(L"any key or ESC...\n");
+    output_console_output_string_w(L"any key or ESC...\n");
     
     tasks_create(&(task_create_args_t) {
         .func = scroller_task,
@@ -133,7 +133,7 @@ static jo_status_t main_task(void* ptr) {
     output_console_set_colour(video_make_color(0xff,0,0));
     wchar_t buf[128];
     swprintf(buf,128,L"\nmain task is done @ %dms\n", clock_ms_since_boot());
-    output_console_output_string(buf);
+    output_console_output_string_w(buf);
     
     _JOS_KTRACE_CHANNEL("main_task", "terminating %llu ms after boot", clock_ms_since_boot());    
     
@@ -142,11 +142,13 @@ static jo_status_t main_task(void* ptr) {
 
 int main(int argc, char* argv[]) {
 
-    tasks_create(&(task_create_args_t){
-         .func = main_task,
-            .pri = kTaskPri_Normal,
-            .name = "main_task"
-    });
+    // tasks_create(&(task_create_args_t){
+    //      .func = main_task,
+    //         .pri = kTaskPri_Normal,
+    //         .name = "main_task"
+    // });
+
+    printf("**************THIS IS MAIN!!!\n");
 
     return 0;
 }

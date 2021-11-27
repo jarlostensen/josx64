@@ -655,7 +655,7 @@ _JOS_API_FUNC void debugger_initialise(heap_allocator_t* allocator) {
 
     vector_create(&_breakpoints, 16, sizeof(debugger_breakpoint_t), _allocator);
 
-    output_console_output_string(L"debug handler initialised\n");    
+    output_console_output_string_w(L"debug handler initialised\n");    
 }
 
 _JOS_API_FUNC void debugger_wait_for_connection(peutil_pe_context_t* pe_ctx, uint64_t image_base) {
