@@ -1,6 +1,8 @@
 #include <string.h>
 #include <stdint.h>
 
+// https://github.com/nadavrot/memset_benchmark/tree/main/src
+
 void* memcpy(void* restrict dstptr, const void* restrict srcptr, size_t size) {
 
 	uint32_t* dst = (uint32_t*) dstptr;

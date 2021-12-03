@@ -89,6 +89,10 @@ _JOS_INLINE_FUNC uint64_t x86_64_read_dr6(void) {
     return val;
 }
 
+_JOS_INLINE_FUNC void x86_64_flush_tlb_for_address(uintptr_t addr) {
+   __asm__ volatile("invlpg (%0)" ::"r" (addr) : "memory");
+}
+
 // (safe) dummy write to POST port, this usually provides a ~usecond delay
 #define x86_64_io_wait() x86_64_outb(0x80, 0)
 #define x86_64_debugbreak() __asm__ volatile( "int $03" )

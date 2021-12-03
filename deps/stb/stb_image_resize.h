@@ -2431,6 +2431,8 @@ static int stbir__resize_arbitrary(
     stbir_filter h_filter, stbir_filter v_filter,
     stbir_edge edge_horizontal, stbir_edge edge_vertical, stbir_colorspace colorspace)
 {
+    (void)alloc_context;
+
     stbir__info info;
     int result;
     size_t memory_required;

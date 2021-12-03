@@ -13,7 +13,7 @@
 
 #include <jos.h>
 
-unsigned char * base64_encode(const unsigned char *src, size_t len, size_t *out_len, heap_allocator_t* allocator);
-unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len, heap_allocator_t* allocator);
+unsigned char * base64_encode(const unsigned char *src, size_t len, size_t *out_len, generic_allocator_t* allocator);
+unsigned char * base64_decode(const unsigned char *src, size_t len, size_t *out_len, generic_allocator_t* allocator);
 
 #endif /* BASE64_H */

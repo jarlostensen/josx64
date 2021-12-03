@@ -69,7 +69,7 @@ _JOS_INLINE_FUNC int _fwrite(const char* src, size_t elem_size, size_t elem_coun
             }
         }
     }
-    return transferred;
+    return (int)transferred;
 }
 
 _JOS_INLINE_FUNC int _fread(void* buffer, size_t elem_size, size_t elem_count, IO_FILE* stream) {
@@ -85,7 +85,7 @@ _JOS_INLINE_FUNC int _fread(void* buffer, size_t elem_size, size_t elem_count, I
     _io_file_update_pos(stream, chunk_len);
     //TODO: what to do if full?
     //NOTE: we either got what we asked for or we didn't (blocking?)
-    return transferred;
+    return (int)transferred;
 }
 
 _JOS_INLINE_FUNC size_t _ftell(IO_FILE* stream) {

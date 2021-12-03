@@ -69,9 +69,6 @@
     <ClCompile Include="..\kernel\video.c">
       <Filter>kernel</Filter>
     </ClCompile>
-    <ClCompile Include="..\kernel\programs\scroller.c">
-      <Filter>kernel\programs</Filter>
-    </ClCompile>
     <ClCompile Include="test_allocators.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -80,6 +77,12 @@
     </ClCompile>
     <ClCompile Include="..\libc\extensions\base64.c">
       <Filter>Header Files\libc</Filter>
+    </ClCompile>
+    <ClCompile Include="programs\scroller.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="dev_ui.c">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

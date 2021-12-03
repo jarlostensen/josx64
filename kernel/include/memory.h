@@ -4,6 +4,8 @@
 #include <c-efi.h>
 #include <jos.h>
 
+#define JOSX_MINIMUM_STARTUP_HEAP_SIZE   0x4000000
+
 typedef enum _memory_pool_type {
 
     // pool supports arbitrarily sized allocations and frees
@@ -23,7 +25,7 @@ _JOS_API_FUNC size_t          memory_get_available(void);
 // NOTE: if size>0 it designates the amount of memory available to allocate from the pool, NOT including internal structures. 
 //       use memory_pool_real_size to calculate the actual amount of memory used by the pool
 // NOTE: if size==0 all available memory will be allocated.
-_JOS_API_FUNC heap_allocator_t*  memory_allocate_pool(memory_pool_type_t type, size_t size);
+_JOS_API_FUNC generic_allocator_t*  memory_allocate_pool(memory_pool_type_t type, size_t size);
 // returns the size in bytes of the overhead for a memory pool of given type and given free size
 _JOS_API_FUNC size_t  memory_pool_overhead(memory_pool_type_t type);
 

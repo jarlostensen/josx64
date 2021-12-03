@@ -5,6 +5,7 @@
 #include <clock.h>
 #include <keyboard.h>
 #include <video.h>
+#include <memory.h>
 
 #include <string.h>
 #include <stdlib.h>
@@ -149,6 +150,7 @@ int main(int argc, char* argv[]) {
     // });
 
     printf("**************THIS IS MAIN!!!\n");
+    _memory_debugger_dump_map();
 
     return 0;
 }

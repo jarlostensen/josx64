@@ -3,6 +3,8 @@
 
 #define _CRT_SECURE_NO_WARNINGS 1
 
+#pragma warning(disable:5105)
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -23,7 +25,6 @@
 #include "../kernel/include/pe.h"
 #include "../kernel/include/video.h"
 #include "../kernel/include/output_console.h"
-#include "../kernel/programs/scroller.h"
 #include "../kernel/include/collections.h"
 #include "../libc/include/extensions/slices.h"
 #include "../libc/include/extensions/pdb_index.h"
@@ -35,28 +36,29 @@
 #include "../kernel/include/arena_allocator.h"
 #include "../kernel/include/hive.h"
 
-
 #include "tests.h"
 
 
-heap_allocator_t _malloc_allocator;
+generic_allocator_t _malloc_allocator;
 
-static void* malloc_alloc(heap_allocator_t* alloc, size_t size) {
+extern void test_ui_loop(generic_allocator_t* allocator, const uint8_t* font8x8);
+
+static void* malloc_alloc(generic_allocator_t* alloc, size_t size) {
 	(void)alloc;
 	return malloc(size);
 }
 
-static void* malloc_realloc(heap_allocator_t* alloc, void* ptr, size_t size) {
+static void* malloc_realloc(generic_allocator_t* alloc, void* ptr, size_t size) {
 	(void)alloc;
 	return realloc(ptr, size);
 }
 
-static void malloc_free(heap_allocator_t* alloc, void* ptr) {
+static void malloc_free(generic_allocator_t* alloc, void* ptr) {
 	(void)alloc;
 	free(ptr);
 }
 
-static size_t malloc_avail(heap_allocator_t* alloc) {
+static size_t malloc_avail(generic_allocator_t* alloc) {
 	(void)alloc;
 	return (size_t)~0;
 }
@@ -91,7 +93,7 @@ void dump_index(pdb_index_node_t* root, int level) {
     }
     if (!vector_is_empty(&root->_children)) {
         printf("\n");
-        const unsigned child_count = vector_size(&root->_children);
+        const size_t child_count = vector_size(&root->_children);
         for (unsigned c = 0; c < child_count; ++c) {
             pdb_index_node_t* child = (pdb_index_node_t*)vector_at(&root->_children, c);
             dump_index(child, level + 1);
@@ -102,17 +104,15 @@ void dump_index(pdb_index_node_t* root, int level) {
     }
 }
 
-void test_search(const char* str) {
-
-    pdb_index_node_t root, * leaf;
-    memset(&root, 0, sizeof(root));
-
-    char_array_slice_t body;
-    char_array_slice_create(&body, str, 0, 0);
-    char_array_slice_t prefix = pdb_index_next_token(&body);
-    pdb_index_match_result m = pdb_index_match_search(&root, prefix, body, &leaf);
-
-}
+//void test_search(const char* str) {
+//
+//    pdb_index_node_t root, * leaf;
+//    memset(&root, 0, sizeof(root));
+//
+//    char_array_slice_t body;
+//    char_array_slice_create(&body, str, 0, 0);
+//    pdb_index_next_token(&body);
+//}
 
 
 // ======================================================================================
@@ -189,35 +189,41 @@ void test_fstream_io(void) {
 
     char buffer[1024];
     const char* data = "hello world";
-    IO_FILE out_file = { ._buffer._begin = buffer };
+    IO_FILE out_file = { ._buffer._begin = (uint8_t*)buffer };
     out_file._buffer._end = out_file._buffer._begin + sizeof(buffer);
     out_file._buffer._wp = out_file._buffer._begin;
     out_file._buffer._rp = out_file._buffer._begin;
     out_file._buffer._size = sizeof(buffer);
     int written = _fwrite(data, 1, strlen(data) + 1, &out_file);
+    (void)written;
     
-    IO_FILE in_file = { ._buffer._begin = buffer };
+    IO_FILE in_file = { ._buffer._begin = (uint8_t*)buffer };
+    (void)in_file;
     out_file._buffer._end = out_file._buffer._begin + sizeof(buffer);
     out_file._buffer._wp = out_file._buffer._begin;
     out_file._buffer._rp = out_file._buffer._begin;
     out_file._buffer._size = 8;
     char out_buffer[128];
     int read = _fread(out_buffer, 1, strlen(data) + 1, &out_file);
-    _stdout_write(0, out_buffer, read);
+    _stdout_write(0, (const unsigned char*)out_buffer, read);
 }
 
 static int _jos_stdin_getch(void) {
-    return _jos_getc(jos_stdin);
+    assert(false);
+    return 0;
 }
 
 typedef int (*_getch_t)(void);
 typedef int (*_putc_t)(int);
 
-#define EXT_KEY 0xe0
-#define VK_CR 0x0d
+#ifndef _WIN32
 #define VK_TAB '\t'
 #define VK_LEFT 0x4b
 #define VK_RIGHT 0x4d
+#endif
+
+#define EXT_KEY 0xe0
+#define VK_CR 0x0d
 #define VK_BS 0x08
 
 int _lab_getch(void) {
@@ -245,7 +251,7 @@ static void test_json(void) {
     size_t out_len = 0;
     interrupt_stack_t stack;
     memset(&stack, 0xcd, sizeof(stack));
-    unsigned char* encoded = base64_encode((const unsigned char*)&stack, sizeof(interrupt_stack_t), &out_len, (heap_allocator_t*)buffer_allocator);
+    unsigned char* encoded = base64_encode((const unsigned char*)&stack, sizeof(interrupt_stack_t), &out_len, (generic_allocator_t*)buffer_allocator);
 
     json_write_object_start(&ctx);
         json_write_key(&ctx, "version");
@@ -263,7 +269,7 @@ static void test_json(void) {
             json_write_number(&ctx, 0x12345678abcdef00);
         json_write_object_end(&ctx);
         json_write_key(&ctx, "binary");
-        json_write_string(&ctx, encoded);
+        json_write_string(&ctx, (const char*)encoded);
     json_write_object_end(&ctx);
     
     printf("\n");
@@ -278,7 +284,7 @@ static void test_json(void) {
     char_array_slice_create(&json_slice, buffer, 0, strlen(buffer));
 
     char heap[512];
-    heap_allocator_t* allocator = (heap_allocator_t*)arena_allocator_create(heap, sizeof(heap));
+    generic_allocator_t* allocator = (generic_allocator_t*)arena_allocator_create(heap, sizeof(heap));
     vector_t tokens;
     vector_create(&tokens, 12, sizeof(json_token_t), allocator);
     json_token_t* root = json_tokenise(&tokens, json_slice);
@@ -291,7 +297,7 @@ static void test_json(void) {
     json_token_t major = json_value(&tokens, "\"major\"");
     long long major_version = strtoll(major._slice._ptr, NULL, 10);
 
-    printf("found match %d, at %s\n", major_version, major._slice._ptr);
+    printf("found match %llx, at %s\n", major_version, major._slice._ptr);
 }
 
 // ==============================================================================
@@ -309,22 +315,24 @@ typedef struct _console_interface {
 static HANDLE _std_in, _std_out;
 static CONSOLE_SCREEN_BUFFER_INFO _std_out_info;
 
-static void con_cursor_left(void) {
+static size_t con_cursor_left(void) {
     CONSOLE_SCREEN_BUFFER_INFO con_info;
     GetConsoleScreenBufferInfo(_std_out, &con_info);
     if (con_info.dwCursorPosition.X) {
         --con_info.dwCursorPosition.X;
         SetConsoleCursorPosition(_std_out, con_info.dwCursorPosition);
     }
+    return 0;
 }
 
-static void con_cursor_right(void) {
+static size_t con_cursor_right(void) {
     CONSOLE_SCREEN_BUFFER_INFO con_info;
     GetConsoleScreenBufferInfo(_std_out, &con_info);
     if (con_info.dwCursorPosition.X < con_info.srWindow.Right) {
         ++con_info.dwCursorPosition.X;
         SetConsoleCursorPosition(_std_out, con_info.dwCursorPosition);
     }
+    return 0;
 }
 
 static void con_clear_from_cursor(void) {
@@ -421,165 +429,6 @@ jo_status_t basic_line_editor(char* out_buffer, size_t buffer_len, _getch_t _get
     return _JO_STATUS_SUCCESS;
 }
 
-// =================================================================================================
-
-video_mode_info_t _info = { .vertical_resolution = 768, .pixel_format = kVideo_Pixel_Format_RBGx };
-static size_t _window_width = 1024;
-
-HDC hdc_mem;
-HBITMAP bm;
-BITMAPINFOHEADER bm_info_header;
-BYTE* bits = 0;
-
-static LRESULT CALLBACK labWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-
-    switch (uMsg) {
-    case WM_SHOWWINDOW:
-    {
-        free(bits);
-        HDC source = GetDC(hWnd);
-        hdc_mem = CreateCompatibleDC(source);
-        bm = CreateCompatibleBitmap(source, _window_width, _info.vertical_resolution);
-        SelectObject(hdc_mem, bm);
-        ZeroMemory(&bm_info_header, sizeof bm_info_header);
-        bm_info_header.biSize = sizeof bm_info_header;
-        bm_info_header.biWidth = _info.horisontal_resolution = _window_width;
-        bm_info_header.biHeight = -(LONG)(_info.vertical_resolution);
-        bm_info_header.biPlanes = 1;
-        bm_info_header.biBitCount = 32;
-        _info.pixels_per_scan_line = ((_window_width * bm_info_header.biBitCount + 31) / 32);
-        DWORD bm_size = 4 * _info.pixels_per_scan_line * _info.vertical_resolution;
-        bits = (BYTE*)malloc(bm_size);
-        GetDIBits(hdc_mem, bm, 0, _info.vertical_resolution, bits, (BITMAPINFO*)(&bm_info_header), DIB_RGB_COLORS);
-
-        video_initialise(&(heap_allocator_t) {
-            .alloc = malloc,
-                .free = free
-        });
-        output_console_initialise();
-        output_console_set_colour(0xffffffff);
-        output_console_set_bg_colour(0x6495ed);
-        output_console_set_font((const uint8_t*)font8x8_basic, 8, 8);
-        video_clear_screen(0x6495ed);
-        output_console_output_string_w(L"Press CR...\n");
-
-        srand(1001107);
-        scroller_initialise(&(rect_t) {
-            .top = 50,
-            .left = 8,
-            .right = _info.horisontal_resolution - 8,
-            .bottom = _info.vertical_resolution - 8,
-        });
-    }
-    break;
-    case WM_PAINT:
-    {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hWnd, &ps);
-        if (bits) {
-            video_present();
-            SetDIBits(hdc_mem, bm, 0, _info.vertical_resolution, bits, (BITMAPINFO*)(&bm_info_header), DIB_RGB_COLORS);
-            BitBlt(hdc, 0, 0, _window_width, _info.vertical_resolution, hdc_mem, 0, 0, SRCCOPY);
-        }
-        EndPaint(hWnd, &ps);
-    }
-    break;
-    case WM_KEYDOWN:
-    {
-        switch (wParam)
-        {
-        case VK_ESCAPE:
-        {
-            output_console_clear_screen();
-            InvalidateRect(hWnd, 0, TRUE);
-        }
-        break;
-        default:;
-        }
-    }
-    break;
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        return 0;
-    case WM_CLOSE:
-        DestroyWindow(hWnd);
-        break;
-    default: return DefWindowProc(hWnd, uMsg, wParam, lParam);
-    }
-    return 0;
-}
-
-static CHAR _class_name[] = TEXT("josx64_lab");
-static HWND ui_hwnd = 0;
-static void initialise_window(void) {
-
-    WNDCLASS wc;
-    ZeroMemory(&wc, sizeof(wc));
-    wc.lpfnWndProc = labWndProc;
-    wc.hInstance = GetModuleHandle(0);
-    wc.lpszClassName = _class_name;
-    ATOM wnd = RegisterClass(&wc);
-    if (wnd) {
-        RECT cw;
-        cw.left = 0;
-        cw.right = _window_width;
-        cw.top = 0;
-        cw.bottom = _info.vertical_resolution;
-        AdjustWindowRect(&cw, WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME, FALSE);
-
-        ui_hwnd = CreateWindowEx(
-            0,
-            _class_name,
-            TEXT("josx64_lab"),
-            WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME,
-            CW_USEDEFAULT, CW_USEDEFAULT, cw.right - cw.left, cw.bottom - cw.top,
-            NULL,
-            NULL,
-            wc.hInstance,
-            NULL
-        );
-
-        ShowWindow(ui_hwnd, SW_SHOW);
-    }
-}
-
-uint32_t* framebuffer_base(void) {
-    return (uint32_t*)bits;
-}
-
-static void ui_test_loop(void) {
-
-    initialise_window();
-
-    region_handle_t handle;
-    jo_status_t status = output_console_create_region(&(rect_t) {
-        .right = _info.horisontal_resolution,
-            .top = 100,
-            .bottom = _info.vertical_resolution - 100
-    },
-        & handle);
-    output_console_activate_region(handle);
-    output_console_set_colour(0xffffffff);
-    output_console_set_bg_colour(0x6495ed);
-    output_console_set_font((const uint8_t*)font8x8_basic, 8, 8);
-    
-    MSG msg = {0};
-    uint64_t t0 = GetTickCount64();
-    while (msg.message!=WM_QUIT)
-    {        
-        if (PeekMessage(&msg, NULL, 0, 0, TRUE)) {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-        
-        uint64_t t1 = GetTickCount64();
-        if (t1 - t0 > 66) {
-            scroller_render_field();
-            InvalidateRect(ui_hwnd, 0, FALSE);
-            t0 = t1;
-        }
-    }
-}
 
 // ==============================================================================================================
 
@@ -590,7 +439,7 @@ void alloc_tests(void) {
 
     void *base_ptr, *ptr;
     alloc_alignment_t alignment = kAllocAlign_128;
-    aligned_alloc((heap_allocator_t*)buffer_allocator, 42, alignment, &base_ptr, &ptr);
+    aligned_alloc((generic_allocator_t*)buffer_allocator, 42, alignment, &base_ptr, &ptr);
     _JOS_ASSERT(((uintptr_t)ptr & ((uintptr_t)alignment) - 1) == 0);
 }
 
@@ -642,15 +491,9 @@ int main(void)
         );
 */
     test_load_dll();
-
     test_unordered_map(&_malloc_allocator);
-    test_vector(&_malloc_allocator);
-    test_vector_aligned(&_malloc_allocator);
-    test_paged_list(&_malloc_allocator);
     test_hive(&_malloc_allocator);
-    test_linear_allocator();
-    test_arena_allocator();
-
+    
     /* alloc_tests();
 
      char buffer[512];
@@ -669,7 +512,7 @@ int main(void)
      is_executable = peutil_phys_is_executable(&pe_ctx, (uintptr_t)(this_module) + 0x6c008, 0);
 
      void* heap = malloc(1024*1024);
-     heap_allocator_t* allocator = (heap_allocator_t*)arena_allocator_create(heap, 1024 * 1024);
+     generic_allocator_t* allocator = (generic_allocator_t*)arena_allocator_create(heap, 1024 * 1024);
 
      vector_t a;
      vector_t b;
@@ -709,5 +552,6 @@ int main(void)
     //ui_test_loop();
     //test_line_editor();
 #endif
+    test_ui_loop(&_malloc_allocator, (const uint8_t*)font8x8_basic);
     return 0;
 }

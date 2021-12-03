@@ -20,7 +20,7 @@ void test_fixed_allocator(void) {
 	char buffer[128];
 
 	fixed_allocator_t* fixed_allocator = fixed_allocator_create(buffer, sizeof(buffer), 4);
-	heap_allocator_t* allocator = (heap_allocator_t*)fixed_allocator;
+	generic_allocator_t* allocator = (generic_allocator_t*)fixed_allocator;
 
 	void* data12b = allocator->alloc(allocator, 12);
 	assert(_JOS_PTR_IS_ALIGNED(data12b, kAllocAlign_8));
@@ -33,7 +33,7 @@ void test_linear_allocator(void) {
 	char buffer[256];
 
 	linear_allocator_t * linear_allocator = linear_allocator_create(buffer, sizeof(buffer));
-	heap_allocator_t* allocator = (heap_allocator_t*)linear_allocator;
+	generic_allocator_t* allocator = (generic_allocator_t*)linear_allocator;
 
 	void* data1 = allocator->alloc(allocator, 11);
 	assert(_JOS_PTR_IS_ALIGNED(data1, kAllocAlign_8));
@@ -47,7 +47,7 @@ void test_arena_allocator(void) {
 
 	char buffer[1024];
 
-	heap_allocator_t* allocator = arena_allocator_create(buffer, sizeof(buffer));
+	generic_allocator_t* allocator = arena_allocator_create(buffer, sizeof(buffer));
 
 	void* allocated = allocator->alloc(allocator, 127);
 	void* allocated2 = allocator->alloc(allocator, 129);

@@ -74,7 +74,7 @@ typedef enum _hive_value_type {
 	kHiveValue_Ptr = 3,	
 } hive_value_type_t;
 
-_JOS_API_FUNC  void hive_create(hive_t* hive, heap_allocator_t* allocator);
+_JOS_API_FUNC  void hive_create(hive_t* hive, generic_allocator_t* allocator);
 // set/create a key -> value
 _JOS_API_FUNC  void hive_set(hive_t* hive, const char* key, ...);
 // create or append values to a list
@@ -201,7 +201,7 @@ _JOS_INLINE_FUNC void _hive_parse_parameter_pack(va_list* params, char* pack) {
 	}
 }
 
-_JOS_INLINE_FUNC _hive_entry_t* _hive_find(hive_t* hive, const char* key, size_t* out_i) {
+_JOS_INLINE_FUNC _hive_entry_t* _hive_find(hive_t* hive, const char* key) {
 
 	size_t i = hive ? unordered_map_size(&hive->_keys) : 0;
 	if (!hive || !key || i == 0)
@@ -213,7 +213,7 @@ _JOS_INLINE_FUNC _hive_entry_t* _hive_find(hive_t* hive, const char* key, size_t
 	return 0;
 }
 
-_JOS_API_FUNC  void hive_create(hive_t* hive, heap_allocator_t* allocator) {
+_JOS_API_FUNC  void hive_create(hive_t* hive, generic_allocator_t* allocator) {
 	unordered_map_create(&hive->_keys, &(unordered_map_create_args_t){
 		.value_size = sizeof(_hive_entry_t),
 		.key_size = sizeof(const char*),
@@ -231,15 +231,15 @@ _JOS_API_FUNC void hive_set(hive_t* hive, const char* key, ...) {
 	const size_t pack_size = _hive_param_pack_size(&args);
 	va_start(args, key);
 
-	_hive_entry_t* existing = _hive_find(hive, key, NULL);
+	_hive_entry_t* existing = _hive_find(hive, key);
 	if (existing) {
 		// update existing 
 
 		char* pack = 0;
 		int real_size = (existing->_size < 0 ? -existing->_size : existing->_size);
-		if (real_size < pack_size) {
+		if (real_size < (int)pack_size) {
 
-			heap_allocator_t* allocator = unordered_map_allocator(&hive->_keys);
+			generic_allocator_t* allocator = unordered_map_allocator(&hive->_keys);
 			if (existing->_size > 0) {
 				// original data is allocated, so we need to reallocate to fit the new pack
 				pack = *(char**)&existing->_storage;
@@ -280,7 +280,7 @@ _JOS_API_FUNC void hive_set(hive_t* hive, const char* key, ...) {
 
 		// if we can store the entry in-situ instead of allocating memory we will
 		if (pack_size > _JOS_HIVE_SMALL_ENTRY_SIZE) {
-			heap_allocator_t* allocator = unordered_map_allocator(&hive->_keys);
+			generic_allocator_t* allocator = unordered_map_allocator(&hive->_keys);
 			pack = allocator->alloc(allocator, pack_size);
 			*(char**)&entry._storage = pack;
 			entry._size = (int)pack_size;
@@ -300,7 +300,7 @@ _JOS_API_FUNC void hive_set(hive_t* hive, const char* key, ...) {
 
 _JOS_API_FUNC void hive_lpush(hive_t* hive, const char* key, ...) {
 
-	_hive_entry_t* entry = _hive_find(hive, key, NULL);
+	_hive_entry_t* entry = _hive_find(hive, key);
 
 	_hive_entry_t base;
 	vector_t* items = NULL;
@@ -357,7 +357,7 @@ _JOS_API_FUNC jo_status_t hive_get(hive_t* hive, const char* key, vector_t* out_
 
 	assert(!out_values || vector_element_size(out_values) == sizeof(hive_value_t));
 
-	_hive_entry_t* entry = _hive_find(hive, key, NULL);
+	_hive_entry_t* entry = _hive_find(hive, key);
 	if (!entry) {
 		return _JO_STATUS_NOT_FOUND;
 	}
@@ -423,7 +423,7 @@ _JOS_API_FUNC jo_status_t hive_lget(hive_t* hive, const char* key, vector_t* out
 
 	assert(vector_element_size(out_values) == sizeof(hive_value_t));
 
-	_hive_entry_t* entry = _hive_find(hive, key, NULL);
+	_hive_entry_t* entry = _hive_find(hive, key);
 	if (!entry || entry->_type != kHiveEntry_List)
 		return _JO_STATUS_NOT_FOUND;
 
@@ -433,12 +433,11 @@ _JOS_API_FUNC jo_status_t hive_lget(hive_t* hive, const char* key, vector_t* out
 }
 
 _JOS_API_FUNC jo_status_t hive_delete(hive_t* hive, const char* key) {
-	size_t i;
-	_hive_entry_t* entry = _hive_find(hive, key, &i);
+	_hive_entry_t* entry = _hive_find(hive, key);
 	if (!entry)
 		return _JO_STATUS_NOT_FOUND;
 
-	heap_allocator_t* allocator = unordered_map_allocator(&hive->_keys);
+	generic_allocator_t* allocator = unordered_map_allocator(&hive->_keys);
 	switch (entry->_type) {
 	case kHiveEntry_Key:
 	{

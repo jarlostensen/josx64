@@ -5,9 +5,12 @@
 #ifdef _JOS_KERNEL_BUILD
 #include <joBase/joWinNtLt.h>
 #else
+#pragma warning(disable:5105)
 #include <windows.h>
 #endif
 #include <jos.h>
+
+
 
 typedef enum _peutil_instance_type
 {
@@ -20,10 +23,10 @@ typedef enum _peutil_instance_type
 typedef struct _peutil_pe_context {
     const IMAGE_DOS_HEADER* _header;
     const IMAGE_NT_HEADERS64* _nt_header;
-    union {
+    union _headers_tag {
         const IMAGE_NT_HEADERS32* _headers32;
         const IMAGE_NT_HEADERS64* _headers64;
-    };
+    } _headers;
     const IMAGE_SECTION_HEADER* _imageSections;
     WORD _numSections;
     DWORD _text_va;
@@ -54,7 +57,7 @@ const void* peutil_rva_to_phys(peutil_pe_context_t* ctx, DWORD rva);
 
 const IMAGE_SECTION_HEADER* peutil_section_for_rva(peutil_pe_context_t* ctx, DWORD rva);
 
-const bool peutil_phys_is_executable(peutil_pe_context_t* ctx, uintptr_t phys, uintptr_t* out_rva);
+bool peutil_phys_is_executable(peutil_pe_context_t* ctx, uintptr_t phys, uintptr_t* out_rva);
 
 const void* peutil_get_proc_name_address(peutil_pe_context_t* ctx, const char* proc_name);
 void peutil_load_dll(peutil_pe_context_t* ctx, page_allocator_t* allocator);

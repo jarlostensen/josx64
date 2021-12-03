@@ -46,7 +46,7 @@ typedef struct _debugger_breakpoint {
 
 #define _BREAKPOINT_INSTR 0xcc
 static vector_t _breakpoints;
-static heap_allocator_t*  _allocator = 0;
+static generic_allocator_t*  _allocator = 0;
 // tracks the last runtime bp we've hit so that we can restore it after a trap
 static debugger_breakpoint_t _last_rt_bp;
 static debugger_packet_id_t _last_command = kDebuggerPacket_End;
@@ -581,6 +581,7 @@ _JOS_API_FUNC void debugger_trigger_assert(const char* cond, const char* file, i
 
 _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length) {
     
+    (void)bytes;
     ZydisDecoder decoder;
     ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
 
@@ -599,8 +600,8 @@ _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffe
         ZydisFormatterFormatInstruction(&formatter, &instruction, instruction_buffer, sizeof(instruction_buffer), runtime_address);
 
 #define _CHECK_OUTPUT_LENGTH(w)\
-        if( output_buffer_length >= w ) {\
-            output_buffer_length -= w;\
+        if( output_buffer_length >= (size_t)(w) ) {\
+            output_buffer_length -= (size_t)(w);\
         }\
         else {\
             output_buffer[output_buffer_length-2] = L'@';\
@@ -641,11 +642,11 @@ _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffe
     output_buffer[output_buffer_length-1] = 0;
 }
 
-_JOS_API_FUNC void debugger_initialise(heap_allocator_t* allocator) {
+_JOS_API_FUNC void debugger_initialise(generic_allocator_t* allocator) {
 
     // we're good with a 2MB heap for now
 #define _DEBUGGER_HEAP_SIZE 2*1024*1024
-    _allocator = (heap_allocator_t*)arena_allocator_create(allocator->alloc(allocator, _DEBUGGER_HEAP_SIZE), _DEBUGGER_HEAP_SIZE);
+    _allocator = (generic_allocator_t*)arena_allocator_create(allocator->alloc(allocator, _DEBUGGER_HEAP_SIZE), _DEBUGGER_HEAP_SIZE);
 
     _last_rt_bp._active = false;
     // we "enter" the debugger with int 3 so we need to register this from the start

@@ -1,6 +1,8 @@
 #include <string.h>
 #include <stdint.h>
 
+// https://github.com/nadavrot/memset_benchmark/tree/main/src
+
 void* memset(void* bufptr, int value, size_t size) {
 	uint32_t v32 = (value * 0x01010101);
 	size_t s = size >> 3;

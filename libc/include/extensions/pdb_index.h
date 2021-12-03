@@ -51,13 +51,13 @@ typedef struct _pdb_index_insert_args {
 
 } pdb_index_insert_args_t;
 
-pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice_t prefix, char_array_slice_t body, 
-       const pdb_index_symbol_t* __restrict data, pdb_index_node_t** leaf);
+pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice_t prefix, char_array_slice_t body,
+	const pdb_index_symbol_t* __restrict data, pdb_index_node_t** leaf, generic_allocator_t* allocator);
 
 // _this | _isA | Mixed | _String | Identifier
 // another | Mixed | Case | Identifier
 // Camels | Are | Ok | Too
 char_array_slice_t pdb_index_next_token(char_array_slice_t* body);
-const pdb_index_node_t* pdb_index_load_from_pdb_yml(const char* pdb_yml_file_pathname, heap_allocator_t* allocator);
+const pdb_index_node_t* pdb_index_load_from_pdb_yml(const char* pdb_yml_file_pathname, generic_allocator_t* allocator);
 // find the closest function to the given RVA (i.e. the offset of the function relative to the .text segment)
 char_array_slice_t pdb_index_symbol_name_for_address(uint32_t rva);

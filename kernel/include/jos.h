@@ -5,7 +5,7 @@
 #include <joBase/joBase.h>
 
 #if defined(__clang__) || defined(__GNUC__)
-    #define ASM_SYNTAX_ATNT
+    #define ASM_SYNTAX_ATNT    
 #else 
     #define ASM_SYNTAX_INTEL
 #endif
@@ -14,6 +14,11 @@
 // for backwards compatibility
 #define _JOS_KERNEL_BUILD
 #endif
+
+// ======================================================
+// Allocator interfaces
+// There is no global malloc/free, all allocations are made from heaps or page pools.
+// 
 
 // allocation alignment in BYTES
 typedef enum _alloc_alignment {
@@ -40,46 +45,68 @@ typedef enum _alloc_alignment {
 
 } alloc_alignment_t;
 
-// All sub-systems are provided an implementation instance of this interface
-// All allocators implement this (using this structure as a basic vtable entry)
-struct _jos_allocator;
+// =================================================================
+// generic allocator interface
+
+struct _generic_allocator;
 // allocate bytes. ALLWAYS a minimum of 8 byte aligned
-typedef void* (*heap_allocator_alloc_func_t)(struct _jos_allocator*, size_t);
-typedef void  (*heap_allocator_free_func_t)(struct _jos_allocator*, void*);
+typedef void* (*generic_allocator_alloc_func_t)(struct _generic_allocator*, size_t);
+typedef void  (*generic_allocator_free_func_t)(struct _generic_allocator*, void*);
 // allocate bytes. ALLWAYS a minimum of 8 byte aligned
-typedef void* (*heap_allocator_realloc_func_t)(struct _jos_allocator*, void*, size_t);
-typedef size_t (*heap_allocator_avail_func_t)(struct _jos_allocator*);
+typedef void* (*generic_allocator_realloc_func_t)(struct _generic_allocator*, void*, size_t);
+typedef size_t (*generic_allocator_avail_func_t)(struct _generic_allocator*);
 
-typedef struct _jos_allocator {
-    heap_allocator_alloc_func_t      alloc;
-    heap_allocator_free_func_t       free;
-    heap_allocator_realloc_func_t    realloc;
-    heap_allocator_avail_func_t      available;
+typedef struct _generic_allocator {
+    generic_allocator_alloc_func_t      alloc;
+    generic_allocator_free_func_t       free;
+    generic_allocator_realloc_func_t    realloc;
+    generic_allocator_avail_func_t      available;
 
-} heap_allocator_t;
+} generic_allocator_t;
 
+// a static allocation policy means that memory will be allocated, but never freed.
+// the allocator can therefore be linear
+typedef struct _static_allocation_policy {
+    generic_allocator_t *   allocator;
+    // needed to prevent the compiler from implicitly casting this struct to an allocator*
+    bool                    __no_implicit_ptr_cast; 
+} static_allocation_policy_t;
+
+// a dynamic allocation policy requires an allocator that can free and reallocate memory
+typedef struct _dynamic_allocation_policy {
+    generic_allocator_t *   allocator;
+    // needed to prevent the compiler from implicitly casting this struct to an allocator*
+    bool                    __no_implicit_ptr_cast;
+} dynamic_allocation_policy_t;
+
+// =================================================================
+// page allocator interface
 
 #define PAGE_NOACCESS           0x01
 #define PAGE_READONLY           0x02
 #define PAGE_READWRITE          0x04
-#define PAGE_WRITECOPY          0x08
 #define PAGE_EXECUTE            0x10
 #define PAGE_EXECUTE_READ       0x20
 #define PAGE_EXECUTE_READWRITE  0x40
-#define PAGE_EXECUTE_WRITECOPY  0x80
 #define PAGE_GUARD             0x100
 #define PAGE_NOCACHE           0x200
 #define PAGE_WRITECOMBINE      0x400
 
-struct _global_allocator;
-typedef void* (*global_allocator_alloc_func_t)(struct _global_allocator*, size_t, unsigned int flags);
-typedef void* (*global_allocator_free_func_t)(struct _global_allocator*, void*);
+// page allocator interface
+// pages can be allocated and protected
+struct _page_allocator;
+typedef void* (*page_allocator_alloc_func_t)(struct _page_allocator*, size_t, unsigned int flags);
+typedef void* (*page_allocator_free_func_t)(struct _page_allocator*, void*);
+typedef void* (*page_allocator_protect_func_t)(struct _page_allocator*, void*, size_t, unsigned int flags);
 
-typedef struct _global_allocator {
-    global_allocator_alloc_func_t  alloc;
-    global_allocator_free_func_t   free;
-
-} global_allocator_t;
+typedef struct _page_allocator {
+    // allocate, page aligned
+    page_allocator_alloc_func_t   alloc;
+    // free page aligned
+    page_allocator_free_func_t    free;
+    // protect page aligned
+    page_allocator_protect_func_t protect;
+} page_allocator_t;
 
 
 // ========================================================================= misc types
@@ -156,6 +183,7 @@ if(!(cond))\
 {\
     if ( !debugger_is_connected() ) {\
         trace(0, "assert %s, %s:%d \n", _JOS_ASSERT_COND(cond), __FILE__,__LINE__);\
+        _JOS_GDB_DBGBREAK();\
     }\
     else {\
         debugger_trigger_assert(_JOS_ASSERT_COND(cond), __FILE__, __LINE__);\
@@ -212,7 +240,7 @@ if(!(cond))\
 #define _JOS_ALIGN(val, alignment)\
     (((uintptr_t)val + ((uintptr_t)alignment - 1)) & ~((uintptr_t)alignment - 1))
 
-_JOS_INLINE_FUNC void aligned_alloc(heap_allocator_t* allocator, size_t bytes, alloc_alignment_t alignment, 
+_JOS_INLINE_FUNC void aligned_alloc(generic_allocator_t* allocator, size_t bytes, alloc_alignment_t alignment, 
                                     void** out_alloc_base, void** out_alloc_aligned) {
     if (!allocator || !bytes) {
         *out_alloc_base = *out_alloc_aligned = 0;
@@ -227,5 +255,12 @@ _JOS_INLINE_FUNC void aligned_alloc(heap_allocator_t* allocator, size_t bytes, a
         *out_alloc_aligned = ptr;
     }
 }
+
+// ================================================
+// warnings
+
+#pragma warning(disable:4200)
+#pragma warning(disable:4201)
+#pragma warning(disable:4213)
 
 #endif // _JOS_H

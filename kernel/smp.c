@@ -7,8 +7,7 @@
 #include <collections.h>
 #include <smp.h>
 #include <apic.h>
-#include <arena_allocator.h>
-#include <fixed_allocator.h>
+#include <linear_allocator.h>
 
 // in efi_main.c
 static CEfiMultiProcessorProtocol*  _mpp = 0;
@@ -19,11 +18,11 @@ static size_t   _num_processors = 0;
 static size_t   _num_enabled_processors = 0;
 static processor_information_t* _processors = 0;
 static const char* kSmpChannel = "smp";
-static arena_allocator_t* _smp_arena = NULL;
+static linear_allocator_t* _smp_allocator = NULL;
 
 // ==================================================================================================
 
-#define CPUID_FEATURE_FLAG_ENABLED(reg, index) (((reg) & (1<<(index))) == (1<<(index)))
+#define CPUID_FEATURE_FLAG_ENABLED(reg, index) (((reg) & (1u<<(index))) == (1u<<(index)))
 
 static void collect_this_cpu_information(processor_information_t* info) {
 
@@ -39,7 +38,7 @@ static void collect_this_cpu_information(processor_information_t* info) {
     info->_vendor_string[12] = 0;
 
     __get_cpuid_count(0x1, 0, &eax, &ebx, &ecx, &edx);
-    info->_has_hypervisor = CPUID_FEATURE_FLAG_ENABLED(ecx, 31);
+    info->_has_hypervisor = CPUID_FEATURE_FLAG_ENABLED(ecx, 31u) ? 1:0;
     if(info->_has_hypervisor) {
         unsigned int regs[4];
         __get_cpuid_count(0x40000000, 0, regs+0, regs+1, regs+2, regs+3);
@@ -97,9 +96,9 @@ static void initialise_this_ap(void* arg) {
     _JOS_KTRACE_CHANNEL(kSmpChannel, "initialised ap %d, gs @ 0x%llx -> %d", proc_info->_id, proc_info_ptr, per_cpu_this_cpu_id());
 }
 
-jo_status_t    smp_initialise(heap_allocator_t* allocator, CEfiBootServices *boot_services) {
+jo_status_t    smp_initialise(static_allocation_policy_t* static_allocator_policy, CEfiBootServices *boot_services) {
 
-    const size_t kSMP_PER_CPU_MEMORY_ARENA_SIZE = 1024*1024;
+    static const size_t kSMP_PER_CPU_MEMORY_ARENA_SIZE = 1024*1024;
 
     CEfiHandle handle_buffer[3];
     CEfiUSize handle_buffer_size = sizeof(handle_buffer);
@@ -136,11 +135,12 @@ jo_status_t    smp_initialise(heap_allocator_t* allocator, CEfiBootServices *boo
             _JOS_KTRACE_CHANNEL(kSmpChannel, "BSP id is %d, %d processors present", _bsp_id, _num_processors);
 
             // now we have the information we need to register this module
-            // we'll set aside one meg per core for misc
-            _smp_arena = arena_allocator_create(allocator->alloc(allocator, kSMP_PER_CPU_MEMORY_ARENA_SIZE*_num_enabled_processors), 
+            // we'll set aside one meg per core for misc            
+            _smp_allocator = linear_allocator_create(static_allocator_policy->allocator->alloc(static_allocator_policy->allocator, 
+                                kSMP_PER_CPU_MEMORY_ARENA_SIZE*_num_enabled_processors), 
                             kSMP_PER_CPU_MEMORY_ARENA_SIZE*_num_enabled_processors);
 
-            _processors = (processor_information_t*)arena_allocator_alloc(_smp_arena, sizeof(processor_information_t) * _num_processors);
+            _processors = (processor_information_t*)linear_allocator_alloc(_smp_allocator, sizeof(processor_information_t) * _num_processors);
             memset(_processors, 0, sizeof(processor_information_t) * _num_processors);
             _processors[_bsp_id]._id = _bsp_id;
             initialise_this_ap((void*)&_processors[_bsp_id]);
@@ -166,9 +166,10 @@ jo_status_t    smp_initialise(heap_allocator_t* allocator, CEfiBootServices *boo
     else
     {
         // uni processor
-        _smp_arena = arena_allocator_create(allocator->alloc(allocator, kSMP_PER_CPU_MEMORY_ARENA_SIZE), kSMP_PER_CPU_MEMORY_ARENA_SIZE);
+        _smp_allocator = linear_allocator_alloc(static_allocator_policy->allocator->alloc(static_allocator_policy->allocator, 
+                kSMP_PER_CPU_MEMORY_ARENA_SIZE), kSMP_PER_CPU_MEMORY_ARENA_SIZE);
         _JOS_KTRACE_CHANNEL(kSmpChannel, "uni processor system, or no UEFI MP protocol handler available");
-        _processors = (processor_information_t*)arena_allocator_alloc(_smp_arena, sizeof(processor_information_t));
+        _processors = (processor_information_t*)linear_allocator_alloc(_smp_allocator, sizeof(processor_information_t));
         _processors->_id = 0;
         initialise_this_ap(_processors);        
         _processors->_is_good = true;
@@ -202,15 +203,15 @@ jo_status_t        smp_get_processor_information(processor_information_t* out_in
 
 per_cpu_ptr_t       per_cpu_create_ptr(void) {
     _JOS_ASSERT(_num_processors);
-    return (per_cpu_ptr_t)arena_allocator_alloc(_smp_arena, sizeof(uintptr_t)*_num_processors);
+    return (per_cpu_ptr_t)linear_allocator_alloc(_smp_allocator, sizeof(uintptr_t)*_num_processors);
 }
 
 per_cpu_queue_t     per_cpu_create_queue(void) {
     _JOS_ASSERT(_num_processors);
-    return (per_cpu_queue_t)arena_allocator_alloc(_smp_arena, sizeof(queue_t)*_num_processors);
+    return (per_cpu_queue_t)linear_allocator_alloc(_smp_allocator, sizeof(queue_t)*_num_processors);
 }
 
 per_cpu_qword_t     per_cpu_create_qword(void) {
     _JOS_ASSERT(_num_processors);
-    return (per_cpu_qword_t)arena_allocator_alloc(_smp_arena, sizeof(uint64_t)*_num_processors);
+    return (per_cpu_qword_t)linear_allocator_alloc(_smp_allocator, sizeof(uint64_t)*_num_processors);
 }

@@ -1,3 +1,4 @@
+#pragma once
 #ifndef _JOS_KERNEL_OUTPUT_CONSOLE_H
 #define _JOS_KERNEL_OUTPUT_CONSOLE_H
 

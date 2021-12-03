@@ -1,14 +1,17 @@
+#pragma once
 #ifndef _JOS_KERNEL_VIDEO_H
 #define _JOS_KERNEL_VIDEO_H
 
 #ifdef _JOS_KERNEL_BUILD
 #include <c-efi.h>
-jo_status_t video_initialise(heap_allocator_t* allocator, CEfiBootServices* boot_services);
+jo_status_t video_initialise(static_allocation_policy_t* static_allocation_policy, CEfiBootServices* boot_services);
 #else
-jo_status_t video_initialise(heap_allocator_t* allocator);
+jo_status_t video_initialise(static_allocation_policy_t* static_allocation_policy);
 #endif
 
 #include <wchar.h>
+
+#define VIDEO_PIXEL_STRIDE  4
 
 uint32_t video_make_color(uint8_t r, uint8_t g, uint8_t b);
 void video_clear_screen(uint32_t colour);

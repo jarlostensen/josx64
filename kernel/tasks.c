@@ -181,6 +181,7 @@ static void _yield_to_next_task(void) {
 //  as the last thing when all other tasks are done.
 //
 static jo_status_t _idle_task(void* ptr) {        
+    (void)ptr;
     //ZZZ: not so much "true" as wait for a kernel shutdown signal   
     while(true) {
         _yield_to_next_task();
@@ -221,7 +222,7 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
             | ctx                     |
             ---------------------------
     */
-    task_context_t* ctx = (task_context_t*)_tasks_allocator->_super.alloc((heap_allocator_t*)_tasks_allocator, TASK_STACK_CONTEXT_SIZE);
+    task_context_t* ctx = (task_context_t*)_tasks_allocator->_super.alloc((generic_allocator_t*)_tasks_allocator, TASK_STACK_CONTEXT_SIZE);
     _JOS_ASSERT(ctx);
 
     // set aside space for XSAVE if we use it
@@ -229,7 +230,7 @@ static task_context_t* _create_task_context(task_func_t func, void* ptr, const c
     if (this_cpu_info->_xsave && this_cpu_info->_xsave_info._xsave_area_size) {
         //TODO: LEAKING
         void* base_alloc_ptr;
-        aligned_alloc((heap_allocator_t*)_tasks_allocator, this_cpu_info->_xsave_info._xsave_area_size, kAllocAlign_64, &base_alloc_ptr, &ctx->_xsave_area);
+        aligned_alloc((generic_allocator_t*)_tasks_allocator, this_cpu_info->_xsave_info._xsave_area_size, kAllocAlign_64, &base_alloc_ptr, &ctx->_xsave_area);
         _JOS_ASSERT(ctx->_xsave_area);
     } else {
         ctx->_xsave_area = 0;
@@ -297,7 +298,7 @@ void tasks_yield(void) {
     x86_64_pause_cpu();
 }
 
-void tasks_initialise(heap_allocator_t* allocator) {
+void tasks_initialise(generic_allocator_t* allocator) {
 
     //NOTE: called on the BSP *only*
     _JOS_ASSERT(smp_get_bsp_id() == per_cpu_this_cpu_id());

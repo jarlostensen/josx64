@@ -8,6 +8,10 @@
  * http://dimensionalrift.homelinux.net/combuster/mos3/?p=viewsource&file=/modules/gfx/font8_8.asm
  **/
 
+#pragma once
+#ifndef _JOS_FONT_8x8_H
+#define _JOS_FONT_8x8_H
+
 #include "font8x8_basic.h"
 #include "font8x8_control.h"
 #include "font8x8_ext_latin.h"
@@ -17,3 +21,5 @@
 #include "font8x8_block.h"
 #include "font8x8_hiragana.h"
 #include "font8x8_sga.h"
+
+#endif // _JOS_FONT_8x8_H

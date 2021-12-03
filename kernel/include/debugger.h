@@ -45,7 +45,7 @@ typedef enum _debugger_packet_id {
 } debugger_packet_id_t;
 
 // to be called after early initialisation of interrupts
-_JOS_API_FUNC void debugger_initialise(heap_allocator_t* allocator);
+_JOS_API_FUNC void debugger_initialise(generic_allocator_t* allocator);
 // outputs disassembly to the console 
 _JOS_API_FUNC void debugger_disasm(void* at, size_t bytes, wchar_t* output_buffer, size_t output_buffer_length);
 

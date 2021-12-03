@@ -5,8 +5,10 @@
 #include <extensions/slices.h>
 #include <extensions/pdb_index.h>
 #else
+#pragma warning(disable:4005)
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <jos.h>
+#include <ctype.h>
 #include "..\..\kernel\include\collections.h"
 #include "..\include\extensions\slices.h"
 #include "..\include\extensions\pdb_index.h"
@@ -78,7 +80,7 @@ pdb_index_match_result pdb_index_match_search(pdb_index_node_t* node, char_array
             return kPdbIndex_FullMatch;
         }
 
-        const unsigned child_count = vector_size(&node->_children);
+        const size_t child_count = vector_size(&node->_children);
         char_array_slice_t next_prefix = pdb_index_next_token(&body);
         if (slice_is_empty(&next_prefix)) {
             *leaf = node;
@@ -100,7 +102,7 @@ pdb_index_match_result pdb_index_match_search(pdb_index_node_t* node, char_array
 
 #define PDB_INDEX_CHILD_INIT_CAPACITY 16
 
-static void pdb_index_add_from_node(pdb_index_node_t* node, char_array_slice_t body, const pdb_index_symbol_t* __restrict data, heap_allocator_t* allocator) {
+static void pdb_index_add_from_node(pdb_index_node_t* node, char_array_slice_t body, const pdb_index_symbol_t* __restrict data, generic_allocator_t* allocator) {
 
     if(vector_is_empty(&node->_children)) {
         vector_create(&node->_children, PDB_INDEX_CHILD_INIT_CAPACITY, sizeof(pdb_index_node_t), allocator);
@@ -122,7 +124,7 @@ static void pdb_index_add_from_node(pdb_index_node_t* node, char_array_slice_t b
 }
 
 pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice_t prefix, char_array_slice_t body, 
-        const pdb_index_symbol_t* __restrict data, pdb_index_node_t** leaf, heap_allocator_t* allocator) {
+        const pdb_index_symbol_t* __restrict data, pdb_index_node_t** leaf, generic_allocator_t* allocator) {
 
     bool is_root_node = false;
 
@@ -162,7 +164,7 @@ pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice
 
         // node has children; find a matching child tree or insert 
 
-        const unsigned child_count = vector_size(&node->_children);
+        const size_t child_count = vector_size(&node->_children);
         char_array_slice_t next_prefix = is_root_node ? prefix : pdb_index_next_token(&body);
         if (slice_is_empty(&next_prefix)) {
             // early out; no more prefixes
@@ -172,7 +174,7 @@ pdb_index_match_result pdb_index_insert(pdb_index_node_t* node, char_array_slice
         }
 
         // recursive check against each child
-        for (unsigned c = 0; c < child_count; ++c) {
+        for (size_t c = 0; c < child_count; ++c) {
             pdb_index_node_t* child = (pdb_index_node_t*)vector_at(&node->_children, c);            
             const pdb_index_match_result m = pdb_index_insert(child, next_prefix, body, data, leaf, allocator);
             if (m != kPdbIndex_NoMatch) {
@@ -252,8 +254,8 @@ static void build_rva_index(pdb_index_node_t* node, build_rva_index_state_t* sta
     }
     
     if (!vector_is_empty(&node->_children)) {
-        const unsigned child_count = vector_size(&node->_children);
-        for (unsigned c = 0; c < child_count; ++c) {
+        const size_t child_count = vector_size(&node->_children);
+        for (size_t c = 0; c < child_count; ++c) {
             pdb_index_node_t* child = (pdb_index_node_t*)vector_at(&node->_children, c);
             build_rva_index(child, state);
         }
@@ -309,7 +311,7 @@ typedef enum _parse_state {
 
 } parse_state_t;
 
-const pdb_index_node_t* pdb_index_load_from_pdb_yml(const char* pdb_yml_file_pathname, heap_allocator_t* allocator) {
+const pdb_index_node_t* pdb_index_load_from_pdb_yml(const char* pdb_yml_file_pathname, generic_allocator_t* allocator) {
     
     pdb_index_node_initialise(&_pdb_index_root);
 
@@ -474,7 +476,7 @@ const pdb_index_node_t* pdb_index_load_from_pdb_yml(const char* pdb_yml_file_pat
                 break;
             case kStoreOffset:
                 //NOTE: assumes number is valid
-                symbol._rva = number;                
+                symbol._rva = (uint32_t)number;
                 break;            
             case kFindSegment:
             {
@@ -487,7 +489,7 @@ const pdb_index_node_t* pdb_index_load_from_pdb_yml(const char* pdb_yml_file_pat
             }
             break;
             case kStoreSegment:
-                symbol._section = number;
+                symbol._section = (uint8_t)number;
                 break;
             case kFindName:
             {

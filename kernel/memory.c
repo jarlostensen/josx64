@@ -28,12 +28,15 @@ static const char* kMemoryChannel = "memory";
 #define UEFI_POOL_PAGE_SIZE 0x1000
 #define MINIMUM_MEMORY_AVAILABLE_PAGES (4*1024*1024) / UEFI_POOL_PAGE_SIZE
 
-
 typedef enum memory_region_type {
     kMemoryRegion_RAM,
     kMemoryRegion_Reserved,
     kMemoryRegion_ACPI,
     kMemoryRegion_NVS,
+    kMemoryRegion_LoaderCode,
+    kMemoryRegion_LoaderData,
+    kMemoryRegion_BootServicesCode,
+    kMemoryRegion_BootServicesData,
     kMemoryRegion_Unusable,
     kMemoryRegion_Unknown,
 } memory_region_type_t;
@@ -108,6 +111,26 @@ _JOS_API_FUNC void _memory_debugger_dump_map(void) {
                 type_name = "NVS";
             }
             break;
+            case kMemoryRegion_LoaderCode:
+            {
+                type_name = "Loader Code";
+            }
+            break;
+            case kMemoryRegion_LoaderData:
+            {
+                type_name = "Loader Data";
+            }
+            break;
+            case kMemoryRegion_BootServicesCode:
+            {
+                type_name = "BootServices Code";
+            }
+            break;
+            case kMemoryRegion_BootServicesData:
+            {
+                type_name = "BootServices Data";
+            }
+            break;
             default:
             {
                 snprintf(buffer, sizeof(buffer), "UNK 0x%x", _regions[i]._uefi_type);
@@ -120,64 +143,120 @@ _JOS_API_FUNC void _memory_debugger_dump_map(void) {
     }
 }
 
-static jo_status_t _build_memory_map(void) {
+/*
+exit_bs: false when we're in the UEFI init phase. true when exiting boot services and we want to merge 
+         regions used by the boot services with conventional RAM.
+ 
+Layout will vary per system, but as an example from my 4Gig VirtualBox VM instance:
+
+[memory] RAM: 0000000000000000 540 KB
+[memory] BootServices Data: 0000000000087000 100 KB
+[memory] RAM: 0000000000100000 3 GB
+[memory] BootServices Data: 00000000dbfbe000 29 MB
+[memory] Loader Code: 00000000ddd49000 940 KB
+[memory] Loader Data: 00000000dde34000 4 KB
+[memory] ACPI: 00000000dde35000 4 KB
+[memory] BootServices Code: 00000000dde36000 364 KB
+[memory] RAM: 00000000ddf1b000 400 KB
+[memory] BootServices Data: 00000000ddf7f000 6 MB
+[memory] BootServices Data: 00000000de61a000 1 MB
+[memory] BootServices Data: 00000000de726000 6 MB
+[memory] BootServices Code: 00000000dee1b000 1 MB
+[memory] RESERVED: 00000000defef000 16 KB
+[memory] ACPI: 00000000deff3000 32 KB
+[memory] NVS: 00000000deffb000 16 KB
+[memory] BootServices Data: 00000000defff000 2 MB
+[memory] BootServices Data: 00000000df218000 128 KB
+[memory] BootServices Code: 00000000df238000 108 KB
+[memory] BootServices Data: 00000000df253000 2 MB
+[memory] BootServices Code: 00000000df457000 80 KB
+[memory] RAM: 0000000100000000 549 MB
+
+*/
+static jo_status_t _build_memory_map(bool exit_bs) {
     
     CEfiMemoryDescriptor* desc = _boot_service_memory_map;
     _boot_service_memory_map_entries = _boot_service_memory_map_size / _descriptor_size;    
     _JOS_KTRACE_CHANNEL(kMemoryChannel, "%d memory descriptors found", _boot_service_memory_map_entries);
     
+    _num_regions = 0;
     memory_region_t* prev = 0;
     for ( unsigned i = 0; i < _boot_service_memory_map_entries; ++i )
     {        
         if ( desc->number_of_pages==0 )
             continue;
 
-        switch(desc->type)
-        {
-            case C_EFI_RESERVED_MEMORY_TYPE:
-            {
-                _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_Reserved, desc->type);
-            }
-            break;
-            case C_EFI_UNUSABLE_MEMORY:
-            {
-                _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_Unusable, desc->type);
-            }
-            break;
-            case C_EFI_ACPI_RECLAIM_MEMORY:
-            {
-                _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_ACPI, desc->type);
-            }
-            break;
-            case C_EFI_ACPI_MEMORY_NVS:
-            {
-                _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_NVS, desc->type);
-            }
-            break;
-            case C_EFI_BOOT_SERVICES_CODE:
-            case C_EFI_BOOT_SERVICES_DATA:
-            //case C_EFI_LOADER_CODE:
-            //case C_EFI_LOADER_DATA:
-            case C_EFI_CONVENTIONAL_MEMORY:
-            {                
-                if (desc->attribute & C_EFI_MEMORY_WB) {
-                    if (prev 
-                        && 
-                        (prev->_start + prev->_size) >= desc->physical_start) {
-                            // merge by growing previous region to encompass this one
-                            size_t delta = (prev->_start + prev->_size) - desc->physical_start;
-                            prev->_size += (desc->number_of_pages * UEFI_POOL_PAGE_SIZE) - delta;
-                    }
-                    else {
-                        _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_RAM, desc->type);
-                    }
+        // pre-exit boot services we don't merge boot services code and data with conventional memory
+        if ( !exit_bs 
+            && 
+            (desc->type == C_EFI_BOOT_SERVICES_CODE
+             ||
+             desc->type == C_EFI_BOOT_SERVICES_DATA)) {
+                if ( desc->type == C_EFI_BOOT_SERVICES_DATA ) {
+                    _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_BootServicesData, desc->type);
                 }
                 else {
+                    _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_BootServicesCode, desc->type);
+                }
+             }
+        else {
+            switch(desc->type)
+            {
+                case C_EFI_RESERVED_MEMORY_TYPE:
+                {
                     _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_Reserved, desc->type);
                 }
+                break;
+                case C_EFI_UNUSABLE_MEMORY:
+                {
+                    _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_Unusable, desc->type);
+                }
+                break;
+                case C_EFI_ACPI_RECLAIM_MEMORY:
+                {
+                    _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_ACPI, desc->type);
+                }
+                break;
+                case C_EFI_ACPI_MEMORY_NVS:
+                {
+                    _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_NVS, desc->type);
+                }
+                break;
+                case C_EFI_LOADER_CODE:
+                {
+                    _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_LoaderCode, desc->type);
+                }
+                break;
+                case C_EFI_LOADER_DATA: 
+                {
+                    _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_LoaderData, desc->type);
+                }
+                break;
+                // merge boot services blocks as well as conventional blocks
+                case C_EFI_BOOT_SERVICES_CODE:
+                case C_EFI_BOOT_SERVICES_DATA:       
+                case C_EFI_CONVENTIONAL_MEMORY:
+                {                
+                    if (desc->attribute & C_EFI_MEMORY_WB) {
+                        if (prev 
+                            && 
+                            (prev->_start + prev->_size) >= desc->physical_start) {
+                                // merge by growing previous region to encompass this one
+                                size_t delta = (prev->_start + prev->_size) - desc->physical_start;
+                                prev->_size += (desc->number_of_pages * UEFI_POOL_PAGE_SIZE) - delta;
+                        }
+                        else {
+                            _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_RAM, desc->type);
+                        }
+                    }
+                    else {
+                        // NOTE: strictly this is not "reserved" but it is memory that is not cacheable, so we don't treat it as usable for CPU I/O 
+                        _add_memory_region(desc->physical_start, desc->number_of_pages * UEFI_POOL_PAGE_SIZE, kMemoryRegion_Reserved, desc->type);
+                    }
+                }
+                break;
+                default:;
             }
-            break;
-            default:;
         }
         
         prev = _regions + _num_regions - 1;
@@ -186,6 +265,8 @@ static jo_status_t _build_memory_map(void) {
     
     return _JO_STATUS_SUCCESS;
 }
+
+//TODO: MERGE all memory boot loader regions obtained from _build_memory_map and create a linked list of usable-RAM pools 
 
 static jo_status_t _get_boot_service_memory_map(CEfiBootServices* boot_services) {
     
@@ -205,24 +286,27 @@ static jo_status_t _get_boot_service_memory_map(CEfiBootServices* boot_services)
 }
 
 _JOS_API_FUNC jo_status_t memory_uefi_init(CEfiBootServices* boot_services) {
-    _JOS_KTRACE_CHANNEL(kMemoryChannel, "uefi init");
+    _JOS_KTRACE_CHANNEL(kMemoryChannel, "uefi init");    
     _get_boot_service_memory_map(boot_services);
-    jo_status_t status = _build_memory_map();
+    jo_status_t status = _build_memory_map(false);
+
     if (_JO_SUCCEEDED(status)) {
-        size_t max_r = 0;
-        size_t max_region = 0;
-        for (size_t r = 0; r < _num_regions; ++r) {
+        size_t total_bytes = 0;
+        for (size_t r = 0; r < _num_regions; ++r) {                
             //TODO: use linked regions instead
             if (_regions[r]._type == kMemoryRegion_RAM) {
-                if (_regions[r]._size > max_region) {
-                    max_region = _regions[r]._size;
-                    max_r = r;
-                }
+                total_bytes += _regions[r]._size;
             }
         }
-        _main_allocator = linear_allocator_create((void*)_regions[max_r]._start, _regions[max_r]._size);
+        _JOS_ASSERT(total_bytes >= JOSX_MINIMUM_STARTUP_HEAP_SIZE);
+        CEfiPhysicalAddress phys;
+        _JOS_ASSERT(!C_EFI_ERROR(boot_services->allocate_pages(C_EFI_ALLOCATE_ANY_PAGES, C_EFI_LOADER_DATA, 
+                            JOSX_MINIMUM_STARTUP_HEAP_SIZE/UEFI_POOL_PAGE_SIZE, 
+                            &phys)));
+        _main_allocator = linear_allocator_create((void*)phys, JOSX_MINIMUM_STARTUP_HEAP_SIZE);
         _JOS_KTRACE_CHANNEL(kMemoryChannel, "uefi init succeeded");
     }
+
     return status;
 }
 
@@ -236,11 +320,36 @@ _JOS_API_FUNC size_t memory_get_available(void) {
 
 _JOS_API_FUNC jo_status_t memory_runtime_init(CEfiHandle h, CEfiBootServices* boot_services) {
         
+    // from UEFI Spec 2.6:
+    // An image that calls ExitBootServices() (i.e., a UEFI OS Loader) first calls
+    // EFI_BOOT_SERVICES.GetMemoryMap() to obtain the current memory map. Following the
+    // ExitBootServices() call, the image implicitly owns all unused memory in the map. This
+    // includes memory types EfiLoaderCode, EfiLoaderData, EfiBootServicesCode,
+    // EfiBootServicesData, and EfiConventionalMemory. A UEFI OS Loader and OS
+    // must preserve the memory marked as EfiRuntimeServicesCode and
+    // EfiRuntimeServicesData.
+    //
     _get_boot_service_memory_map(boot_services);
+    _build_memory_map(true);
     CEfiStatus status = boot_services->exit_boot_services(h, _map_key);    
     if ( C_EFI_ERROR(status )) {
-        return _JO_STATUS_UNAVAILABLE;        
+        return _JO_STATUS_UNAVAILABLE;
     }
+    
+    size_t max_r = 0;
+    size_t max_region = 0;
+    for (size_t r = 0; r < _num_regions; ++r) {                
+        //TODO: use linked regions instead
+        if (_regions[r]._type == kMemoryRegion_RAM) {
+            if (_regions[r]._size > max_region) {
+                max_region = _regions[r]._size;
+                max_r = r;
+            }
+        }
+    }
+
+    //TODO: create *another* allocator that the kernel will switch to at this point?
+
     return _JO_STATUS_SUCCESS;
 }
 
@@ -256,7 +365,7 @@ _JOS_API_FUNC size_t  memory_pool_overhead(memory_pool_type_t type) {
     return 0;
 }
 
-_JOS_API_FUNC heap_allocator_t*  memory_allocate_pool(memory_pool_type_t type, size_t size) {
+_JOS_API_FUNC generic_allocator_t*  memory_allocate_pool(memory_pool_type_t type, size_t size) {
     
     const size_t overhead = memory_pool_overhead(type); 
     size = size ? size + overhead : memory_get_available() - kAllocAlign_8;
@@ -265,16 +374,16 @@ _JOS_API_FUNC heap_allocator_t*  memory_allocate_pool(memory_pool_type_t type, s
         {
             // standard arena allocator
             _JOS_ASSERT(size<=memory_get_available());
-            void* pool = _main_allocator->_super.alloc((heap_allocator_t*)_main_allocator, size);
-            return (heap_allocator_t*)arena_allocator_create(pool, size);
+            void* pool = _main_allocator->_super.alloc((generic_allocator_t*)_main_allocator, size);
+            return (generic_allocator_t*)arena_allocator_create(pool, size);
         }
         break;
         case kMemoryPoolType_Static:
         {
             // basic linear allocator
             _JOS_ASSERT(size<=memory_get_available());
-            void* pool = _main_allocator->_super.alloc((heap_allocator_t*)_main_allocator, size);
-            return (heap_allocator_t*)linear_allocator_create(pool, size);
+            void* pool = _main_allocator->_super.alloc((generic_allocator_t*)_main_allocator, size);
+            return (generic_allocator_t*)linear_allocator_create(pool, size);
         }
         break;
         default:;

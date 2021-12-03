@@ -16,9 +16,18 @@ static arena_allocator_t* _video_memory_arena = 0;
 #include "include/jos.h"
 #include "include/video.h"
 
+#ifdef __clang__
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wsign-compare"
+#endif
+
 #define STBIR_MALLOC(size,context) arena_allocator_alloc(_video_memory_arena, (size))
 #define STBIR_FREE(ptr,context) arena_allocator_free(_video_memory_arena, (ptr))
 #include "../deps/stb/stb_image_resize.h"
+
+#ifdef __clang__
+    #pragma clang diagnostic pop
+#endif
 
 #ifdef _JOS_KERNEL_BUILD
 // in efi_main.c
@@ -54,9 +63,9 @@ static uint32_t* backbuffer_wptr(size_t top, size_t left) {
 }
 
 #ifdef _JOS_KERNEL_BUILD
-jo_status_t video_initialise(heap_allocator_t* allocator, CEfiBootServices* boot_services)
+jo_status_t video_initialise(static_allocation_policy_t* static_allocation_policy, CEfiBootServices* boot_services)
 #else
-jo_status_t video_initialise(heap_allocator_t* allocator)
+jo_status_t video_initialise(static_allocation_policy_t* static_allocation_policy)
 #endif
 {
     jo_status_t status = _JO_STATUS_SUCCESS;
@@ -155,10 +164,11 @@ jo_status_t video_initialise(heap_allocator_t* allocator)
 
     if (_JO_SUCCEEDED(status)) {
         _framebuffer_size = (_info.pixels_per_scan_line * _info.vertical_resolution * 4);
-         _backbuffer = (uint8_t*)allocator->alloc(allocator, _framebuffer_size);
-         // we set aside an arena with some room
-         //TODO: this memory is only used by STB image functions like "scale" and should be managed more dynamically
-         _video_memory_arena = arena_allocator_create(allocator->alloc(allocator, _framebuffer_size), _framebuffer_size);
+         _backbuffer = (uint8_t*)static_allocation_policy->allocator->alloc(static_allocation_policy->allocator, 
+                _framebuffer_size);
+         // we set aside an arena with some room for scaling operations         
+         _video_memory_arena = arena_allocator_create(static_allocation_policy->allocator->alloc(static_allocation_policy->allocator,
+             2*_framebuffer_size), 2*_framebuffer_size);
     }
 
     return status;
@@ -495,10 +505,7 @@ void video_scale_draw_bitmap(const uint32_t* bitmap, size_t src_width, size_t sr
 void video_scale_draw_indexed_bitmap(const uint8_t* bitmap, const uint32_t* colourmap, size_t colourmap_size,
     size_t src_width, size_t src_height,
     size_t dest_top, size_t dest_left, size_t dest_width, size_t dest_height) {
-    //TODO: need asserts...
-    // if ( !bitmap || !colourmap || !colourmap_size || !src_width || !src_height || !dest_width || !dest_height ) {
-    //     return;
-    // }
+    _JOS_ASSERT(bitmap && colourmap && colourmap_size && src_width && src_height && dest_width && dest_height);
 
     uint32_t* wptr = backbuffer_wptr(dest_top, dest_left);
 

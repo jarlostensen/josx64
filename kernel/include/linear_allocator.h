@@ -5,7 +5,7 @@
 typedef struct _linear_allocator {
 
 	//NOTE: this must be the first entry in this struct as it is used as a super class
-	heap_allocator_t _super;
+	generic_allocator_t _super;
 
     void*       _begin;
     char*       _ptr;
@@ -35,10 +35,10 @@ _JOS_API_FUNC linear_allocator_t* linear_allocator_create(void* memory, size_t s
     linalloc->_end = (void*)((uintptr_t)memory + size_adjusted);
     linalloc->_ptr = (char*)_JOS_ALIGN(((char*)memory + sizeof(linear_allocator_t)), kAllocAlign_8);
     
-    linalloc->_super.alloc = (heap_allocator_alloc_func_t)linear_allocator_alloc;
+    linalloc->_super.alloc = (generic_allocator_alloc_func_t)linear_allocator_alloc;
     linalloc->_super.free = 0;
     linalloc->_super.realloc = 0;
-    linalloc->_super.available = (heap_allocator_avail_func_t)linear_allocator_available;
+    linalloc->_super.available = (generic_allocator_avail_func_t)linear_allocator_available;
 
     return linalloc;
 }
@@ -46,7 +46,7 @@ _JOS_API_FUNC linear_allocator_t* linear_allocator_create(void* memory, size_t s
 _JOS_API_FUNC void* linear_allocator_alloc(linear_allocator_t* linalloc, size_t size) {
     char* ptr = (char*)_JOS_ALIGN(linalloc->_ptr, kAllocAlign_8);
     intptr_t capacity = (intptr_t)linalloc->_end - (intptr_t)ptr;
-    if ( capacity < size ) {
+    if ( capacity < (intptr_t)size ) {
         return NULL;
     }
     linalloc->_ptr = (ptr + size);
