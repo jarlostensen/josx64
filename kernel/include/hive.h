@@ -64,7 +64,6 @@ Usage example:
 #include <string.h>
 
 typedef struct _hive {
-	//ZZZ: vector_t _keys;
 	unordered_map_t _keys;
 } hive_t;
 
@@ -85,6 +84,8 @@ _JOS_API_FUNC jo_status_t hive_get(hive_t* hive, const char* key, vector_t* out_
 _JOS_API_FUNC jo_status_t hive_lget(hive_t* hive, const char* key, vector_t* out_values);
 // deletes an item from the hive
 _JOS_API_FUNC jo_status_t hive_delete(hive_t* hive, const char* key);
+// get the current hive in-memory size in bytes
+_JOS_API_FUNC size_t hive_memory_footprint(hive_t* hive);
 // iterate over each hive entry and invoke the callback
 _JOS_API_FUNC void hive_visit_values(hive_t* hive, 
 	void (*visitor)(const char* key, vector_t* values, void*),
@@ -125,6 +126,7 @@ typedef enum _hive_entry_type_impl {
 typedef struct _hive_entry_impl {
 
 	_hive_entry_type_t _type;
+	// > 0 if we're using _storage, < 0 if _storage contains a pointer to allocated memory (or a list)
 	int         _size;
 	//NOTE: this is used for a lot of things; if the number of values stored with this key is 
 	//      small enough they live here, if not it's a pointer to allocated memory, or a vector if this is a list
@@ -224,7 +226,34 @@ _JOS_API_FUNC  void hive_create(hive_t* hive, generic_allocator_t* allocator) {
 	allocator);
 }
 
+_JOS_API_FUNC size_t hive_memory_footprint(hive_t* hive) {
+	_JOS_ASSERT(hive);
+	size_t size = sizeof(hive_t) + unordered_map_memory_footprint(&hive->_keys);
+	unordered_map_iterator_t iter = unordered_map_iterator_begin(&hive->_keys);
+	while (!unordered_map_iterator_at_end(&iter)) {
+
+		_hive_entry_t* entry = (_hive_entry_t*)unordered_map_iterator_value(&iter);
+		if (entry->_type == kHiveEntry_Key) {
+			if (entry->_size < 0) {
+				size += (size_t)(-entry->_size);
+			}
+			else {
+				size += (size_t)(entry->_size);
+			}
+		}
+		else {
+			// list
+			vector_t* items = (vector_t*)(&entry->_storage);
+			size += vector_capacity(items) * vector_element_size(items);
+		}
+		unordered_map_iterator_next(&iter);
+	}
+	return size;
+}
+
 _JOS_API_FUNC void hive_set(hive_t* hive, const char* key, ...) {
+
+	_JOS_ASSERT(hive);
 
 	va_list args;
 	va_start(args, key);
@@ -245,7 +274,7 @@ _JOS_API_FUNC void hive_set(hive_t* hive, const char* key, ...) {
 				pack = *(char**)&existing->_storage;
 				pack = allocator->realloc(allocator, pack, pack_size);
 				*(char**)&existing->_storage = pack;
-				existing->_size = pack_size;
+				existing->_size = (int)pack_size;
 			}
 			else {
 				// original data is in-place, but it may not be enough space for the new data
@@ -264,7 +293,7 @@ _JOS_API_FUNC void hive_set(hive_t* hive, const char* key, ...) {
 			// we can fit within existing storage
 			if (existing->_size > 0) {
 				pack = *(char**)&existing->_storage;
-				existing->_size = pack_size;
+				existing->_size = (int)pack_size;
 			}
 			else {
 				existing->_size = -(int)pack_size;
@@ -365,6 +394,7 @@ _JOS_API_FUNC jo_status_t hive_get(hive_t* hive, const char* key, vector_t* out_
 		return _JO_STATUS_SUCCESS;
 	}
 
+	_JOS_ASSERT(entry->_type == kHiveEntry_Key);
 	const char* pack;
 	int pack_size;
 	if (entry->_size < 0) {
@@ -424,9 +454,9 @@ _JOS_API_FUNC jo_status_t hive_lget(hive_t* hive, const char* key, vector_t* out
 	assert(vector_element_size(out_values) == sizeof(hive_value_t));
 
 	_hive_entry_t* entry = _hive_find(hive, key);
-	if (!entry || entry->_type != kHiveEntry_List)
+	if (!entry)
 		return _JO_STATUS_NOT_FOUND;
-
+	_JOS_ASSERT(entry->_type == kHiveEntry_List);
 	vector_append(out_values, (vector_t*)&entry->_storage);
 
 	return _JO_STATUS_SUCCESS;

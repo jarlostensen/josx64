@@ -1,6 +1,8 @@
 
 #include "scroller.h"
 #include <video.h>
+
+#pragma warning(disable:4005)
 #include <stdint.h>
 #include <stdlib.h>
 

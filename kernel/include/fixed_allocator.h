@@ -44,7 +44,7 @@ _JOS_API_FUNC fixed_allocator_t* fixed_allocator_create(void* mem, size_t size, 
     size -= sizeof(fixed_allocator_t);
     pool->_count = size / ((size_t)1 << allocUnitPow2);
     pool->_free = 0;
-	pool->_end = (uintptr_t)((uintptr_t)(pool+1) + pool->_count*(1<<pool->_size_p2));
+	pool->_end = (uintptr_t)((uintptr_t)(pool+1) + (uintptr_t)(pool->_count*(1ull<<pool->_size_p2)));
     uint32_t* block = (uint32_t*)((uint8_t*)(pool+1));
     const uint32_t unit_size = 1<<pool->_size_p2;
     for(size_t n = 1; n < pool->_count; ++n)
@@ -52,7 +52,7 @@ _JOS_API_FUNC fixed_allocator_t* fixed_allocator_create(void* mem, size_t size, 
         *block = (uint32_t)n;
         block += (unit_size >> 2);
     }
-    *block = ~0;
+    *block = ~0u;
 
     pool->_super.alloc = (generic_allocator_alloc_func_t)fixed_allocator_alloc;
     pool->_super.free = (generic_allocator_free_func_t)fixed_allocator_free;
@@ -95,7 +95,7 @@ _JOS_API_FUNC void fixed_allocator_clear(fixed_allocator_t* pool)
         *block = (uint32_t)n;
         block += (unit_size >> 2);
     }
-    *block = ~0;
+    *block = ~0u;
 }
 
 

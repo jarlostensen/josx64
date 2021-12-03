@@ -47,7 +47,7 @@ void test_arena_allocator(void) {
 
 	char buffer[1024];
 
-	generic_allocator_t* allocator = arena_allocator_create(buffer, sizeof(buffer));
+	generic_allocator_t* allocator = (generic_allocator_t*)arena_allocator_create(buffer, sizeof(buffer));
 
 	void* allocated = allocator->alloc(allocator, 127);
 	void* allocated2 = allocator->alloc(allocator, 129);

@@ -67,8 +67,7 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
     //STRICTLY assumes this doesn't need any memory, video, or SMP functionality
     serial_initialise();
 
-    //NOTE: we can initialise the kernel allocator here because we never exit back to the EFI firmware, otherwise 
-    //      this memory would have to be freed at that point
+    // get the initial memory map and create our root allocators for kernel use
     jo_status_t status = memory_uefi_init(system_services->boot_services);
     if ( !_JO_SUCCEEDED(status) ) {
         _JOS_KTRACE_CHANNEL(kKernelChannel, "***FATAL ERROR: memory initialise returned 0x%x", status);
@@ -77,7 +76,7 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
 
     // we use two pools of memory for the kernel:
     //   one STATIC pool from which modules create their heaps
-    //   one DYNAMIC pool as an internal kernel heap
+    //   one DYNAMIC kernel heap
     _initial_memory = memory_get_available();
     //ZZZ: this is not a very clever algorithm, needs refinement
     const size_t pool_size = (_initial_memory * 3) / 4;
@@ -87,8 +86,6 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
 
     // create our hive storage
     hive_create(&_hive, (generic_allocator_t*)_kernel_heap_allocator);    
-    hive_set(&_hive, "kernel:pool", HIVE_VALUE_INT(_kernel_system_allocator->available(_kernel_system_allocator)), HIVE_VALUELIST_END);
-    hive_set(&_hive, "kernel:heap", HIVE_VALUE_INT(_kernel_heap_allocator->available(_kernel_heap_allocator)), HIVE_VALUELIST_END);
     
     status = acpi_intitialise(system_services);
     if ( !_JO_SUCCEEDED(status) ) {
@@ -111,7 +108,12 @@ _JOS_API_FUNC jo_status_t kernel_uefi_init(CEfiSystemTable* system_services) {
     
     // =====================================================================
 
+    hive_set(&_hive, "kernel:pool", HIVE_VALUE_INT(_kernel_system_allocator->available(_kernel_system_allocator)), HIVE_VALUELIST_END);
+    hive_set(&_hive, "kernel:heap", HIVE_VALUE_INT(_kernel_heap_allocator->available(_kernel_heap_allocator)), HIVE_VALUELIST_END);
+    
+    hive_set(&_hive, "kernel:hive_boot_size", HIVE_VALUE_INT(hive_memory_footprint(&_hive)), HIVE_VALUELIST_END);
     hive_set(&_hive, "kernel:booted", HIVE_VALUELIST_END);
+
     _JOS_KTRACE_CHANNEL(kKernelChannel, "uefi init ok");
     return _JO_STATUS_SUCCESS;
 }

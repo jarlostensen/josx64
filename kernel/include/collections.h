@@ -267,6 +267,7 @@ _JOS_API_FUNC void unordered_map_destroy(unordered_map_t* umap);
 _JOS_API_FUNC map_value_t unordered_map_find(unordered_map_t* umap, map_key_t key);
 _JOS_API_FUNC bool unordered_map_insert(unordered_map_t* umap, map_key_t key, map_value_t item);
 _JOS_API_FUNC bool unordered_map_remove(unordered_map_t* umap, map_key_t key);
+_JOS_API_FUNC size_t unordered_map_memory_footprint(unordered_map_t* umap);
 _JOS_INLINE_FUNC size_t unordered_map_size(unordered_map_t* umap) {
 	return umap->_occupancy;
 }
@@ -571,8 +572,7 @@ _JOS_API_FUNC  void queue_create(queue_t* queue, size_t capacity, size_t element
 	queue->_head = queue->_tail = 0;
 }
 
-_JOS_INLINE_FUNC void* queue_front(queue_t* queue)
-{
+_JOS_API_FUNC void* queue_front(queue_t* queue) {
 	if (queue_is_empty(queue))
 		return 0;
 	return _vector_at(queue->_elements, queue->_head);
@@ -689,7 +689,7 @@ _JOS_API_FUNC uint32_t map_str_hash_func(const void* key) {
 	// first time we need to initialise with random permutations of [0..255]
 	if (kPermutations[0] == kPermutations[1]) {
 		for (int i = 0; i < 256; ++i) {
-			kPermutations[i] = i;
+			kPermutations[i] = (unsigned char)i;
 		}
 		for (int i = 0; i < 254; ++i) {
 			int idx = i + 1 + (rand() % (254 - i));
@@ -731,6 +731,15 @@ _JOS_API_FUNC void unordered_map_create(unordered_map_t* umap, unordered_map_cre
 	for (size_t i = 0; i < umap->_num_slots; ++i) {
 		vector_create(umap->_slots + i, 32, args->key_size + args->value_size, allocator);
 	}
+}
+
+_JOS_API_FUNC size_t unordered_map_memory_footprint(unordered_map_t* umap) {
+	_JOS_ASSERT(umap);
+	size_t size = 0;
+	for (size_t i = 0; i < umap->_num_slots; ++i) {
+		size += vector_capacity(umap->_slots + i);
+	}
+	return (size* umap->_key_size + umap->_value_size) + umap->_num_slots*sizeof(vector_t);
 }
 
 _JOS_API_FUNC void unordered_map_destroy(unordered_map_t* umap) {

@@ -2,6 +2,8 @@
 #define _JOS_IMPLEMENT_CONTAINERS
 #define _JOS_IMPLEMENT_HIVE
 
+#pragma warning(disable:4005)
+
 #include <jos.h>
 #include "../kernel/include/collections.h"
 #include "../kernel/include/hive.h"
@@ -25,7 +27,7 @@ void test_vector(generic_allocator_t* allocator) {
 	for (int n = 0; n < 100; ++n) {
 		vector_push_back(&vector, &(test_item_t){
 			._a = n,
-			._b = n
+			._b = (char)n
 		});
 	}
 
@@ -54,7 +56,7 @@ void test_vector_aligned(generic_allocator_t* allocator) {
 	for (int n = 0; n < 100; ++n) {
 		vector_push_back(&vector, &(test_item_t){
 			._a = n,
-				._b = n
+			._b = (char)n
 		});
 	}
 
@@ -105,7 +107,7 @@ void test_paged_list(generic_allocator_t* allocator) {
 }
 
 
-static void print_hive_values(const vector_t* values) {
+static void print_hive_values(vector_t* values) {
 	const size_t num_elements = vector_size(values);
 	for (size_t n = 0; n < num_elements; ++n) {
 		hive_value_t* hive_value = (hive_value_t*)vector_at(values, n);
@@ -193,7 +195,9 @@ void test_hive(generic_allocator_t* allocator) {
 
 	print_hive_values(&values);
 
-	printf("\n");
+	const size_t hive_footprint = hive_memory_footprint(&hive);
+
+	printf("\nHive now %lld bytes\n", hive_footprint);
 	vector_reset(&values);
 	hive_visit_values(&hive, _print_hive_key, &values, 0);
 

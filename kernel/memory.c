@@ -303,6 +303,8 @@ _JOS_API_FUNC jo_status_t memory_uefi_init(CEfiBootServices* boot_services) {
         _JOS_ASSERT(!C_EFI_ERROR(boot_services->allocate_pages(C_EFI_ALLOCATE_ANY_PAGES, C_EFI_LOADER_DATA, 
                             JOSX_MINIMUM_STARTUP_HEAP_SIZE/UEFI_POOL_PAGE_SIZE, 
                             &phys)));
+        // we create one linear allocator for the initial memory requirements of the kernel
+        // which will create allocators inside the memory managed by this allocator                            
         _main_allocator = linear_allocator_create((void*)phys, JOSX_MINIMUM_STARTUP_HEAP_SIZE);
         _JOS_KTRACE_CHANNEL(kMemoryChannel, "uefi init succeeded");
     }
