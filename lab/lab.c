@@ -459,6 +459,8 @@ void test_load_dll(void) { };
 
 // ==============================================================================================================
 
+extern void test_page_allocator(void);
+
 int main(void)
 {
     init_tests();
@@ -494,6 +496,8 @@ int main(void)
     test_unordered_map(&_malloc_allocator);
     test_hive(&_malloc_allocator);
     
+    test_page_allocator();
+
     /* alloc_tests();
 
      char buffer[512];
