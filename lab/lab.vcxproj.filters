@@ -128,6 +128,9 @@
     <ClInclude Include="tests.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\kernel\include\bb_page_allocator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="json_data.json">

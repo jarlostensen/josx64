@@ -1,3 +1,4 @@
+#pragma once
 #ifndef _JOS_arena_allocator_ALLOCATOR_H
 #define _JOS_arena_allocator_ALLOCATOR_H
 
