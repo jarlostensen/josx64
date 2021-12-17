@@ -1,14 +1,20 @@
 
 #define _JOS_IMPLEMENT_CONTAINERS
 #define _JOS_IMPLEMENT_HIVE
+#define _JOS_IMPLEMENT_BINARY_SEARCH_TREE
 
 #pragma warning(disable:4005)
 
 #include <jos.h>
 #include "../kernel/include/collections.h"
 #include "../kernel/include/hive.h"
+#include "../kernel/include/binary_search_tree.h"
 
 #include <stdio.h>
+
+// ===============================================================================================
+
+// ===============================================================================================
 
 typedef struct _test_item {
 
@@ -269,4 +275,66 @@ void test_unordered_map(generic_allocator_t* allocator) {
 	//unordered_map_dump_stats(&umap);
 	unordered_map_destroy(&umap);
 	printf("passed\n");
+}
+
+
+typedef struct _my_node {
+
+	uintptr_t		_data;
+	bool			_has_value;
+
+} my_node_t;
+
+
+static void print_node(uintptr_t key, void* value) {
+	(void)value;
+	printf("%llu ", key);
+}
+
+void test_binary_search_tree(generic_allocator_t* allocator) {
+
+	binary_search_tree_t	tree;
+	my_node_t node;
+	binary_search_tree_create(&tree, sizeof(node), _Alignof(my_node_t), allocator);
+
+	binary_search_tree_insert(&tree, 12345, (void*)(&(my_node_t) {
+		._data = 0xdeadc0de,
+		._has_value = true
+		}));
+	binary_search_tree_insert(&tree, 1234, (void*)(&(my_node_t) {
+		._data = 0xbaadbeef,
+			._has_value = true
+	}));
+	binary_search_tree_insert(&tree, 123456, (void*)(&(my_node_t) {
+		._data = 0xfa11afe1,
+			._has_value = true
+	}));
+	binary_search_tree_insert(&tree, 1234567, (void*)(&(my_node_t) {
+		._data = 0xc0de15bad,
+			._has_value = true
+	}));
+	binary_search_tree_insert(&tree, 123, (void*)(&(my_node_t) {
+		._data = 0xf00baaa,
+			._has_value = true
+	}));
+	//NOTE: this is a NOP, it won't insert a duplicate or overwrite 
+	binary_search_tree_insert(&tree, 123, NULL);
+
+	assert(binary_search_tree_size(&tree) == 5);
+	assert(binary_search_tree_contains(&tree, 12345));
+	assert(binary_search_tree_contains(&tree, 123456));
+	assert(binary_search_tree_contains(&tree, 1234));
+
+	my_node_t* pnode;
+	assert(binary_search_tree_find(&tree, 123, &pnode) && pnode->_data == 0xf00baaa);
+	assert(binary_search_tree_find(&tree, 1234567, &pnode) && pnode->_data == 0xc0de15bad);
+	assert(binary_search_tree_find(&tree, 123456, &pnode) && pnode->_data == 0xfa11afe1);
+	assert(binary_search_tree_find(&tree, 12345, &pnode) && pnode->_data == 0xdeadc0de);
+
+	printf("\nsearch tree, sorted elements: ");
+	binary_search_tree_sorted_traverse(&tree, print_node);
+	printf("\n");
+
+	binary_search_tree_destroy(&tree);
+	assert(binary_search_tree_size(&tree) == 0);
 }

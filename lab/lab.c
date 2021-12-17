@@ -460,6 +460,7 @@ void test_load_dll(void) { };
 // ==============================================================================================================
 
 extern void test_page_allocator(void);
+extern void test_binary_search_tree(generic_allocator_t* allocator);
 
 int main(void)
 {
@@ -497,6 +498,7 @@ int main(void)
     test_hive(&_malloc_allocator);
     
     test_page_allocator();
+    test_binary_search_tree(&_malloc_allocator);
 
     /* alloc_tests();
 
@@ -556,6 +558,7 @@ int main(void)
     //ui_test_loop();
     //test_line_editor();
 #endif
-    test_ui_loop(&_malloc_allocator, (const uint8_t*)font8x8_basic);
+    //test_ui_loop(&_malloc_allocator, (const uint8_t*)font8x8_basic);
+
     return 0;
 }

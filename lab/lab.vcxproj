@@ -164,6 +164,7 @@
   <ItemGroup>
     <ClInclude Include="..\kernel\include\arena_allocator.h" />
     <ClInclude Include="..\kernel\include\bb_page_allocator.h" />
+    <ClInclude Include="..\kernel\include\binary_search_tree.h" />
     <ClInclude Include="..\kernel\include\collections.h" />
     <ClInclude Include="..\kernel\include\fixed_allocator.h" />
     <ClInclude Include="..\kernel\include\hive.h" />
