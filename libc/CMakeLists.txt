@@ -28,7 +28,6 @@ target_include_directories(c PRIVATE
 "${CMAKE_CURRENT_SOURCE_DIR}/internal/include"
 "${CMAKE_CURRENT_SOURCE_DIR}/include"
 "${CMAKE_SOURCE_DIR}/kernel/include"
-"${CMAKE_SOURCE_DIR}/deps" 
 )
 
 #ZZZ: there's a mismash of .a and .lib suffixes being generated and this is probably not really the right way of fixing that....

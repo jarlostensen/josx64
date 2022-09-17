@@ -2,7 +2,7 @@
 #ifndef _JOS_H
 #define _JOS_H
 
-#include <joBase/joBase.h>
+#include <joBase.h>
 
 #if defined(__clang__) || defined(__GNUC__)
     #define ASM_SYNTAX_ATNT    

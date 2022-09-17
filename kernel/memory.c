@@ -338,14 +338,12 @@ _JOS_API_FUNC jo_status_t memory_runtime_init(CEfiHandle h, CEfiBootServices* bo
         return _JO_STATUS_UNAVAILABLE;
     }
     
-    size_t max_r = 0;
     size_t max_region = 0;
     for (size_t r = 0; r < _num_regions; ++r) {                
         //TODO: use linked regions instead
         if (_regions[r]._type == kMemoryRegion_RAM) {
             if (_regions[r]._size > max_region) {
                 max_region = _regions[r]._size;
-                max_r = r;
             }
         }
     }

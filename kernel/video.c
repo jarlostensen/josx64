@@ -23,7 +23,7 @@ static arena_allocator_t* _video_memory_arena = 0;
 
 #define STBIR_MALLOC(size,context) arena_allocator_alloc(_video_memory_arena, (size))
 #define STBIR_FREE(ptr,context) arena_allocator_free(_video_memory_arena, (ptr))
-#include "../deps/stb/stb_image_resize.h"
+#include "../external/stb/stb_image_resize.h"
 
 #ifdef __clang__
     #pragma clang diagnostic pop

@@ -1,7 +1,7 @@
 #ifndef _JOS_KERNEL_ASSERT_H
 #define _JOS_KERNEL_ASSERT_H
 
-#include <joBase/joBase.h>
+#include <joBase.h>
 
 #ifdef _JO_BARE_METAL_BUILD
 #undef assert

@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #ifdef _JOS_KERNEL_BUILD
-#include <joBase/joWinNtLt.h>
+#include <joWinNtLt.h>
 #else
 #pragma warning(disable:5105)
 #include <windows.h>

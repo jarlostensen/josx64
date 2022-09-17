@@ -15,3 +15,10 @@ include(${CMAKE_SOURCE_DIR}/CMakeLists.cmake)
 add_library(lab STATIC "")
 add_subdirectory(lab)
 target_link_libraries(boot PRIVATE lab)
+target_include_directories(lab PUBLIC
+"${zydis_SOURCE_DIR}/include"
+"${CMAKE_SYSTEM_PREFIX_PATH}" 
+"${CMAKE_SOURCE_DIR}/kernel/include"
+"${jobase_SOURCE_DIR}"
+)
+

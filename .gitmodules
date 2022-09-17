@@ -1,6 +1,0 @@
-[submodule "deps/joBase"]
-	path = deps/joBase
-	url = https://github.com/jarlostensen/joBase.git
-[submodule "deps/joForth"]
-	path = deps/joForth
-	url = https://github.com/jarlostensen/joForth.git
