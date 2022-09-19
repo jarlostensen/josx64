@@ -51,7 +51,7 @@ typedef struct _memory_region {
 } memory_region_t;
 
 // TODO: allocate dynamically from each region and link them as a list?
-#define MAX_MEMORY_REGIONS 64
+#define MAX_MEMORY_REGIONS 256
 static memory_region_t _regions[MAX_MEMORY_REGIONS];
 static size_t _num_regions = 0;
 
